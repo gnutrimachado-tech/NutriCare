@@ -44,6 +44,11 @@ export default async function GastoCaloricoPage({ params }: Props) {
     orderBy: { created_at: "desc" },
   });
 
+  const evolucao = await prisma.evolucao_corporal.findFirst({
+    where: { paciente_id: id },
+    orderBy: { created_at: "desc" },
+  });
+
   const sexoPaciente =
     paciente.sexo === "Feminino" ||
     paciente.sexo === "feminino" ||
@@ -56,6 +61,9 @@ export default async function GastoCaloricoPage({ params }: Props) {
   const pesoKg = Number(anamnese?.peso ?? 0);
   const alturaCm = Number(anamnese?.altura ?? 0);
   const percentualGordura = Number(anamnese?.percentual_gordura ?? 0);
+
+  const massaMuscularAnamnese = anamnese?.massa_muscular ? Number(anamnese.massa_muscular) : null;
+  const massaMuscularAntropometria = evolucao?.massa_muscular ? Number(evolucao.massa_muscular) : null;
 
   return (
     <div>
@@ -100,10 +108,10 @@ export default async function GastoCaloricoPage({ params }: Props) {
           }}
         >
           <Link href={`/pacientes/${id}/antropometria`}>
-            <button style={buttonSecondary}>← Voltar à Antropometria</button>
+            <button style={buttonNav}>← Anterior</button>
           </Link>
           <Link href={`/pacientes/${id}/plano-alimentar`}>
-            <button style={buttonPrimary}>🍽️ Plano Alimentar</button>
+            <button style={buttonNavNext}>Próxima →</button>
           </Link>
         </div>
       </div>
@@ -115,26 +123,29 @@ export default async function GastoCaloricoPage({ params }: Props) {
         alturaCm={alturaCm}
         percentualGordura={percentualGordura}
         nomePaciente={paciente.nome}
+        massaMuscularAnamnese={massaMuscularAnamnese}
+        massaMuscularAntropometria={massaMuscularAntropometria}
       />
     </div>
   );
 }
 
-const buttonPrimary: React.CSSProperties = {
-  padding: "10px 16px",
-  backgroundColor: "#16a34a",
-  color: "white",
-  border: "none",
-  borderRadius: "8px",
-  cursor: "pointer",
-  fontWeight: "bold",
-};
-
-const buttonSecondary: React.CSSProperties = {
+const buttonNav: React.CSSProperties = {
   padding: "10px 16px",
   backgroundColor: "#e2e8f0",
   color: "#0f172a",
   border: "none",
   borderRadius: "8px",
   cursor: "pointer",
+  fontWeight: "600",
+};
+
+const buttonNavNext: React.CSSProperties = {
+  padding: "10px 16px",
+  backgroundColor: "#2563eb",
+  color: "white",
+  border: "none",
+  borderRadius: "8px",
+  cursor: "pointer",
+  fontWeight: "600",
 };

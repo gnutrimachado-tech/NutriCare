@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import NovoPacienteForm from "./NovoPacienteForm";
+import BuscaPacientes from "./BuscaPacientes";
 
 export const dynamic = "force-dynamic";
 
@@ -9,8 +9,16 @@ export default async function PacientesPage() {
     orderBy: {
       created_at: "desc",
     },
-    take: 50,
+    take: 200,
   });
+
+  const pacientesSerializados = pacientes.map((p) => ({
+    id: p.id,
+    nome: p.nome,
+    email: p.email,
+    telefone: p.telefone,
+    created_at: p.created_at,
+  }));
 
   return (
     <div>
@@ -30,51 +38,8 @@ export default async function PacientesPage() {
       >
         <h2 style={{ marginBottom: "20px" }}>Lista de Pacientes</h2>
 
-        {pacientes.length === 0 ? (
-          <p>Nenhum paciente cadastrado.</p>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th style={thStyle}>Nome</th>
-                <th style={thStyle}>E-mail</th>
-                <th style={thStyle}>Telefone</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pacientes.map((paciente) => (
-                <tr key={paciente.id}>
-                  <td style={tdStyle}>
-                    <Link
-                      href={`/pacientes/${paciente.id}`}
-                      style={{
-                        color: "#2563eb",
-                        textDecoration: "none",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      {paciente.nome}
-                    </Link>
-                  </td>
-                  <td style={tdStyle}>{paciente.email || "-"}</td>
-                  <td style={tdStyle}>{paciente.telefone || "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <BuscaPacientes pacientes={pacientesSerializados} />
       </div>
     </div>
   );
 }
-
-const thStyle = {
-  textAlign: "left" as const,
-  padding: "12px",
-  borderBottom: "1px solid #e2e8f0",
-};
-
-const tdStyle = {
-  padding: "12px",
-  borderBottom: "1px solid #f1f5f9",
-};
