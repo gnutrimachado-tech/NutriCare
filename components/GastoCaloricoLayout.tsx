@@ -10,6 +10,8 @@ type Props = {
   alturaCm: number;
   percentualGordura: number;
   nomePaciente?: string;
+  massaMuscularAnamnese?: number | null;
+  massaMuscularAntropometria?: number | null;
 };
 
 // ==================== EXERCISE DATA (internal MET values) ====================
@@ -330,9 +332,17 @@ export default function GastoCaloricoLayout({
   alturaCm,
   percentualGordura,
   nomePaciente,
+  massaMuscularAnamnese,
+  massaMuscularAntropometria,
 }: Props) {
   const sexo = sexoPaciente === "Masculino" ? "M" : "F";
   const massaMagraCalc = pesoKg - (pesoKg * percentualGordura) / 100;
+
+  const [massaMuscularFonte, setMassaMuscularFonte] = useState<"anamnese" | "antropometria">("anamnese");
+
+  const massaMuscularSelecionada = massaMuscularFonte === "anamnese"
+    ? massaMuscularAnamnese
+    : massaMuscularAntropometria;
 
   const [massaMagra, setMassaMagra] = useState<number | null>(
     percentualGordura > 0 ? Math.round(massaMagraCalc * 10) / 10 : null
@@ -471,36 +481,54 @@ export default function GastoCaloricoLayout({
         </div>
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary Cards — design distinto do Plano Alimentar */}
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(4, 1fr)",
-          gap: "12px",
+          gap: "14px",
           marginBottom: "16px",
         }}
       >
-        <div style={summaryCard("#e74c3c", "#c0392b")}>
-          <div style={summaryValue}>
-            {fmt(tmb)} <sub style={{ fontSize: "11px" }}>kcal</sub>
+        <div style={gcSummaryCard}>
+          <div style={{ fontSize: "11px", color: "#e74c3c", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+            🔥 Gasto Calórico (TMB)
           </div>
-          <div style={summaryLabel}>Gasto Calórico (TMB)</div>
-        </div>
-        <div style={summaryCard("#3498db", "#2980b9")}>
-          <div style={summaryValue}>
-            {fmt(get)} <sub style={{ fontSize: "11px" }}>kcal</sub>
+          <div style={{ fontSize: "28px", fontWeight: 800, color: "#1a202c" }}>
+            {fmt(tmb)}
           </div>
-          <div style={summaryLabel}>Gasto Energético Total</div>
+          <div style={{ fontSize: "11px", color: "#a0aec0" }}>kcal/dia</div>
+          <div style={{ height: "3px", background: "linear-gradient(90deg, #e74c3c, #ff8a80)", borderRadius: "2px", marginTop: "8px" }} />
         </div>
-        <div style={summaryCard("#2ecc71", "#27ae60")}>
-          <div style={summaryValue}>
-            {fmt(totalTreino)} <sub style={{ fontSize: "11px" }}>kcal</sub>
+        <div style={gcSummaryCard}>
+          <div style={{ fontSize: "11px", color: "#3498db", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+            ⚡ Gasto Energético Total
           </div>
-          <div style={summaryLabel}>Kcal Treinos</div>
+          <div style={{ fontSize: "28px", fontWeight: 800, color: "#1a202c" }}>
+            {fmt(get)}
+          </div>
+          <div style={{ fontSize: "11px", color: "#a0aec0" }}>kcal/dia</div>
+          <div style={{ height: "3px", background: "linear-gradient(90deg, #3498db, #90caf9)", borderRadius: "2px", marginTop: "8px" }} />
         </div>
-        <div style={summaryCard("#f39c12", "#e67e22")}>
-          <div style={summaryValue}>{fatorAtividade.toFixed(2)}</div>
-          <div style={summaryLabel}>Fator de Atividade</div>
+        <div style={gcSummaryCard}>
+          <div style={{ fontSize: "11px", color: "#2ecc71", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+            🏋️ Gasto dos Treinos
+          </div>
+          <div style={{ fontSize: "28px", fontWeight: 800, color: "#1a202c" }}>
+            {fmt(totalTreino)}
+          </div>
+          <div style={{ fontSize: "11px", color: "#a0aec0" }}>kcal</div>
+          <div style={{ height: "3px", background: "linear-gradient(90deg, #2ecc71, #a5d6a7)", borderRadius: "2px", marginTop: "8px" }} />
+        </div>
+        <div style={gcSummaryCard}>
+          <div style={{ fontSize: "11px", color: "#f39c12", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+            📊 Fator de Atividade
+          </div>
+          <div style={{ fontSize: "28px", fontWeight: 800, color: "#1a202c" }}>
+            {fatorAtividade.toFixed(2)}
+          </div>
+          <div style={{ fontSize: "11px", color: "#a0aec0" }}>FAF</div>
+          <div style={{ height: "3px", background: "linear-gradient(90deg, #f39c12, #ffe082)", borderRadius: "2px", marginTop: "8px" }} />
         </div>
       </div>
 
@@ -570,6 +598,37 @@ export default function GastoCaloricoLayout({
                   }}
                   style={inputStyle}
                 />
+              </div>
+            </div>
+
+            {/* Massa Muscular Source Selector */}
+            <div style={{ marginTop: "12px", padding: "12px", background: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+              <label style={{ ...labelStyle, marginBottom: "6px" }}>
+                Massa Muscular — Fonte dos Dados
+              </label>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <select
+                  value={massaMuscularFonte}
+                  onChange={(e) => setMassaMuscularFonte(e.target.value as "anamnese" | "antropometria")}
+                  style={{
+                    padding: "8px 12px",
+                    border: "1.5px solid #dce3ec",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                    background: "#fff",
+                    cursor: "pointer",
+                    fontWeight: 500,
+                    minWidth: "180px",
+                  }}
+                >
+                  <option value="anamnese">Anamnese</option>
+                  <option value="antropometria">Antropometria</option>
+                </select>
+                <div style={{ fontSize: "13px", color: "#475569", fontWeight: 600 }}>
+                  {massaMuscularSelecionada != null
+                    ? `${massaMuscularSelecionada} kg`
+                    : "Sem dados"}
+                </div>
               </div>
             </div>
           </div>
@@ -1253,24 +1312,12 @@ export default function GastoCaloricoLayout({
 }
 
 // ==================== STYLES ====================
-function summaryCard(from: string, to: string): React.CSSProperties {
-  return {
-    borderRadius: "12px",
-    padding: "12px",
-    textAlign: "center",
-    color: "white",
-    background: `linear-gradient(135deg, ${from}, ${to})`,
-  };
-}
-
-const summaryValue: React.CSSProperties = {
-  fontSize: "24px",
-  fontWeight: "bold",
-};
-
-const summaryLabel: React.CSSProperties = {
-  fontSize: "10px",
-  opacity: 0.9,
+const gcSummaryCard: React.CSSProperties = {
+  background: "#ffffff",
+  borderRadius: "14px",
+  padding: "16px 18px",
+  boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+  border: "1px solid #edf2f7",
 };
 
 const cardStyle: React.CSSProperties = {

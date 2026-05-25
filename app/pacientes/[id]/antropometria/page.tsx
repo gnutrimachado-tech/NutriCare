@@ -133,17 +133,15 @@ export default async function AntropometriaPage({
             marginTop: "8px",
           }}
         >
-          {/* VOLTAR */}
-          <Link href={`/pacientes/${id}`}>
+          <Link href={`/pacientes/${id}/anamnese`}>
             <button style={buttonSecondary}>
-              ← Voltar ao Paciente
+              ← Anterior
             </button>
           </Link>
 
-          {/* GASTO CALÓRICO */}
           <Link href={`/pacientes/${id}/gasto-calorico`}>
             <button style={buttonPrimary}>
-              🔥 Gasto Calórico
+              Próxima →
             </button>
           </Link>
         </div>

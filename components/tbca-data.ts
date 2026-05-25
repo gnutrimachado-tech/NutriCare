@@ -2689,4 +2689,7 @@ export const TBCA_FOODS: TBCAFood[] = [
   {n:"Óleo, soja, assado, Glycine max",k:900.0,p:0.0,l:100.0,c:0.0,f:0.0,ca:0.0,fe:0.1},
   {n:"Óleo, soja, cozido, Glycine max",k:900.0,p:0.0,l:100.0,c:0.0,f:0.0,ca:0.0,fe:0.1},
   {n:"Óleo, soja, frito, Glycine max",k:900.0,p:0.0,l:100.0,c:0.0,f:0.0,ca:0.0,fe:0.1},
+  {n:"Arroz branco cozido (tipo 1/2/3 - polido c/ óleo e sal)",k:138.0,p:2.4,l:1.6,c:27.9,f:1.3,ca:5.8,fe:0.3},
+  {n:"Arroz branco cozido (sem óleo, sem sal)",k:131.0,p:2.4,l:0.4,c:28.8,f:1.2,ca:5.2,fe:0.3},
+  {n:"Arroz branco cru (tipo 1/2/3 - polido)",k:346.0,p:7.0,l:0.5,c:77.4,f:1.7,ca:4.8,fe:0.5},
 ]

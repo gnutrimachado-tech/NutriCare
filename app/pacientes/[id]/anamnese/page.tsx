@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import Link from "next/link";
 import AnamneseForm from "./AnamneseForm";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,6 @@ type Props = {
 export default async function AnamnesePage({ params }: Props) {
   const { id } = await params;
 
-  // Buscar paciente
   const paciente = await prisma.pacientes.findUnique({
     where: { id },
   });
@@ -21,21 +21,18 @@ export default async function AnamnesePage({ params }: Props) {
     return <div>Paciente não encontrado.</div>;
   }
 
-  // Buscar anamnese
   const anamnese = await prisma.anamneses.findFirst({
     where: {
       paciente_id: id,
     },
   });
 
-  // Converter Decimal do Prisma em objeto simples
   const anamneseSerializada = anamnese
     ? JSON.parse(JSON.stringify(anamnese))
     : null;
 
   return (
     <div>
-      {/* Cabeçalho */}
       <div
         style={{
           display: "flex",
@@ -46,7 +43,6 @@ export default async function AnamnesePage({ params }: Props) {
           flexWrap: "wrap",
         }}
       >
-        {/* Lado esquerdo */}
         <div>
           <h1
             style={{
@@ -71,7 +67,6 @@ export default async function AnamnesePage({ params }: Props) {
           </p>
         </div>
 
-        {/* Botões lado direito */}
         <div
           style={{
             display: "flex",
@@ -80,7 +75,7 @@ export default async function AnamnesePage({ params }: Props) {
             marginTop: "4px",
           }}
         >
-          <a
+          <Link
             href={`/pacientes/${id}`}
             style={{
               backgroundColor: "#e2e8f0",
@@ -93,13 +88,13 @@ export default async function AnamnesePage({ params }: Props) {
               border: "1px solid #cbd5e1",
             }}
           >
-            ← Voltar ao Paciente
-          </a>
+            ← Anterior
+          </Link>
 
-          <a
+          <Link
             href={`/pacientes/${id}/antropometria`}
             style={{
-              backgroundColor: "#16a34a",
+              backgroundColor: "#2563eb",
               color: "#ffffff",
               padding: "10px 18px",
               borderRadius: "10px",
@@ -109,12 +104,11 @@ export default async function AnamnesePage({ params }: Props) {
               border: "none",
             }}
           >
-            📏 Antropometria
-          </a>
+            Próxima →
+          </Link>
         </div>
       </div>
 
-      {/* Formulário */}
       <AnamneseForm
         pacienteId={id}
         dados={anamneseSerializada}
