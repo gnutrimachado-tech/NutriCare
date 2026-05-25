@@ -1,18 +1,20 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 type Props = {
   params: Promise<{
     id: string;
   }>;
 };
 
-function formatarNumero(valor: any) {
+function formatarNumero(valor: unknown) {
   if (valor === null || valor === undefined) return "-";
 
   const numero =
-    typeof valor === "object" && "toNumber" in valor
-      ? valor.toNumber()
+    typeof valor === "object" && valor !== null && "toNumber" in valor
+      ? (valor as { toNumber: () => number }).toNumber()
       : Number(valor);
 
   if (isNaN(numero)) return "-";
@@ -20,7 +22,8 @@ function formatarNumero(valor: any) {
   return numero.toFixed(2).replace(".", ",");
 }
 
-function formatarData(data: Date) {
+function formatarData(data: Date | null) {
+  if (!data) return "--";
   return new Intl.DateTimeFormat("pt-BR").format(new Date(data));
 }
 

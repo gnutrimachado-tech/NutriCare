@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 
 type SexoPaciente = "Masculino" | "Feminino";
 
@@ -525,15 +525,13 @@ export default function AntropometriaLayout({
   const [circunferencias, setCircunferencias] =
     useState<Record<CircKey, string>>(allCircsInitial);
 
-  useEffect(() => {
-    if (!protocolosDisponiveis.some((p) => p.id === protocolId)) {
-      setProtocolId(protocolosDisponiveis[0]?.id ?? "");
-    }
-  }, [protocolId, protocolosDisponiveis]);
+  const effectiveProtocolId = protocolosDisponiveis.some((p) => p.id === protocolId)
+    ? protocolId
+    : protocolosDisponiveis[0]?.id ?? "";
 
   const protocoloAtual = useMemo(
-    () => protocolosDisponiveis.find((p) => p.id === protocolId),
-    [protocolId, protocolosDisponiveis]
+    () => protocolosDisponiveis.find((p) => p.id === effectiveProtocolId),
+    [effectiveProtocolId, protocolosDisponiveis]
   );
 
   const dobrasNum = useMemo(() => {
@@ -552,8 +550,8 @@ export default function AntropometriaLayout({
     return out;
   }, [circunferencias]);
 
-  const requiredDobras = protocoloAtual?.requiredDobras ?? [];
-  const requiredCircs = protocoloAtual?.requiredCircs ?? [];
+  const requiredDobras = useMemo(() => protocoloAtual?.requiredDobras ?? [], [protocoloAtual]);
+  const requiredCircs = useMemo(() => protocoloAtual?.requiredCircs ?? [], [protocoloAtual]);
 
   const canCalculate = useMemo(() => {
     if (!protocoloAtual) return false;

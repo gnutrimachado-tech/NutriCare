@@ -1,15 +1,15 @@
-import NextAuth from "next-auth";
-import Credentials from "next-auth/providers/credentials";
+import type { NextAuthOptions } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
 import { prisma } from "./prisma";
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
   },
 
   providers: [
-    Credentials({
+    CredentialsProvider({
       name: "credentials",
 
       credentials: {
@@ -28,9 +28,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return null;
         }
 
-        const user = await prisma.user.findUnique({
+        const user = await prisma.nutricionistas.findUnique({
           where: {
-            email: credentials.email as string,
+            email: credentials.email,
           },
         });
 
@@ -39,8 +39,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         const passwordMatch = await compare(
-          credentials.password as string,
-          user.password
+          credentials.password,
+          user.senha_hash
         );
 
         if (!passwordMatch) {
@@ -49,7 +49,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         return {
           id: user.id,
-          name: user.name,
+          name: user.nome,
           email: user.email,
         };
       },
@@ -61,6 +61,4 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
 
   secret: process.env.NEXTAUTH_SECRET,
-});
-
-export const authOptions = {};
+};

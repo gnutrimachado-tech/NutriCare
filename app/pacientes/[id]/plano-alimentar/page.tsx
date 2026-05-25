@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import GastoCaloricoLayout from "@/components/GastoCaloricoLayout";
+import PlanoAlimentarLayout from "@/components/PlanoAlimentarLayout";
 
 export const dynamic = "force-dynamic";
 
@@ -10,25 +10,7 @@ type Props = {
   }>;
 };
 
-function calcularIdade(dataNascimento: Date | null): number {
-  if (!dataNascimento) return 0;
-  const nascimento = new Date(dataNascimento);
-  const hoje = new Date();
-  let idade = hoje.getFullYear() - nascimento.getFullYear();
-  const mesAtual = hoje.getMonth();
-  const diaAtual = hoje.getDate();
-  const mesNascimento = nascimento.getMonth();
-  const diaNascimento = nascimento.getDate();
-  if (
-    mesAtual < mesNascimento ||
-    (mesAtual === mesNascimento && diaAtual < diaNascimento)
-  ) {
-    idade--;
-  }
-  return idade;
-}
-
-export default async function GastoCaloricoPage({ params }: Props) {
+export default async function PlanoAlimentarPage({ params }: Props) {
   const { id } = await params;
 
   const paciente = await prisma.pacientes.findUnique({
@@ -39,23 +21,12 @@ export default async function GastoCaloricoPage({ params }: Props) {
     return <div>Paciente não encontrado.</div>;
   }
 
-  const anamnese = await prisma.anamneses.findFirst({
-    where: { paciente_id: id },
-    orderBy: { created_at: "desc" },
-  });
-
   const sexoPaciente =
     paciente.sexo === "Feminino" ||
     paciente.sexo === "feminino" ||
     paciente.sexo === "F"
       ? "Feminino"
       : "Masculino";
-
-  const idade = calcularIdade(paciente.data_nascimento);
-
-  const pesoKg = Number(anamnese?.peso ?? 0);
-  const alturaCm = Number(anamnese?.altura ?? 0);
-  const percentualGordura = Number(anamnese?.percentual_gordura ?? 0);
 
   return (
     <div>
@@ -78,7 +49,7 @@ export default async function GastoCaloricoPage({ params }: Props) {
               color: "#0f172a",
             }}
           >
-            Gasto Calórico
+            Plano Alimentar
           </h1>
           <p
             style={{
@@ -99,36 +70,22 @@ export default async function GastoCaloricoPage({ params }: Props) {
             marginTop: "8px",
           }}
         >
-          <Link href={`/pacientes/${id}/antropometria`}>
-            <button style={buttonSecondary}>← Voltar à Antropometria</button>
+          <Link href={`/pacientes/${id}/gasto-calorico`}>
+            <button style={buttonSecondary}>← Voltar ao Gasto Calórico</button>
           </Link>
-          <Link href={`/pacientes/${id}/plano-alimentar`}>
-            <button style={buttonPrimary}>🍽️ Plano Alimentar</button>
+          <Link href={`/pacientes/${id}`}>
+            <button style={buttonSecondary}>← Voltar ao Paciente</button>
           </Link>
         </div>
       </div>
 
-      <GastoCaloricoLayout
+      <PlanoAlimentarLayout
         sexoPaciente={sexoPaciente}
-        idade={idade}
-        pesoKg={pesoKg}
-        alturaCm={alturaCm}
-        percentualGordura={percentualGordura}
         nomePaciente={paciente.nome}
       />
     </div>
   );
 }
-
-const buttonPrimary: React.CSSProperties = {
-  padding: "10px 16px",
-  backgroundColor: "#16a34a",
-  color: "white",
-  border: "none",
-  borderRadius: "8px",
-  cursor: "pointer",
-  fontWeight: "bold",
-};
 
 const buttonSecondary: React.CSSProperties = {
   padding: "10px 16px",

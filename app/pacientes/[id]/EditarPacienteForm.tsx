@@ -2,8 +2,21 @@
 
 import { atualizarPaciente, excluirPaciente } from "./actions";
 
+type PacienteData = {
+  id: string;
+  nome: string;
+  email: string | null;
+  telefone: string | null;
+  data_nascimento: Date | string | null;
+  sexo: string | null;
+  profissao: string | null;
+  estado_civil: string | null;
+  objetivo: string | null;
+  observacoes: string | null;
+};
+
 type Props = {
-  paciente: any;
+  paciente: PacienteData;
 };
 
 export default function EditarPacienteForm({

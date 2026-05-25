@@ -2,6 +2,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import NovoPacienteForm from "./NovoPacienteForm";
 
+export const dynamic = "force-dynamic";
+
 export default async function PacientesPage() {
   const pacientes = await prisma.pacientes.findMany({
     orderBy: {
