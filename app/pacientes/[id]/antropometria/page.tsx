@@ -2,6 +2,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import AntropometriaLayout from "./AntropometriaLayout";
 
+export const dynamic = "force-dynamic";
+
 type Props = {
   params: Promise<{
     id: string;
@@ -73,35 +75,17 @@ export default async function AntropometriaPage({
   // ==============================
   // IDADE
   // ==============================
-  const idade =
-    Number(paciente.idade ?? 0) > 0
-      ? Number(paciente.idade)
-      : calcularIdade(
-          (paciente as any).data_nascimento ??
-            (paciente as any).dataNascimento ??
-            null
-        );
+  const idade = calcularIdade(paciente.data_nascimento);
 
   // ==============================
   // PESO
   // ==============================
-  const pesoKg = Number(
-    (anamnese as any)?.peso_atual ??
-      (anamnese as any)?.pesoAtual ??
-      (anamnese as any)?.peso ??
-      (anamnese as any)?.peso_kg ??
-      0
-  );
+  const pesoKg = Number(anamnese?.peso ?? 0);
 
   // ==============================
   // ALTURA
   // ==============================
-  const alturaCm = Number(
-    (anamnese as any)?.altura ??
-      (anamnese as any)?.altura_cm ??
-      (anamnese as any)?.alturaCm ??
-      0
-  );
+  const alturaCm = Number(anamnese?.altura ?? 0);
 
   return (
     <div>

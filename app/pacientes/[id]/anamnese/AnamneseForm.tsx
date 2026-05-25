@@ -4,21 +4,21 @@ import { salvarAnamnese } from "./actions";
 
 type Props = {
   pacienteId: string;
-  dados?: any;
+  dados?: Record<string, unknown>;
 };
 
 export default function AnamneseForm({
   pacienteId,
   dados,
 }: Props) {
-  function valorDecimal(valor: any) {
+  function valorDecimal(valor: unknown) {
     if (valor === null || valor === undefined) {
       return "";
     }
 
     const numero =
-      typeof valor === "object" && "toNumber" in valor
-        ? valor.toNumber()
+      typeof valor === "object" && valor !== null && "toNumber" in valor
+        ? (valor as { toNumber: () => number }).toNumber()
         : Number(valor);
 
     if (isNaN(numero)) {
@@ -28,14 +28,14 @@ export default function AnamneseForm({
     return numero.toString().replace(".", ",");
   }
 
-  function valorInteiro(valor: any) {
+  function valorInteiro(valor: unknown) {
     if (valor === null || valor === undefined) {
       return "";
     }
 
     const numero =
-      typeof valor === "object" && "toNumber" in valor
-        ? valor.toNumber()
+      typeof valor === "object" && valor !== null && "toNumber" in valor
+        ? (valor as { toNumber: () => number }).toNumber()
         : Number(valor);
 
     if (isNaN(numero)) {
@@ -182,7 +182,7 @@ export default function AnamneseForm({
         placeholder="Histórico Clínico"
         rows={4}
         style={textareaStyle}
-        defaultValue={dados?.historico_saude || ""}
+        defaultValue={String(dados?.historico_saude || "")}
       />
 
       <textarea
@@ -190,7 +190,7 @@ export default function AnamneseForm({
         placeholder="Alergias"
         rows={4}
         style={textareaStyle}
-        defaultValue={dados?.alergias || ""}
+        defaultValue={String(dados?.alergias || "")}
       />
 
       <textarea
@@ -198,7 +198,7 @@ export default function AnamneseForm({
         placeholder="Medicamentos"
         rows={4}
         style={textareaStyle}
-        defaultValue={dados?.medicamentos || ""}
+        defaultValue={String(dados?.medicamentos || "")}
       />
 
       <textarea
@@ -206,7 +206,7 @@ export default function AnamneseForm({
         placeholder="Suplementos"
         rows={4}
         style={textareaStyle}
-        defaultValue={dados?.suplementos || ""}
+        defaultValue={String(dados?.suplementos || "")}
       />
 
       <textarea
@@ -214,7 +214,7 @@ export default function AnamneseForm({
         placeholder="Observações"
         rows={4}
         style={textareaStyle}
-        defaultValue={dados?.observacoes || ""}
+        defaultValue={String(dados?.observacoes || "")}
       />
 
       <button type="submit" style={buttonStyle}>

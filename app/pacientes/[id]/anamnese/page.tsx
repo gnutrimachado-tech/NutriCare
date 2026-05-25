@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import AnamneseForm from "./AnamneseForm";
 
+export const dynamic = "force-dynamic";
+
 type Props = {
   params: Promise<{
     id: string;
@@ -115,7 +117,7 @@ export default async function AnamnesePage({ params }: Props) {
       {/* Formulário */}
       <AnamneseForm
         pacienteId={id}
-        anamnese={anamneseSerializada}
+        dados={anamneseSerializada}
       />
     </div>
   );
