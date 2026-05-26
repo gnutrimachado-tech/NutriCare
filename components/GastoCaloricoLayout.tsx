@@ -338,11 +338,9 @@ export default function GastoCaloricoLayout({
   const sexo = sexoPaciente === "Masculino" ? "M" : "F";
   const massaMagraCalc = pesoKg - (pesoKg * percentualGordura) / 100;
 
-  const [massaMuscularFonte, setMassaMuscularFonte] = useState<"anamnese" | "antropometria">("anamnese");
-
-  const massaMuscularSelecionada = massaMuscularFonte === "anamnese"
-    ? massaMuscularAnamnese
-    : massaMuscularAntropometria;
+  // Auto-populate massa muscular: use first available value from anamnese or antropometria
+  const autoMassaMuscular = massaMuscularAnamnese ?? massaMuscularAntropometria ?? null;
+  const [massaMuscularEditada, setMassaMuscularEditada] = useState<number | null>(autoMassaMuscular);
 
   const [massaMagra, setMassaMagra] = useState<number | null>(
     percentualGordura > 0 ? Math.round(massaMagraCalc * 10) / 10 : null
@@ -481,43 +479,6 @@ export default function GastoCaloricoLayout({
         </div>
       </div>
 
-      {/* Caloria Final para o Plano - moved to top */}
-      <div
-        style={{
-          background: "linear-gradient(135deg, #e3f2fd, #bbdefb)",
-          borderRadius: "12px",
-          padding: "14px 20px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "14px",
-        }}
-      >
-        <div style={{ fontSize: "12px", color: "#1976d2", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.5px" }}>
-          Caloria Final para o Plano
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <input
-            type="number"
-            value={caloriaFinal}
-            onChange={(e) => setManualCalorie(Number(e.target.value))}
-            style={{
-              width: "120px",
-              textAlign: "center",
-              fontSize: "18px",
-              fontWeight: "bold",
-              color: "#1565c0",
-              border: "2px dashed #90caf9",
-              borderRadius: "8px",
-              padding: "6px",
-              background: "rgba(255,255,255,0.7)",
-              outline: "none",
-            }}
-          />
-          <span style={{ fontSize: "11px", color: "#7b8a9e" }}>kcal/dia</span>
-        </div>
-      </div>
-
       {/* Summary Cards — design distinto do Plano Alimentar */}
       <div
         style={{
@@ -609,58 +570,56 @@ export default function GastoCaloricoLayout({
               </div>
               <div>
                 <label style={labelStyle}>
-                  Massa Magra (kg){" "}
-                  <span
-                    style={{
-                      background: "#eff6ff",
-                      color: "#1d4ed8",
-                      fontSize: "8px",
-                      padding: "1px 6px",
-                      borderRadius: "999px",
-                      fontWeight: 600,
-                    }}
-                  >
-                    opcional
-                  </span>
+                  Massa Muscular (kg)
                 </label>
                 <input
                   type="number"
-                  value={massaMagra ?? ""}
-                  placeholder="Ex: 48"
+                  value={massaMuscularEditada ?? ""}
+                  placeholder="Auto"
                   onChange={(e) => {
-                    setMassaMagra(
+                    setMassaMuscularEditada(
                       e.target.value ? Number(e.target.value) : null
                     );
-                    setManualCalorie(null);
                   }}
                   style={inputStyle}
                 />
               </div>
-              <div>
-                <label style={labelStyle}>
-                  Massa Muscular
-                </label>
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <select
-                    value={massaMuscularFonte}
-                    onChange={(e) => setMassaMuscularFonte(e.target.value as "anamnese" | "antropometria")}
-                    style={{
-                      padding: "6px 8px",
-                      border: "1.5px solid #dce3ec",
-                      borderRadius: "8px",
-                      fontSize: "10px",
-                      background: "#fff",
-                      cursor: "pointer",
-                      fontWeight: 500,
-                    }}
-                  >
-                    <option value="anamnese">Anamnese</option>
-                    <option value="antropometria">Antropometria</option>
-                  </select>
-                  <span style={{ fontSize: "12px", color: "#475569", fontWeight: 600 }}>
-                    {massaMuscularSelecionada != null ? `${massaMuscularSelecionada} kg` : "--"}
-                  </span>
-                </div>
+            </div>
+
+            {/* Caloria Final para o Plano */}
+            <div
+              style={{
+                background: "linear-gradient(135deg, #e3f2fd, #bbdefb)",
+                borderRadius: "12px",
+                padding: "14px 20px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginTop: "14px",
+              }}
+            >
+              <div style={{ fontSize: "12px", color: "#1976d2", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.5px" }}>
+                Caloria Final para o Plano
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <input
+                  type="number"
+                  value={caloriaFinal}
+                  onChange={(e) => setManualCalorie(Number(e.target.value))}
+                  style={{
+                    width: "120px",
+                    textAlign: "center",
+                    fontSize: "18px",
+                    fontWeight: "bold",
+                    color: "#1565c0",
+                    border: "2px dashed #90caf9",
+                    borderRadius: "8px",
+                    padding: "6px",
+                    background: "rgba(255,255,255,0.7)",
+                    outline: "none",
+                  }}
+                />
+                <span style={{ fontSize: "11px", color: "#7b8a9e" }}>kcal/dia</span>
               </div>
             </div>
           </div>
