@@ -481,6 +481,43 @@ export default function GastoCaloricoLayout({
         </div>
       </div>
 
+      {/* Caloria Final para o Plano - moved to top */}
+      <div
+        style={{
+          background: "linear-gradient(135deg, #e3f2fd, #bbdefb)",
+          borderRadius: "12px",
+          padding: "14px 20px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: "14px",
+        }}
+      >
+        <div style={{ fontSize: "12px", color: "#1976d2", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.5px" }}>
+          Caloria Final para o Plano
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <input
+            type="number"
+            value={caloriaFinal}
+            onChange={(e) => setManualCalorie(Number(e.target.value))}
+            style={{
+              width: "120px",
+              textAlign: "center",
+              fontSize: "18px",
+              fontWeight: "bold",
+              color: "#1565c0",
+              border: "2px dashed #90caf9",
+              borderRadius: "8px",
+              padding: "6px",
+              background: "rgba(255,255,255,0.7)",
+              outline: "none",
+            }}
+          />
+          <span style={{ fontSize: "11px", color: "#7b8a9e" }}>kcal/dia</span>
+        </div>
+      </div>
+
       {/* Summary Cards — design distinto do Plano Alimentar */}
       <div
         style={{
@@ -548,7 +585,7 @@ export default function GastoCaloricoLayout({
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(5, 1fr)",
+                gridTemplateColumns: "repeat(6, 1fr)",
                 gap: "10px",
               }}
             >
@@ -599,35 +636,30 @@ export default function GastoCaloricoLayout({
                   style={inputStyle}
                 />
               </div>
-            </div>
-
-            {/* Massa Muscular Source Selector */}
-            <div style={{ marginTop: "12px", padding: "12px", background: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
-              <label style={{ ...labelStyle, marginBottom: "6px" }}>
-                Massa Muscular — Fonte dos Dados
-              </label>
-              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                <select
-                  value={massaMuscularFonte}
-                  onChange={(e) => setMassaMuscularFonte(e.target.value as "anamnese" | "antropometria")}
-                  style={{
-                    padding: "8px 12px",
-                    border: "1.5px solid #dce3ec",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                    background: "#fff",
-                    cursor: "pointer",
-                    fontWeight: 500,
-                    minWidth: "180px",
-                  }}
-                >
-                  <option value="anamnese">Anamnese</option>
-                  <option value="antropometria">Antropometria</option>
-                </select>
-                <div style={{ fontSize: "13px", color: "#475569", fontWeight: 600 }}>
-                  {massaMuscularSelecionada != null
-                    ? `${massaMuscularSelecionada} kg`
-                    : "Sem dados"}
+              <div>
+                <label style={labelStyle}>
+                  Massa Muscular
+                </label>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <select
+                    value={massaMuscularFonte}
+                    onChange={(e) => setMassaMuscularFonte(e.target.value as "anamnese" | "antropometria")}
+                    style={{
+                      padding: "6px 8px",
+                      border: "1.5px solid #dce3ec",
+                      borderRadius: "8px",
+                      fontSize: "10px",
+                      background: "#fff",
+                      cursor: "pointer",
+                      fontWeight: 500,
+                    }}
+                  >
+                    <option value="anamnese">Anamnese</option>
+                    <option value="antropometria">Antropometria</option>
+                  </select>
+                  <span style={{ fontSize: "12px", color: "#475569", fontWeight: 600 }}>
+                    {massaMuscularSelecionada != null ? `${massaMuscularSelecionada} kg` : "--"}
+                  </span>
                 </div>
               </div>
             </div>
@@ -709,27 +741,6 @@ export default function GastoCaloricoLayout({
           {useTreino && (
             <div style={cardStyle}>
               <h3 style={cardTitleStyle}>⚡ Gasto Energético dos Treinos</h3>
-              <div
-                style={{
-                  background:
-                    "linear-gradient(to right, #1a3a5c, #2d5a8e)",
-                  color: "white",
-                  borderRadius: "8px",
-                  padding: "10px",
-                  textAlign: "center",
-                  marginBottom: "12px",
-                }}
-              >
-                <div style={{ fontSize: "12px", fontWeight: 600 }}>
-                  KCAL = MET × PESO (kg) × TEMPO (min) / 60
-                </div>
-                <div
-                  style={{ fontSize: "9px", opacity: 0.8, marginTop: "2px" }}
-                >
-                  Estimativa de gasto calórico pelo método de METS
-                </div>
-              </div>
-
               {treinos.map((treino, idx) => (
                 <div
                   key={idx}
@@ -1260,55 +1271,98 @@ export default function GastoCaloricoLayout({
             </table>
           </div>
 
-          {/* Valor Final da Caloria */}
-          <div
-            style={{
-              background: "linear-gradient(135deg, #e3f2fd, #bbdefb)",
-              borderRadius: "12px",
-              padding: "16px",
-              textAlign: "center",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "10px",
-                color: "#1976d2",
-                textTransform: "uppercase",
-                fontWeight: 600,
-                letterSpacing: "0.5px",
-              }}
-            >
-              Caloria Final para o Plano
-            </div>
-            <div style={{ marginTop: "6px" }}>
-              <input
-                type="number"
-                value={caloriaFinal}
-                onChange={(e) => setManualCalorie(Number(e.target.value))}
-                style={{
-                  width: "120px",
-                  textAlign: "center",
-                  fontSize: "18px",
-                  fontWeight: "bold",
-                  color: "#1565c0",
-                  border: "2px dashed #90caf9",
-                  borderRadius: "8px",
-                  padding: "6px",
-                  background: "rgba(255,255,255,0.7)",
-                  outline: "none",
-                }}
-              />
-            </div>
-            <div
-              style={{ fontSize: "9px", color: "#7b8a9e", marginTop: "4px" }}
-            >
-              kcal/dia · Editável pelo nutricionista
-            </div>
-          </div>
+          {/* VO2 Max - Jack Daniels Formula */}
+          <VO2MaxCalculator sexo={sexo} />
         </div>
       </div>
     </div>
   );
+}
+
+// ==================== VO2 MAX - JACK DANIELS FORMULA ====================
+function VO2MaxCalculator({ sexo }: { sexo: string }) {
+  const [distancia, setDistancia] = useState(5000)
+  const [tempo, setTempo] = useState(25)
+  const [velocidade, setVelocidade] = useState(12)
+
+  const calcVO2Max = () => {
+    const velocidadeMs = velocidade * 1000 / 3600
+    const pctVO2 = 0.8 + 0.1894393 * Math.exp(-0.012778 * tempo) + 0.2989558 * Math.exp(-0.1932605 * tempo)
+    const vo2 = -4.60 + 0.182258 * velocidadeMs * 60 + 0.000104 * Math.pow(velocidadeMs * 60, 2)
+    const vo2max = vo2 / pctVO2
+    return Math.round(vo2max * 10) / 10
+  }
+
+  const vo2max = calcVO2Max()
+  const isMale = sexo === "M"
+
+  return (
+    <div style={cardStyle}>
+      <h3 style={cardTitleStyle}>
+        🏃 VO2 Max — Jack Daniels
+        <span style={{
+          background: isMale ? "#dbeafe" : "#fce7f3",
+          color: isMale ? "#1d4ed8" : "#be185d",
+          fontSize: "10px",
+          padding: "2px 8px",
+          borderRadius: "999px",
+          fontWeight: 600,
+          marginLeft: "4px",
+        }}>
+          {isMale ? "Masculino" : "Feminino"}
+        </span>
+      </h3>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+        <div>
+          <label style={labelStyle}>Distância (m)</label>
+          <input
+            type="number"
+            value={distancia}
+            onChange={(e) => setDistancia(Number(e.target.value))}
+            style={inputStyle}
+            placeholder="Ex: 5000"
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>Velocidade (km/h)</label>
+          <input
+            type="number"
+            value={velocidade}
+            step="0.1"
+            onChange={(e) => setVelocidade(Number(e.target.value))}
+            style={inputStyle}
+            placeholder="Ex: 12"
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>Tempo (min)</label>
+          <input
+            type="number"
+            value={tempo}
+            onChange={(e) => setTempo(Number(e.target.value))}
+            style={inputStyle}
+            placeholder="Ex: 25"
+          />
+        </div>
+      </div>
+      <div style={{
+        background: "linear-gradient(135deg, #f0f9ff, #e0f2fe)",
+        borderRadius: "10px",
+        padding: "14px",
+        textAlign: "center",
+      }}>
+        <div style={{ fontSize: "10px", color: "#0369a1", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.5px" }}>
+          VO2 Max Estimado
+        </div>
+        <div style={{ fontSize: "28px", fontWeight: 800, color: "#0c4a6e", marginTop: "4px" }}>
+          {vo2max} <span style={{ fontSize: "12px", fontWeight: 500 }}>ml/kg/min</span>
+        </div>
+        <div style={{ fontSize: "9px", color: "#64748b", marginTop: "4px" }}>
+          Fórmula de Jack Daniels para corredores ({isMale ? "masculino" : "feminino"})
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ==================== STYLES ====================
