@@ -160,17 +160,9 @@ function createInitialMeals(): Meal[] {
       colorClass: 'cafe',
       time: '07:00h',
       foods: [
-        { id: 'f1', name: 'Pão integral', qty: 2, unit: 'fatias', prot: 7, carb: 26, fat: 2, kcal: 150, baseGrams: 60 },
-        { id: 'f2', name: 'Ovos mexidos', qty: 3, unit: 'unid', prot: 18, carb: 2, fat: 12, kcal: 186, baseGrams: 150 },
-        { id: 'f3', name: 'Abacate', qty: 50, unit: 'g', prot: 1, carb: 4, fat: 8, kcal: 85, baseGrams: 50 },
+        { id: 'f1', name: '', qty: 100, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 },
       ],
-      subs: {
-        f1: [{ id: 's1', name: 'Tapioca (2 unid)', qty: 2, unit: 'unid', prot: 1, carb: 24, fat: 0, kcal: 100 }],
-        f2: [
-          { id: 's2', name: 'Queijo cottage (60g)', qty: 60, unit: 'g', prot: 7, carb: 2, fat: 3, kcal: 62 },
-          { id: 's3', name: 'Peito de peru (4 fatias)', qty: 4, unit: 'fatias', prot: 12, carb: 1, fat: 2, kcal: 70 },
-        ],
-      },
+      subs: {},
       collapsed: false,
       editing: false,
     },
@@ -181,15 +173,9 @@ function createInitialMeals(): Meal[] {
       colorClass: 'almoco',
       time: '12:00h',
       foods: [
-        { id: 'f4', name: 'Arroz integral', qty: 150, unit: 'g', prot: 4, carb: 38, fat: 2, kcal: 178, baseGrams: 150 },
-        { id: 'f5', name: 'Frango grelhado', qty: 150, unit: 'g', prot: 45, carb: 0, fat: 7, kcal: 248, baseGrams: 150 },
-        { id: 'f6', name: 'Brócolis', qty: 100, unit: 'g', prot: 3, carb: 7, fat: 0, kcal: 35, baseGrams: 100 },
-        { id: 'f7', name: 'Azeite de oliva', qty: 1, unit: 'col. sopa', prot: 0, carb: 0, fat: 10, kcal: 90, baseGrams: 15 },
+        { id: 'f4', name: '', qty: 100, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 },
       ],
-      subs: {
-        f4: [{ id: 's4', name: 'Batata doce cozida (200g)', qty: 200, unit: 'g', prot: 3, carb: 40, fat: 0, kcal: 172 }],
-        f5: [{ id: 's5', name: 'Tilápia grelhada (180g)', qty: 180, unit: 'g', prot: 39, carb: 0, fat: 5, kcal: 190 }],
-      },
+      subs: {},
       collapsed: false,
       editing: false,
     },
@@ -200,8 +186,7 @@ function createInitialMeals(): Meal[] {
       colorClass: 'lanche',
       time: '15:30h',
       foods: [
-        { id: 'f8', name: 'Iogurte natural', qty: 170, unit: 'g', prot: 10, carb: 8, fat: 5, kcal: 120, baseGrams: 170 },
-        { id: 'f9', name: 'Granola', qty: 30, unit: 'g', prot: 2, carb: 20, fat: 3, kcal: 115, baseGrams: 30 },
+        { id: 'f8', name: '', qty: 100, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 },
       ],
       subs: {},
       collapsed: false,
@@ -214,13 +199,9 @@ function createInitialMeals(): Meal[] {
       colorClass: 'jantar',
       time: '19:00h',
       foods: [
-        { id: 'f10', name: 'Salmão grelhado', qty: 150, unit: 'g', prot: 34, carb: 0, fat: 12, kcal: 280, baseGrams: 150 },
-        { id: 'f11', name: 'Batata doce', qty: 200, unit: 'g', prot: 3, carb: 40, fat: 0, kcal: 172, baseGrams: 200 },
-        { id: 'f12', name: 'Salada verde', qty: 100, unit: 'g', prot: 2, carb: 4, fat: 0, kcal: 22, baseGrams: 100 },
+        { id: 'f10', name: '', qty: 100, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 },
       ],
-      subs: {
-        f10: [{ id: 's6', name: 'Frango grelhado (180g)', qty: 180, unit: 'g', prot: 54, carb: 0, fat: 8, kcal: 297 }],
-      },
+      subs: {},
       collapsed: false,
       editing: false,
     },
@@ -231,8 +212,7 @@ function createInitialMeals(): Meal[] {
       colorClass: 'ceia',
       time: '21:30h',
       foods: [
-        { id: 'f13', name: 'Chá de camomila', qty: 200, unit: 'ml', prot: 0, carb: 0, fat: 0, kcal: 2, baseGrams: 200 },
-        { id: 'f14', name: 'Castanha do Pará', qty: 3, unit: 'unid', prot: 2, carb: 1, fat: 6, kcal: 66, baseGrams: 150 },
+        { id: 'f13', name: '', qty: 100, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 },
       ],
       subs: {},
       collapsed: false,
@@ -851,40 +831,52 @@ export default function PlanoAlimentarLayout({
                         </tbody>
                       </table>
 
-                      {/* Meal Totals - accumulated */}
+                      {/* Meal Totals - simplified inline */}
                       <div
                         style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 16,
                           padding: '10px 8px',
                           borderTop: '2px solid #edf2f7',
                           marginTop: 8,
                         }}
                       >
-                        {[
-                          { label: 'Proteínas', values: meal.foods.map(f => f.prot), unit: 'g', color: '#3182ce' },
-                          { label: 'Carboidratos', values: meal.foods.map(f => f.carb), unit: 'g', color: '#38a169' },
-                          { label: 'Gorduras', values: meal.foods.map(f => f.fat), unit: 'g', color: '#dd6b20' },
-                          { label: 'Calorias', values: meal.foods.map(f => f.kcal), unit: 'kcal', color: '#e53e3e' },
-                        ].map((t) => {
-                          const total = t.values.reduce((a, b) => a + b, 0)
-                          const accumulated = t.values.length > 1
-                            ? t.values.map(v => `${v}${t.unit}`).join(' + ') + ` = `
-                            : ''
-                          return (
-                            <div key={t.label} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, fontSize: 11 }}>
-                              <span style={{ fontWeight: 700, color: t.color, minWidth: 85 }}>{t.label}:</span>
-                              <span style={{ color: '#718096', fontSize: 10 }}>{accumulated}</span>
-                              <span style={{ fontWeight: 800, color: '#1a365d' }}>{total}{t.unit}</span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                      <div style={{ fontSize: 8, color: '#a0aec0', textAlign: 'center', marginTop: 2, fontStyle: 'italic' }}>
-                        * Somente alimentos principais contabilizados
+                        <span style={{ fontWeight: 700, color: '#3182ce', fontSize: 12 }}>
+                          P{meal.foods.reduce((a, f) => a + f.prot, 0)}g
+                        </span>
+                        <span style={{ fontWeight: 700, color: '#38a169', fontSize: 12 }}>
+                          C{meal.foods.reduce((a, f) => a + f.carb, 0)}g
+                        </span>
+                        <span style={{ fontWeight: 700, color: '#dd6b20', fontSize: 12 }}>
+                          G{meal.foods.reduce((a, f) => a + f.fat, 0)}g
+                        </span>
+                        <span style={{ fontWeight: 800, color: '#e53e3e', fontSize: 13 }}>
+                          {meal.foods.reduce((a, f) => a + f.kcal, 0)}kcal
+                        </span>
                       </div>
 
-                      {/* Add Food Button */}
+                      {/* Add Meal Button (opens new meal tab) */}
                       <div
-                        onClick={() => addFood(meal.id)}
+                        onClick={() => {
+                          const newId = genId()
+                          const colorClasses = ['cafe', 'almoco', 'lanche', 'jantar', 'ceia']
+                          setMeals((prev) => [
+                            ...prev,
+                            {
+                              id: newId,
+                              name: `Refeição ${prev.length + 1}`,
+                              icon: '',
+                              colorClass: colorClasses[prev.length % colorClasses.length],
+                              time: '',
+                              foods: [{ id: genId(), name: '', qty: 100, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 }],
+                              subs: {},
+                              collapsed: false,
+                              editing: false,
+                            },
+                          ])
+                        }}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
@@ -900,7 +892,7 @@ export default function PlanoAlimentarLayout({
                           marginTop: 10,
                         }}
                       >
-                        + Adicionar Alimento Principal
+                        + Adicionar Refeição
                       </div>
                     </div>
                   )}
