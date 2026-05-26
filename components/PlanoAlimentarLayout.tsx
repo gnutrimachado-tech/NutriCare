@@ -156,7 +156,7 @@ function createInitialMeals(): Meal[] {
     {
       id: 'cafe',
       name: 'Café da Manhã',
-      icon: '☀️',
+      icon: '',
       colorClass: 'cafe',
       time: '07:00h',
       foods: [
@@ -177,7 +177,7 @@ function createInitialMeals(): Meal[] {
     {
       id: 'almoco',
       name: 'Almoço',
-      icon: '🥗',
+      icon: '',
       colorClass: 'almoco',
       time: '12:00h',
       foods: [
@@ -196,7 +196,7 @@ function createInitialMeals(): Meal[] {
     {
       id: 'lanche',
       name: 'Lanche da Tarde',
-      icon: '🍎',
+      icon: '',
       colorClass: 'lanche',
       time: '15:30h',
       foods: [
@@ -210,7 +210,7 @@ function createInitialMeals(): Meal[] {
     {
       id: 'jantar',
       name: 'Jantar',
-      icon: '🌙',
+      icon: '',
       colorClass: 'jantar',
       time: '19:00h',
       foods: [
@@ -227,7 +227,7 @@ function createInitialMeals(): Meal[] {
     {
       id: 'ceia',
       name: 'Ceia',
-      icon: '🌜',
+      icon: '',
       colorClass: 'ceia',
       time: '21:30h',
       foods: [
@@ -414,7 +414,7 @@ export default function PlanoAlimentarLayout({
   void _nomePaciente
   const [meals, setMeals] = useState<Meal[]>(createInitialMeals)
   const [strategy, _setStrategy] = useState(3) // Dieta 33:33:33
-  const [totalKcal, setTotalKcal] = useState(gastoCaloricoTotal ?? 1850)
+  const totalKcal = gastoCaloricoTotal ?? 1850
   void _setStrategy
   const sex = sexoPaciente
   const [microExpanded, setMicroExpanded] = useState(false)
@@ -725,16 +725,6 @@ export default function PlanoAlimentarLayout({
           {/* Left Column - Meals */}
           <div>
             {meals.map((meal) => {
-              const mealTotals = meal.foods.reduce(
-                (acc, f) => ({
-                  prot: acc.prot + f.prot,
-                  carb: acc.carb + f.carb,
-                  fat: acc.fat + f.fat,
-                  kcal: acc.kcal + f.kcal,
-                }),
-                { prot: 0, carb: 0, fat: 0, kcal: 0 }
-              )
-
               return (
                 <div
                   key={meal.id}
@@ -775,7 +765,7 @@ export default function PlanoAlimentarLayout({
                           onDoubleClick={() => editMealName(meal.id)}
                           style={{ fontSize: 14, fontWeight: 700, color: '#1a365d', cursor: 'pointer' }}
                         >
-                          {meal.icon} {meal.name}
+                          {meal.name}
                         </span>
                       )}
                     </div>
@@ -855,34 +845,38 @@ export default function PlanoAlimentarLayout({
                               onAddSub={() => addSub(meal.id, food.id)}
                               onUpdateSub={(subId, updates) => updateSub(meal.id, food.id, subId, updates)}
                               onRemoveSub={(subId) => removeSub(meal.id, food.id, subId)}
+                              onAddFood={() => addFood(meal.id)}
                             />
                           ))}
                         </tbody>
                       </table>
 
-                      {/* Meal Totals */}
+                      {/* Meal Totals - accumulated */}
                       <div
                         style={{
-                          display: 'flex',
-                          justifyContent: 'space-around',
-                          padding: '10px 0',
+                          padding: '10px 8px',
                           borderTop: '2px solid #edf2f7',
                           marginTop: 8,
                         }}
                       >
                         {[
-                          { label: 'Proteínas', value: `${mealTotals.prot}g` },
-                          { label: 'Carboidratos', value: `${mealTotals.carb}g` },
-                          { label: 'Gorduras', value: `${mealTotals.fat}g` },
-                          { label: 'Calorias', value: `${mealTotals.kcal} kcal` },
-                        ].map((t) => (
-                          <div key={t.label} style={{ textAlign: 'center' }}>
-                            <div style={{ fontWeight: 800, fontSize: 14, color: '#1a365d' }}>{t.value}</div>
-                            <div style={{ fontSize: 8, color: '#a0aec0', textTransform: 'uppercase', fontWeight: 700 }}>
-                              {t.label}
+                          { label: 'Proteínas', values: meal.foods.map(f => f.prot), unit: 'g', color: '#3182ce' },
+                          { label: 'Carboidratos', values: meal.foods.map(f => f.carb), unit: 'g', color: '#38a169' },
+                          { label: 'Gorduras', values: meal.foods.map(f => f.fat), unit: 'g', color: '#dd6b20' },
+                          { label: 'Calorias', values: meal.foods.map(f => f.kcal), unit: 'kcal', color: '#e53e3e' },
+                        ].map((t) => {
+                          const total = t.values.reduce((a, b) => a + b, 0)
+                          const accumulated = t.values.length > 1
+                            ? t.values.map(v => `${v}${t.unit}`).join(' + ') + ` = `
+                            : ''
+                          return (
+                            <div key={t.label} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, fontSize: 11 }}>
+                              <span style={{ fontWeight: 700, color: t.color, minWidth: 85 }}>{t.label}:</span>
+                              <span style={{ color: '#718096', fontSize: 10 }}>{accumulated}</span>
+                              <span style={{ fontWeight: 800, color: '#1a365d' }}>{total}{t.unit}</span>
                             </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                       <div style={{ fontSize: 8, color: '#a0aec0', textAlign: 'center', marginTop: 2, fontStyle: 'italic' }}>
                         * Somente alimentos principais contabilizados
@@ -906,13 +900,52 @@ export default function PlanoAlimentarLayout({
                           marginTop: 10,
                         }}
                       >
-                        + Adicionar Alimento
+                        + Adicionar Alimento Principal
                       </div>
                     </div>
                   )}
                 </div>
               )
             })}
+
+            {/* Add Meal Button */}
+            <div
+              onClick={() => {
+                const newId = genId()
+                const colorClasses = ['cafe', 'almoco', 'lanche', 'jantar', 'ceia']
+                setMeals((prev) => [
+                  ...prev,
+                  {
+                    id: newId,
+                    name: `Refeição ${prev.length + 1}`,
+                    icon: '',
+                    colorClass: colorClasses[prev.length % colorClasses.length],
+                    time: '',
+                    foods: [{ id: genId(), name: '', qty: 100, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 }],
+                    subs: {},
+                    collapsed: false,
+                    editing: false,
+                  },
+                ])
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                border: '2px dashed #63b3ed',
+                borderRadius: 12,
+                padding: 14,
+                color: '#3182ce',
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: 'pointer',
+                marginTop: 4,
+                background: '#f0f9ff',
+              }}
+            >
+              + Adicionar Refeição
+            </div>
           </div>
 
           {/* Right Column */}
@@ -920,31 +953,6 @@ export default function PlanoAlimentarLayout({
             {/* Quadro 1 - Distribuição de Macronutrientes */}
             <div style={cardStyle}>
               <div style={cardTitleStyle}>📊 Distribuição de Macronutrientes</div>
-
-              {/* Kcal Total editável - referencia gasto calórico */}
-              <div style={{ textAlign: 'center', marginBottom: 10, padding: '8px', background: '#f0f9ff', borderRadius: 10, border: '1px solid #bae6fd' }}>
-                <div style={{ fontSize: 10, color: '#0369a1', fontWeight: 600, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  Kcal Total (Gasto Calórico)
-                </div>
-                <input
-                  type="number"
-                  value={totalKcal}
-                  onChange={(e) => setTotalKcal(Number(e.target.value) || 0)}
-                  style={{
-                    width: 100,
-                    textAlign: 'center',
-                    fontSize: 18,
-                    fontWeight: 800,
-                    color: '#0c4a6e',
-                    border: '2px dashed #7dd3fc',
-                    borderRadius: 8,
-                    padding: '4px 8px',
-                    background: 'rgba(255,255,255,0.8)',
-                    outline: 'none',
-                  }}
-                />
-                <div style={{ fontSize: 9, color: '#64748b', marginTop: 2 }}>kcal/dia · Editável</div>
-              </div>
 
               <div style={{ textAlign: 'center', marginBottom: 8 }}>
                 <span
@@ -1271,6 +1279,7 @@ function FoodRow({
   onAddSub,
   onUpdateSub,
   onRemoveSub,
+  onAddFood,
 }: {
   food: FoodItem
   mealId: string
@@ -1283,13 +1292,17 @@ function FoodRow({
   onAddSub: () => void
   onUpdateSub: (subId: string, updates: Partial<SubItem>) => void
   onRemoveSub: (subId: string) => void
+  onAddFood: () => void
 }) {
   void _mealId
   return (
     <>
       <tr>
         <td style={{ ...tdStyle, fontSize: 9, color: '#4299e1', textTransform: 'uppercase', fontWeight: 700 }}>
-          PRINCIPAL
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            PRINCIPAL
+            <span onClick={onAddFood} style={{ cursor: 'pointer', color: '#4299e1', fontSize: 14, fontWeight: 700, marginLeft: 2 }} title="Adicionar alimento principal">+</span>
+          </div>
         </td>
         <td style={tdStyle}>
           <TacoAutocomplete
@@ -1347,13 +1360,22 @@ function FoodRow({
         </td>
       </tr>
 
+      {/* Blue divider between principal and substitution */}
+      {subs.length > 0 && (
+        <tr>
+          <td colSpan={8} style={{ padding: 0, border: 'none' }}>
+            <div style={{ height: 3, background: 'linear-gradient(90deg, #4299e1, #63b3ed)', borderRadius: 2 }} />
+          </td>
+        </tr>
+      )}
+
       {/* Substitution rows */}
       {subs.map((sub, idx) => (
-        <tr key={sub.id} style={{ background: '#f7fafc' }}>
-          <td style={{ ...tdStyle, borderBottom: '1px solid #edf2f7', fontSize: 9, color: '#63b3ed', fontWeight: 600 }}>
+        <tr key={sub.id} style={{ background: '#edf4fc' }}>
+          <td style={{ ...tdStyle, borderBottom: '1px solid #bee3f8', fontSize: 9, color: '#3182ce', fontWeight: 600 }}>
             ↳ SUB {idx + 1}
           </td>
-          <td style={{ ...tdStyle, borderBottom: '1px solid #edf2f7' }}>
+          <td style={{ ...tdStyle, borderBottom: '1px solid #bee3f8' }}>
             <TacoAutocomplete
               value={sub.name}
               onChange={(name) => onUpdateSub(sub.id, { name })}
@@ -1371,43 +1393,80 @@ function FoodRow({
               style={{ minWidth: 120 }}
             />
           </td>
-          <td style={{ ...tdStyle, borderBottom: '1px solid #edf2f7' }}>
-            <input
-              type="number"
-              value={sub.qty}
-              onChange={(e) => {
-                const qty = parseFloat(e.target.value) || 0
-                const tbcaFood = TBCA_FOODS.find((t) => t.n === sub.name)
-                if (tbcaFood) {
-                  const grams = qty * (UNIT_FACTORS[sub.unit] || 1)
-                  const factor = grams / 100
-                  onUpdateSub(sub.id, {
-                    qty,
-                    prot: Math.round(tbcaFood.p * factor * 10) / 10,
-                    carb: Math.round(tbcaFood.c * factor * 10) / 10,
-                    fat: Math.round(tbcaFood.l * factor * 10) / 10,
-                    kcal: Math.round(tbcaFood.k * factor),
-                  })
-                } else {
-                  onUpdateSub(sub.id, { qty })
-                }
-              }}
-              style={{
-                width: 50,
-                padding: '5px 6px',
-                border: '1.5px solid #e2e8f0',
-                borderRadius: 8,
-                fontSize: 12,
-                textAlign: 'center',
-                fontWeight: 600,
-              }}
-            />
+          <td style={{ ...tdStyle, borderBottom: '1px solid #bee3f8' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input
+                type="number"
+                value={sub.qty}
+                onChange={(e) => {
+                  const qty = parseFloat(e.target.value) || 0
+                  const tbcaFood = TBCA_FOODS.find((t) => t.n === sub.name)
+                  if (tbcaFood) {
+                    const grams = qty * (UNIT_FACTORS[sub.unit] || 1)
+                    const factor = grams / 100
+                    onUpdateSub(sub.id, {
+                      qty,
+                      prot: Math.round(tbcaFood.p * factor * 10) / 10,
+                      carb: Math.round(tbcaFood.c * factor * 10) / 10,
+                      fat: Math.round(tbcaFood.l * factor * 10) / 10,
+                      kcal: Math.round(tbcaFood.k * factor),
+                    })
+                  } else {
+                    onUpdateSub(sub.id, { qty })
+                  }
+                }}
+                style={{
+                  width: 50,
+                  padding: '5px 6px',
+                  border: '1.5px solid #e2e8f0',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  textAlign: 'center',
+                  fontWeight: 600,
+                }}
+              />
+              <select
+                value={sub.unit}
+                onChange={(e) => {
+                  const newUnit = e.target.value
+                  const tbcaFood = TBCA_FOODS.find((t) => t.n === sub.name)
+                  if (tbcaFood) {
+                    const grams = sub.qty * (UNIT_FACTORS[newUnit] || 1)
+                    const factor = grams / 100
+                    onUpdateSub(sub.id, {
+                      unit: newUnit,
+                      prot: Math.round(tbcaFood.p * factor * 10) / 10,
+                      carb: Math.round(tbcaFood.c * factor * 10) / 10,
+                      fat: Math.round(tbcaFood.l * factor * 10) / 10,
+                      kcal: Math.round(tbcaFood.k * factor),
+                    })
+                  } else {
+                    onUpdateSub(sub.id, { unit: newUnit })
+                  }
+                }}
+                style={{
+                  padding: '5px 6px',
+                  border: '1.5px solid #e2e8f0',
+                  borderRadius: 8,
+                  fontSize: 10,
+                  background: '#fff',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                }}
+              >
+                {UNIT_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </td>
-          <td style={{ ...tdStyle, borderBottom: '1px solid #edf2f7', textAlign: 'right', fontWeight: 600, color: '#4a5568', fontSize: 12 }}>{sub.prot}g</td>
-          <td style={{ ...tdStyle, borderBottom: '1px solid #edf2f7', textAlign: 'right', fontWeight: 600, color: '#4a5568', fontSize: 12 }}>{sub.carb}g</td>
-          <td style={{ ...tdStyle, borderBottom: '1px solid #edf2f7', textAlign: 'right', fontWeight: 600, color: '#4a5568', fontSize: 12 }}>{sub.fat}g</td>
-          <td style={{ ...tdStyle, borderBottom: '1px solid #edf2f7', textAlign: 'right', fontWeight: 800, color: '#1a365d', fontSize: 12 }}>{sub.kcal}</td>
-          <td style={{ ...tdStyle, borderBottom: '1px solid #edf2f7' }}>
+          <td style={{ ...tdStyle, borderBottom: '1px solid #bee3f8', textAlign: 'right', fontWeight: 600, color: '#4a5568', fontSize: 12 }}>{sub.prot}g</td>
+          <td style={{ ...tdStyle, borderBottom: '1px solid #bee3f8', textAlign: 'right', fontWeight: 600, color: '#4a5568', fontSize: 12 }}>{sub.carb}g</td>
+          <td style={{ ...tdStyle, borderBottom: '1px solid #bee3f8', textAlign: 'right', fontWeight: 600, color: '#4a5568', fontSize: 12 }}>{sub.fat}g</td>
+          <td style={{ ...tdStyle, borderBottom: '1px solid #bee3f8', textAlign: 'right', fontWeight: 800, color: '#1a365d', fontSize: 12 }}>{sub.kcal}</td>
+          <td style={{ ...tdStyle, borderBottom: '1px solid #bee3f8' }}>
             <span onClick={() => onRemoveSub(sub.id)} style={{ cursor: 'pointer', color: '#e53e3e', fontSize: 16, padding: '2px 4px', fontWeight: 700 }}>
               ×
             </span>
@@ -1416,14 +1475,21 @@ function FoodRow({
       ))}
 
       {/* Add substitution */}
-      <tr style={{ background: '#f7fafc' }}>
-        <td colSpan={8} style={{ ...tdStyle, borderBottom: '1px solid #edf2f7' }}>
+      <tr style={{ background: '#edf4fc' }}>
+        <td colSpan={8} style={{ ...tdStyle, borderBottom: '1px solid #bee3f8' }}>
           <span
             onClick={onAddSub}
-            style={{ color: '#63b3ed', fontSize: 10, cursor: 'pointer', fontWeight: 600 }}
+            style={{ color: '#3182ce', fontSize: 10, cursor: 'pointer', fontWeight: 600 }}
           >
             ↳ + Adicionar substituição
           </span>
+        </td>
+      </tr>
+
+      {/* Blue divider after substitutions */}
+      <tr>
+        <td colSpan={8} style={{ padding: 0, border: 'none' }}>
+          <div style={{ height: 3, background: 'linear-gradient(90deg, #4299e1, #63b3ed)', borderRadius: 2 }} />
         </td>
       </tr>
     </>

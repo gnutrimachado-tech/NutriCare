@@ -116,38 +116,6 @@ export default async function PacienteDetalhePage({
         </div>
       </div>
 
-      {/* Histórico do Paciente - Massa Muscular, Adiposa, % Gordura */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: "16px",
-          marginBottom: "24px",
-        }}
-      >
-        <div style={historicoCard}>
-          <div style={historicoIcon}>💪</div>
-          <div style={historicoLabel}>Massa Muscular</div>
-          <div style={historicoValue}>
-            {formatarNumero(massaMuscular)} <span style={historicoUnit}>kg</span>
-          </div>
-        </div>
-        <div style={historicoCard}>
-          <div style={historicoIcon}>📊</div>
-          <div style={historicoLabel}>Massa Adiposa</div>
-          <div style={historicoValue}>
-            {massaAdiposa} <span style={historicoUnit}>kg</span>
-          </div>
-        </div>
-        <div style={historicoCard}>
-          <div style={historicoIcon}>📈</div>
-          <div style={historicoLabel}>% Gordura</div>
-          <div style={historicoValue}>
-            {formatarNumero(percentualGordura)} <span style={historicoUnit}>%</span>
-          </div>
-        </div>
-      </div>
-
       <EditarPacienteForm paciente={paciente} />
 
       <div
@@ -162,6 +130,35 @@ export default async function PacienteDetalhePage({
         <h2 style={{ marginBottom: "20px" }}>
           Informações Atuais
         </h2>
+
+        {/* Dados do histórico do paciente */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gap: "16px",
+            marginBottom: "24px",
+          }}
+        >
+          <div style={historicoCard}>
+            <div style={historicoLabel}>Massa Muscular</div>
+            <div style={historicoValue}>
+              {formatarNumero(massaMuscular)} <span style={historicoUnit}>kg</span>
+            </div>
+          </div>
+          <div style={historicoCard}>
+            <div style={historicoLabel}>Massa Adiposa</div>
+            <div style={historicoValue}>
+              {massaAdiposa} <span style={historicoUnit}>kg</span>
+            </div>
+          </div>
+          <div style={historicoCard}>
+            <div style={historicoLabel}>% Gordura</div>
+            <div style={historicoValue}>
+              {formatarNumero(percentualGordura)} <span style={historicoUnit}>%</span>
+            </div>
+          </div>
+        </div>
 
         <p><strong>Nome:</strong> {paciente.nome}</p>
         <p><strong>E-mail:</strong> {paciente.email || "-"}</p>
@@ -184,11 +181,6 @@ const historicoCard: React.CSSProperties = {
   boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
   border: "1px solid #edf2f7",
   textAlign: "center",
-};
-
-const historicoIcon: React.CSSProperties = {
-  fontSize: "28px",
-  marginBottom: "6px",
 };
 
 const historicoLabel: React.CSSProperties = {
