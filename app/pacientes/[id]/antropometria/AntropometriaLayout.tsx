@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
+import { sincronizarAntropometria } from "../anamnese/actions";
 
 type SexoPaciente = "Masculino" | "Feminino";
 
 type Props = {
+  pacienteId: string;
   sexoPaciente: SexoPaciente;
   idade: number;
   pesoKg: number;
@@ -505,6 +507,7 @@ const PROTOCOLS: ProtocolDef[] = [
 ];
 
 export default function AntropometriaLayout({
+  pacienteId,
   sexoPaciente,
   idade,
   pesoKg,
@@ -612,6 +615,59 @@ export default function AntropometriaLayout({
       formulaLabel: calc.formulaLabel,
     };
   }, [protocoloAtual, canCalculate, idade, pesoKg, alturaCm, dobrasNum, circNum]);
+
+  // ==============================
+  // % ÁGUA CORPORAL — Fórmula de Watson
+  // Homens: TBW = 2.447 − 0.09156·idade + 0.1074·altura(cm) + 0.3362·peso(kg)
+  // Mulheres: TBW = −2.097 + 0.1069·altura(cm) + 0.2466·peso(kg)
+  // Exibe apenas o % de água do corpo (TBW / peso × 100).
+  // ==============================
+  const aguaCorporalPct = useMemo(() => {
+    if (!(pesoKg > 0) || !(alturaCm > 0)) return null;
+    const tbw =
+      sexoPaciente === "Masculino"
+        ? 2.447 - 0.09156 * idade + 0.1074 * alturaCm + 0.3362 * pesoKg
+        : -2.097 + 0.1069 * alturaCm + 0.2466 * pesoKg;
+    if (!Number.isFinite(tbw) || tbw <= 0) return null;
+    return round1((tbw / pesoKg) * 100);
+  }, [sexoPaciente, idade, alturaCm, pesoKg]);
+
+  // ==============================
+  // LINK COM A ANAMNESE
+  // Salva massa muscular, % de gordura e % de água nas barras da Anamnese.
+  // Regra: primeiro valor vence (só preenche o que estiver vazio na Anamnese).
+  // ==============================
+  const syncRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    syncRef.current = () => {
+      if (
+        result.massaMuscular === null &&
+        result.bodyFatPct === null &&
+        aguaCorporalPct === null
+      ) {
+        return;
+      }
+      sincronizarAntropometria(pacienteId, {
+        massa_muscular: result.massaMuscular,
+        percentual_gordura: result.bodyFatPct,
+        agua_corporal: aguaCorporalPct,
+      }).catch(() => {});
+    };
+  }, [result, aguaCorporalPct, pacienteId]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => syncRef.current(), 1500);
+    return () => clearTimeout(timer);
+  }, [result, aguaCorporalPct]);
+
+  useEffect(() => {
+    const handler = () => syncRef.current();
+    window.addEventListener("pagehide", handler);
+    return () => {
+      window.removeEventListener("pagehide", handler);
+      syncRef.current();
+    };
+  }, []);
 
   function onChangeDobra(key: DobraKey, value: string) {
     setDobras((prev) => ({ ...prev, [key]: normalizeDecimalInput(value) }));
@@ -846,6 +902,134 @@ export default function AntropometriaLayout({
             <div style={warningBoxStyle}>
               Preencha peso, altura, idade e todos os campos obrigatórios do
               protocolo para liberar o cálculo.
+            </div>
+          )}
+        </div>
+
+        {/* ÁGUA CORPORAL — Fórmula de Watson */}
+        <div style={{ ...resultCardStyle, marginTop: 24 }}>
+          <div style={resultHeaderStyle}>
+            <div style={headerBlockStyle}>
+              <div style={iconBubbleBlue}>💧</div>
+              <div>
+                <h3 style={sectionTitleStyle}>% de água corporal</h3>
+                <p style={subTitleStyle}>
+                  Fórmula de Watson ({sexoPaciente})
+                </p>
+              </div>
+            </div>
+
+            <div style={aguaValueBoxStyle}>
+              <div style={aguaValueStyle}>
+                {aguaCorporalPct !== null ? formatPt(aguaCorporalPct, " %") : "—"}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* VO2 MAX — Jack Daniels */}
+        <VO2MaxJackDaniels sexoPaciente={sexoPaciente} />
+      </div>
+    </div>
+  );
+}
+
+// ==================== VO2 MAX — JACK DANIELS ====================
+function classifyVdot(v: number): { label: string; color: string; bg: string } {
+  if (v < 35) return { label: "Iniciante", color: "#dc2626", bg: "#fef2f2" };
+  if (v < 45) return { label: "Recreativo treinado", color: "#d97706", bg: "#fffbeb" };
+  if (v < 55) return { label: "Muito bom", color: "#16a34a", bg: "#f0fdf4" };
+  if (v < 65) return { label: "Excelente", color: "#16a34a", bg: "#f0fdf4" };
+  return { label: "Elite", color: "#15803d", bg: "#dcfce7" };
+}
+
+function VO2MaxJackDaniels({ sexoPaciente }: { sexoPaciente: SexoPaciente }) {
+  const [distancia, setDistancia] = useState(""); // metros
+  const [tempo, setTempo] = useState(""); // minutos
+
+  const dist = parsePtNumber(distancia);
+  const min = parsePtNumber(tempo);
+
+  const vo2max = useMemo(() => {
+    if (!(dist > 0) || !(min > 0)) return null;
+    const v = dist / min; // velocidade em metros/minuto
+    const valor = -4.6 + 0.182258 * v + 0.000104 * v * v;
+    if (!Number.isFinite(valor) || valor <= 0) return null;
+    return Math.round(valor * 10) / 10;
+  }, [dist, min]);
+
+  const vdot = vo2max;
+  const cls = vdot !== null ? classifyVdot(vdot) : null;
+
+  return (
+    <div style={{ ...resultCardStyle, marginTop: 24 }}>
+      <div style={resultHeaderStyle}>
+        <div style={headerBlockStyle}>
+          <div style={iconBubblePurple}>🏃</div>
+          <div>
+            <h3 style={sectionTitleStyle}>VO2max — Jack Daniels (corredores)</h3>
+            <p style={subTitleStyle}>
+              Cálculo automático para {sexoPaciente.toLowerCase()}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div style={vo2GridStyle}>
+        <div>
+          <label style={vo2LabelStyle}>Distância (metros)</label>
+          <input
+            type="text"
+            inputMode="decimal"
+            placeholder="Ex: 5000"
+            value={distancia}
+            onChange={(e) => setDistancia(normalizeDecimalInput(e.target.value))}
+            style={smallInputStyle}
+          />
+        </div>
+        <div>
+          <label style={vo2LabelStyle}>Tempo (minutos)</label>
+          <input
+            type="text"
+            inputMode="decimal"
+            placeholder="Ex: 25"
+            value={tempo}
+            onChange={(e) => setTempo(normalizeDecimalInput(e.target.value))}
+            style={smallInputStyle}
+          />
+        </div>
+      </div>
+
+      <div style={vo2ResultRowStyle}>
+        <div style={vo2ResultBoxStyle}>
+          <div style={vo2ResultLabelStyle}>VO2max estimado</div>
+          <div style={vo2ResultValueStyle}>
+            {vo2max !== null ? (
+              <>
+                {formatPt(vo2max)}{" "}
+                <span style={{ fontSize: 12, fontWeight: 500, color: "#64748b" }}>
+                  ml/kg/min
+                </span>
+              </>
+            ) : (
+              "—"
+            )}
+          </div>
+        </div>
+
+        <div
+          style={{
+            ...vo2ResultBoxStyle,
+            background: cls ? cls.bg : "#f8fafc",
+          }}
+        >
+          <div style={vo2ResultLabelStyle}>VDOT</div>
+          <div style={{ ...vo2ResultValueStyle, color: cls ? cls.color : "#0f172a" }}>
+            {vdot !== null ? formatPt(vdot) : "—"}
+          </div>
+          {cls && (
+            <div style={{ fontSize: 13, fontWeight: 700, color: cls.color, marginTop: 2 }}>
+              {cls.label}
             </div>
           )}
         </div>
@@ -1093,6 +1277,65 @@ const resultFootNoteStyle: React.CSSProperties = {
   marginTop: 4,
   fontSize: 12,
   color: "#9ca3af",
+};
+
+const aguaValueBoxStyle: React.CSSProperties = {
+  background: "#eff6ff",
+  border: "1px solid #dbeafe",
+  borderRadius: 14,
+  padding: "12px 20px",
+  textAlign: "center",
+};
+
+const aguaValueStyle: React.CSSProperties = {
+  fontSize: 28,
+  fontWeight: 800,
+  color: "#2563eb",
+};
+
+const vo2GridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: 16,
+  marginTop: 16,
+};
+
+const vo2LabelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: 13,
+  fontWeight: 600,
+  color: "#475569",
+  marginBottom: 6,
+};
+
+const vo2ResultRowStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: 16,
+  marginTop: 18,
+};
+
+const vo2ResultBoxStyle: React.CSSProperties = {
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+  borderRadius: 14,
+  padding: "14px 18px",
+  textAlign: "center",
+};
+
+const vo2ResultLabelStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "#64748b",
+  textTransform: "uppercase",
+  letterSpacing: 0.4,
+};
+
+const vo2ResultValueStyle: React.CSSProperties = {
+  fontSize: 26,
+  fontWeight: 800,
+  color: "#0f172a",
+  marginTop: 4,
 };
 
 const resultTitleGreen: React.CSSProperties = {

@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect, useId } from 'react'
 import { TBCA_FOODS, type TBCAFood } from './tbca-data'
 
 type PlanoAlimentarProps = {
+  pacienteId?: string
   sexoPaciente: 'Feminino' | 'Masculino'
   nomePaciente?: string
   gastoCaloricoTotal?: number | null
@@ -22,14 +23,10 @@ const UNIT_FACTORS: Record<string, number> = {
 }
 
 const UNIT_OPTIONS = [
-  { value: 'g', label: 'gramas (g)' },
+  { value: 'g', label: 'gramas' },
   { value: 'ml', label: 'ml' },
   { value: 'unid', label: 'unidade' },
   { value: 'fatias', label: 'fatias' },
-  { value: 'col. sopa', label: 'colher sopa' },
-  { value: 'col. cha', label: 'colher chá' },
-  { value: 'porcao', label: 'porção caseira' },
-  { value: 'xicara', label: 'xícara' },
 ]
 
 // ==================== DIETARY STRATEGIES ====================
@@ -160,7 +157,7 @@ function createInitialMeals(): Meal[] {
       colorClass: 'cafe',
       time: '07:00h',
       foods: [
-        { id: 'f1', name: '', qty: 100, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 },
+        { id: 'f1', name: '', qty: 0, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 },
       ],
       subs: {},
       collapsed: false,
@@ -173,7 +170,7 @@ function createInitialMeals(): Meal[] {
       colorClass: 'almoco',
       time: '12:00h',
       foods: [
-        { id: 'f4', name: '', qty: 100, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 },
+        { id: 'f4', name: '', qty: 0, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 },
       ],
       subs: {},
       collapsed: false,
@@ -186,7 +183,7 @@ function createInitialMeals(): Meal[] {
       colorClass: 'lanche',
       time: '15:30h',
       foods: [
-        { id: 'f8', name: '', qty: 100, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 },
+        { id: 'f8', name: '', qty: 0, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 },
       ],
       subs: {},
       collapsed: false,
@@ -199,7 +196,7 @@ function createInitialMeals(): Meal[] {
       colorClass: 'jantar',
       time: '19:00h',
       foods: [
-        { id: 'f10', name: '', qty: 100, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 },
+        { id: 'f10', name: '', qty: 0, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 },
       ],
       subs: {},
       collapsed: false,
@@ -212,7 +209,7 @@ function createInitialMeals(): Meal[] {
       colorClass: 'ceia',
       time: '21:30h',
       foods: [
-        { id: 'f13', name: '', qty: 100, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 },
+        { id: 'f13', name: '', qty: 0, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 },
       ],
       subs: {},
       collapsed: false,
@@ -387,15 +384,43 @@ function PieChart({ prot, carb, fat }: { prot: number; carb: number; fat: number
 
 // ==================== MAIN COMPONENT ====================
 export default function PlanoAlimentarLayout({
+  pacienteId,
   sexoPaciente,
   nomePaciente: _nomePaciente,
   gastoCaloricoTotal,
 }: PlanoAlimentarProps) {
   void _nomePaciente
   const [meals, setMeals] = useState<Meal[]>(createInitialMeals)
-  const [strategy, _setStrategy] = useState(3) // Dieta 33:33:33
-  const totalKcal = gastoCaloricoTotal ?? 1850
-  void _setStrategy
+
+  // Caloria Final + Estratégia vindas da aba Gasto Calórico (via localStorage).
+  const [planoConfig, setPlanoConfig] = useState<{
+    caloriaFinal: number | null
+    estrategiaNome: string
+    mac: [number, number, number] | null
+  }>({ caloriaFinal: null, estrategiaNome: '', mac: null })
+
+  useEffect(() => {
+    if (!pacienteId) return
+    const timer = window.setTimeout(() => {
+      try {
+        const raw = window.localStorage.getItem(`nutricare:plano:${pacienteId}`)
+        if (raw) {
+          const p = JSON.parse(raw)
+          setPlanoConfig({
+            caloriaFinal: typeof p.caloriaFinal === 'number' ? p.caloriaFinal : null,
+            estrategiaNome: typeof p.estrategiaNome === 'string' ? p.estrategiaNome : '',
+            mac: Array.isArray(p.mac) && p.mac.length === 3 ? p.mac : null,
+          })
+        }
+      } catch {
+        // ignore
+      }
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [pacienteId])
+
+  // O gráfico de pizza sempre usa a Caloria Final do Gasto Calórico.
+  const totalKcal = planoConfig.caloriaFinal ?? gastoCaloricoTotal ?? 1850
   const sex = sexoPaciente
   const [microExpanded, setMicroExpanded] = useState(false)
   const [cadMicroExpanded, setCadMicroExpanded] = useState(false)
@@ -423,7 +448,15 @@ export default function PlanoAlimentarLayout({
     { prot: 0, carb: 0, fat: 0, kcal: 0 }
   )
 
-  const strat = STRATEGIES[strategy]
+  // Estratégia: nome + percentuais vêm do Gasto Calórico (fallback p/ padrão).
+  const fallbackStrat = STRATEGIES[3]
+  const macFromGasto = planoConfig.mac
+  const strat = {
+    name: planoConfig.estrategiaNome || fallbackStrat.name,
+    prot: macFromGasto ? macFromGasto[0] : fallbackStrat.prot,
+    carb: macFromGasto ? macFromGasto[1] : fallbackStrat.carb,
+    fat: macFromGasto ? macFromGasto[2] : fallbackStrat.fat,
+  }
   const metaProt = Math.round((totalKcal * strat.prot) / 100 / 4)
   const metaCarb = Math.round((totalKcal * strat.carb) / 100 / 4)
   const metaFat = Math.round((totalKcal * strat.fat) / 100 / 9)
@@ -498,7 +531,7 @@ export default function PlanoAlimentarLayout({
     const newFood: FoodItem = {
       id: genId(),
       name: '',
-      qty: 100,
+      qty: 0,
       unit: 'g',
       prot: 0,
       carb: 0,
@@ -572,7 +605,7 @@ export default function PlanoAlimentarLayout({
     const newSub: SubItem = {
       id: genId(),
       name: '',
-      qty: 100,
+      qty: 0,
       unit: 'g',
       prot: 0,
       carb: 0,
@@ -870,7 +903,7 @@ export default function PlanoAlimentarLayout({
                               icon: '',
                               colorClass: colorClasses[prev.length % colorClasses.length],
                               time: '',
-                              foods: [{ id: genId(), name: '', qty: 100, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 }],
+                              foods: [{ id: genId(), name: '', qty: 0, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 }],
                               subs: {},
                               collapsed: false,
                               editing: false,
@@ -899,45 +932,6 @@ export default function PlanoAlimentarLayout({
                 </div>
               )
             })}
-
-            {/* Add Meal Button */}
-            <div
-              onClick={() => {
-                const newId = genId()
-                const colorClasses = ['cafe', 'almoco', 'lanche', 'jantar', 'ceia']
-                setMeals((prev) => [
-                  ...prev,
-                  {
-                    id: newId,
-                    name: `Refeição ${prev.length + 1}`,
-                    icon: '',
-                    colorClass: colorClasses[prev.length % colorClasses.length],
-                    time: '',
-                    foods: [{ id: genId(), name: '', qty: 100, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 }],
-                    subs: {},
-                    collapsed: false,
-                    editing: false,
-                  },
-                ])
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                border: '2px dashed #63b3ed',
-                borderRadius: 12,
-                padding: 14,
-                color: '#3182ce',
-                fontSize: 14,
-                fontWeight: 700,
-                cursor: 'pointer',
-                marginTop: 4,
-                background: '#f0f9ff',
-              }}
-            >
-              + Adicionar Refeição
-            </div>
           </div>
 
           {/* Right Column */}
@@ -1041,26 +1035,38 @@ export default function PlanoAlimentarLayout({
             <div style={cardStyle}>
               <div style={cardTitleStyle}>💊 Micronutrientes</div>
               <div style={{ fontSize: 10, color: '#718096', marginBottom: 8 }}>
-                IDR baseada no sexo: <strong>{sex}</strong>
+                IDR (OMS) baseada no sexo: <strong>{sex}</strong> — barra mostra o quanto falta
               </div>
-              {MICRO_IDR.map((micro) => (
-                <div
-                  key={micro.name}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '5px 0',
-                    borderBottom: '1px solid #f7fafc',
-                    fontSize: 11,
-                  }}
-                >
-                  <span style={{ color: '#4a5568', fontWeight: 500 }}>{micro.name}</span>
-                  <span style={{ fontWeight: 700, color: '#1a365d' }}>
-                    {sex === 'Masculino' ? micro.male : micro.female} {micro.unit}
-                  </span>
-                </div>
-              ))}
+              {MICRO_IDR.map((micro) => {
+                const meta = sex === 'Masculino' ? micro.male : micro.female
+                const consumido = 0 // sem banco de alimentos com micronutrientes (aguardando nova tabela)
+                const pct = meta > 0 ? Math.min(Math.round((consumido / meta) * 100), 100) : 0
+                const falta = Math.max(meta - consumido, 0)
+                return (
+                  <div key={micro.name} style={{ padding: '6px 0', borderBottom: '1px solid #f7fafc' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ color: '#4a5568', fontWeight: 600, fontSize: 11 }}>{micro.name}</span>
+                      <span style={{ fontWeight: 700, color: '#1a365d', fontSize: 10 }}>
+                        {consumido}/{meta} {micro.unit}
+                      </span>
+                    </div>
+                    <div style={{ height: 8, borderRadius: 4, background: '#edf2f7', overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          height: '100%',
+                          width: `${pct}%`,
+                          borderRadius: 4,
+                          background: 'linear-gradient(90deg, #68d391, #38a169)',
+                          transition: 'width 0.4s',
+                        }}
+                      />
+                    </div>
+                    <div style={{ fontSize: 9, marginTop: 2, fontWeight: 600, color: falta > 0 ? '#e53e3e' : '#38a169' }}>
+                      {falta > 0 ? `Faltam ${falta} ${micro.unit} (${pct}%)` : `Meta atingida (${pct}%)`}
+                    </div>
+                  </div>
+                )
+              })}
 
               {microExpanded && (
                 <div style={{ marginTop: 8 }}>
@@ -1290,10 +1296,22 @@ function FoodRow({
   return (
     <>
       <tr>
-        <td style={{ ...tdStyle, fontSize: 9, color: '#4299e1', textTransform: 'uppercase', fontWeight: 700 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            PRINCIPAL
-            <span onClick={onAddFood} style={{ cursor: 'pointer', color: '#4299e1', fontSize: 14, fontWeight: 700, marginLeft: 2 }} title="Adicionar alimento principal">+</span>
+        <td style={tdStyle}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+            <span
+              onClick={onAddFood}
+              title="Adicionar outro alimento principal"
+              style={{ cursor: 'pointer', color: '#38a169', fontSize: 11, fontWeight: 800 }}
+            >
+              +principal
+            </span>
+            <span
+              onClick={onAddSub}
+              title="Adicionar substituição"
+              style={{ cursor: 'pointer', color: '#38a169', fontSize: 11, fontWeight: 800 }}
+            >
+              +substituição
+            </span>
           </div>
         </td>
         <td style={tdStyle}>
@@ -1308,7 +1326,8 @@ function FoodRow({
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <input
               type="number"
-              value={food.qty}
+              value={food.qty || ''}
+              placeholder="0"
               onChange={(e) => onUpdateQty(parseFloat(e.target.value) || 0)}
               style={{
                 width: 50,
@@ -1389,7 +1408,8 @@ function FoodRow({
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <input
                 type="number"
-                value={sub.qty}
+                value={sub.qty || ''}
+                placeholder="0"
                 onChange={(e) => {
                   const qty = parseFloat(e.target.value) || 0
                   const tbcaFood = TBCA_FOODS.find((t) => t.n === sub.name)
@@ -1465,18 +1485,6 @@ function FoodRow({
           </td>
         </tr>
       ))}
-
-      {/* Add substitution */}
-      <tr style={{ background: '#edf4fc' }}>
-        <td colSpan={8} style={{ ...tdStyle, borderBottom: '1px solid #bee3f8' }}>
-          <span
-            onClick={onAddSub}
-            style={{ color: '#3182ce', fontSize: 10, cursor: 'pointer', fontWeight: 600 }}
-          >
-            ↳ + Adicionar substituição
-          </span>
-        </td>
-      </tr>
 
       {/* Blue divider after substitutions */}
       <tr>

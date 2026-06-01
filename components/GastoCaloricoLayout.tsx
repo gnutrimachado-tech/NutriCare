@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 
 // ==================== TYPES ====================
 type Props = {
+  pacienteId?: string;
   sexoPaciente: "Masculino" | "Feminino";
   idade: number;
   pesoKg: number;
@@ -326,6 +327,7 @@ interface TreinoState {
 
 // ==================== COMPONENT ====================
 export default function GastoCaloricoLayout({
+  pacienteId,
   sexoPaciente,
   idade,
   pesoKg,
@@ -382,6 +384,25 @@ export default function GastoCaloricoLayout({
   }, [selectedStrat, pesoKg]);
 
   const stratResult = computeStrat();
+
+  // Compartilha a Caloria Final e a Estratégia selecionada com a aba
+  // Plano Alimentar (que é uma página separada) via localStorage.
+  useEffect(() => {
+    if (!pacienteId) return;
+    try {
+      const estrat = strategies[selectedStrat];
+      window.localStorage.setItem(
+        `nutricare:plano:${pacienteId}`,
+        JSON.stringify({
+          caloriaFinal,
+          estrategiaNome: estrat?.name ?? "",
+          mac: estrat?.mac ?? null,
+        })
+      );
+    } catch {
+      // ignore (modo privado/sem storage)
+    }
+  }, [pacienteId, caloriaFinal, selectedStrat]);
 
   const addTreino = () => {
     if (treinos.length < 3) {
@@ -1229,99 +1250,10 @@ export default function GastoCaloricoLayout({
               </tbody>
             </table>
           </div>
-
-          {/* VO2 Max - Jack Daniels Formula */}
-          <VO2MaxCalculator sexo={sexo} />
         </div>
       </div>
     </div>
   );
-}
-
-// ==================== VO2 MAX - JACK DANIELS FORMULA ====================
-function VO2MaxCalculator({ sexo }: { sexo: string }) {
-  const [distancia, setDistancia] = useState(5000)
-  const [tempo, setTempo] = useState(25)
-  const [velocidade, setVelocidade] = useState(12)
-
-  const calcVO2Max = () => {
-    const velocidadeMs = velocidade * 1000 / 3600
-    const pctVO2 = 0.8 + 0.1894393 * Math.exp(-0.012778 * tempo) + 0.2989558 * Math.exp(-0.1932605 * tempo)
-    const vo2 = -4.60 + 0.182258 * velocidadeMs * 60 + 0.000104 * Math.pow(velocidadeMs * 60, 2)
-    const vo2max = vo2 / pctVO2
-    return Math.round(vo2max * 10) / 10
-  }
-
-  const vo2max = calcVO2Max()
-  const isMale = sexo === "M"
-
-  return (
-    <div style={cardStyle}>
-      <h3 style={cardTitleStyle}>
-        🏃 VO2 Max — Jack Daniels
-        <span style={{
-          background: isMale ? "#dbeafe" : "#fce7f3",
-          color: isMale ? "#1d4ed8" : "#be185d",
-          fontSize: "10px",
-          padding: "2px 8px",
-          borderRadius: "999px",
-          fontWeight: 600,
-          marginLeft: "4px",
-        }}>
-          {isMale ? "Masculino" : "Feminino"}
-        </span>
-      </h3>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginBottom: "12px" }}>
-        <div>
-          <label style={labelStyle}>Distância (m)</label>
-          <input
-            type="number"
-            value={distancia}
-            onChange={(e) => setDistancia(Number(e.target.value))}
-            style={inputStyle}
-            placeholder="Ex: 5000"
-          />
-        </div>
-        <div>
-          <label style={labelStyle}>Velocidade (km/h)</label>
-          <input
-            type="number"
-            value={velocidade}
-            step="0.1"
-            onChange={(e) => setVelocidade(Number(e.target.value))}
-            style={inputStyle}
-            placeholder="Ex: 12"
-          />
-        </div>
-        <div>
-          <label style={labelStyle}>Tempo (min)</label>
-          <input
-            type="number"
-            value={tempo}
-            onChange={(e) => setTempo(Number(e.target.value))}
-            style={inputStyle}
-            placeholder="Ex: 25"
-          />
-        </div>
-      </div>
-      <div style={{
-        background: "linear-gradient(135deg, #f0f9ff, #e0f2fe)",
-        borderRadius: "10px",
-        padding: "14px",
-        textAlign: "center",
-      }}>
-        <div style={{ fontSize: "10px", color: "#0369a1", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.5px" }}>
-          VO2 Max Estimado
-        </div>
-        <div style={{ fontSize: "28px", fontWeight: 800, color: "#0c4a6e", marginTop: "4px" }}>
-          {vo2max} <span style={{ fontSize: "12px", fontWeight: 500 }}>ml/kg/min</span>
-        </div>
-        <div style={{ fontSize: "9px", color: "#64748b", marginTop: "4px" }}>
-          Fórmula de Jack Daniels para corredores ({isMale ? "masculino" : "feminino"})
-        </div>
-      </div>
-    </div>
-  )
 }
 
 // ==================== STYLES ====================

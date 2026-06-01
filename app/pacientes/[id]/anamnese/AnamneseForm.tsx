@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { salvarAnamnese } from "./actions";
+import { salvarAnamnese, autoSalvarAnamnese } from "./actions";
 
 type Props = {
   pacienteId: string;
@@ -24,9 +24,7 @@ export default function AnamneseForm({
   pacienteId,
   dados,
 }: Props) {
-  const [showGoogleModal, setShowGoogleModal] = useState(false);
-  const [googleFormsLink, setGoogleFormsLink] = useState("");
-  const [googleData, setGoogleData] = useState<Record<string, string>>({});
+
   const [saving, setSaving] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -40,7 +38,6 @@ export default function AnamneseForm({
   ];
 
   const [fields, setFields] = useState<DynamicField[]>(defaultFields);
-  const [lastSavedFields, setLastSavedFields] = useState<string>(JSON.stringify(defaultFields.map(f => ({ id: f.id, value: f.value }))));
 
   function valorDecimal(valor: unknown) {
     if (valor === null || valor === undefined) return "";
@@ -109,55 +106,72 @@ export default function AnamneseForm({
     setFields(prev => prev.map(f => f.id === fieldId ? { ...f, editing: !f.editing } : f));
   }, []);
 
-  const autoSave = useCallback(async () => {
-    const currentState = JSON.stringify(fields.map(f => ({ id: f.id, value: f.value })));
-    if (currentState === lastSavedFields) return;
+  // Snapshot of the FULL form (numeric inputs + dynamic fields) so we only
+  // save to the DB when something actually changed.
+  const lastSavedRef = useRef<string>("");
 
-    if (!formRef.current) return;
+  const buildFormData = useCallback(() => {
+    if (!formRef.current) return null;
+    const formData = new FormData(formRef.current);
+    fields.forEach(f => {
+      formData.set(f.id, f.value);
+    });
+    return formData;
+  }, [fields]);
+
+  const autoSave = useCallback(async () => {
+    const formData = buildFormData();
+    if (!formData) return;
+    const snapshot = JSON.stringify(Array.from(formData.entries()));
+    if (snapshot === lastSavedRef.current) return; // nada mudou -> nao salva
     setSaving(true);
     try {
-      const formData = new FormData(formRef.current);
-      fields.forEach(f => {
-        formData.set(f.id, f.value);
-      });
-      await salvarAnamnese(pacienteId, formData);
-      setLastSavedFields(currentState);
+      await autoSalvarAnamnese(pacienteId, formData);
+      lastSavedRef.current = snapshot;
     } catch {
       // silent fail
     } finally {
       setSaving(false);
     }
-  }, [fields, lastSavedFields, pacienteId]);
+  }, [buildFormData, pacienteId]);
 
+  // Define a linha de base assim que o formulario monta (dados ja salvos).
   useEffect(() => {
-    const timer = setTimeout(() => {
-      autoSave();
-    }, 2000);
-    return () => clearTimeout(timer);
+    const formData = buildFormData();
+    if (formData) {
+      lastSavedRef.current = JSON.stringify(Array.from(formData.entries()));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Mantem a referencia mais recente do autoSave para usar no unmount/pagehide.
+  const autoSaveRef = useRef(autoSave);
+  useEffect(() => {
+    autoSaveRef.current = autoSave;
   }, [autoSave]);
 
+  // Debounce de digitacao em qualquer campo do formulario.
+  const inputTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleFormInput = useCallback(() => {
+    if (inputTimer.current) clearTimeout(inputTimer.current);
+    inputTimer.current = setTimeout(() => {
+      autoSaveRef.current();
+    }, 1500);
+  }, []);
+
+  // Salva ao sair da aba (unmount na navegacao SPA) e ao fechar/atualizar.
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      autoSave();
+    const handler = () => {
+      autoSaveRef.current();
     };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [autoSave]);
+    window.addEventListener("pagehide", handler);
+    return () => {
+      window.removeEventListener("pagehide", handler);
+      autoSaveRef.current();
+    };
+  }, []);
 
-  function importarGoogleForms() {
-    const fieldsCopy = [...fields];
-    Object.entries(googleData).forEach(([key, val]) => {
-      if (!val) return;
-      const existing = fieldsCopy.find(f => f.id === key || f.label.toLowerCase() === key.toLowerCase());
-      if (existing) {
-        existing.value = val;
-      }
-    });
-    setFields(fieldsCopy);
-    setShowGoogleModal(false);
-    setGoogleData({});
-    setGoogleFormsLink("");
-  }
+
 
   return (
     <>
@@ -165,6 +179,7 @@ export default function AnamneseForm({
         ref={formRef}
         action={salvarAnamnese.bind(null, pacienteId)}
         onSubmit={validarFormulario}
+        onInput={handleFormInput}
         style={{
           background: "white",
           padding: "30px",
@@ -179,28 +194,29 @@ export default function AnamneseForm({
 
         <div style={rowStyle}>
           <div style={campoPequenoStyle}>
-            <input type="text" name="peso" placeholder="Peso (kg)" style={inputLinhaStyle} defaultValue={valorDecimal(dados?.peso)} />
+            <label style={campoLabelStyle}>Peso (kg)</label>
+            <input type="text" name="peso" style={inputLinhaStyle} defaultValue={valorDecimal(dados?.peso)} />
           </div>
           <div style={campoPequenoStyle}>
-            <input type="text" name="altura" placeholder="Altura (M)" style={inputLinhaStyle} defaultValue={valorInteiro(dados?.altura)} />
+            <label style={campoLabelStyle}>Altura (cm)</label>
+            <input type="text" name="altura" style={inputLinhaStyle} defaultValue={valorInteiro(dados?.altura)} />
+          </div>
+
+          <div style={campoPequenoStyle}>
+            <label style={campoLabelStyle}>% Gordura</label>
+            <input type="text" name="percentual_gordura" style={inputLinhaStyle} defaultValue={valorDecimal(dados?.percentual_gordura)} />
           </div>
           <div style={campoPequenoStyle}>
-            <input type="text" name="imc" placeholder="IMC" style={inputLinhaStyle} defaultValue={valorDecimal(dados?.imc)} />
+            <label style={campoLabelStyle}>Massa Muscular (kg)</label>
+            <input type="text" name="massa_muscular" style={inputLinhaStyle} defaultValue={valorDecimal(dados?.massa_muscular)} />
           </div>
           <div style={campoPequenoStyle}>
-            <input type="text" name="percentual_gordura" placeholder="% Gordura" style={inputLinhaStyle} defaultValue={valorDecimal(dados?.percentual_gordura)} />
-          </div>
-          <div style={campoPequenoStyle}>
-            <input type="text" name="massa_muscular" placeholder="Massa Muscular (kg)" style={inputLinhaStyle} defaultValue={valorDecimal(dados?.massa_muscular)} />
-          </div>
-          <div style={campoPequenoStyle}>
-            <input type="text" name="agua_corporal" placeholder="Água Corporal (%)" style={inputLinhaStyle} defaultValue={valorDecimal(dados?.agua_corporal)} />
+            <label style={campoLabelStyle}>Água Corporal (%)</label>
+            <input type="text" name="agua_corporal" style={inputLinhaStyle} defaultValue={valorDecimal(dados?.agua_corporal)} />
           </div>
         </div>
 
-        <div style={{ marginBottom: "12px", maxWidth: "240px" }}>
-          <input type="text" name="taxa_metabolica" placeholder="Taxa Metabólica" style={inputStyle} defaultValue={valorDecimal(dados?.taxa_metabolica)} />
-        </div>
+
 
         {/* Dynamic Fields */}
         {fields.map((field) => (
@@ -284,81 +300,10 @@ export default function AnamneseForm({
           + Adicionar Campo
         </div>
 
-        <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
-          <button
-            type="button"
-            onClick={() => setShowGoogleModal(true)}
-            style={googleBtnStyle}
-          >
-            📋 Importar do Google Forms
-          </button>
-        </div>
+
       </form>
 
-      {showGoogleModal && (
-        <div style={modalOverlayStyle}>
-          <div style={modalContentStyle}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-              <h2 style={{ margin: 0, fontSize: "20px", color: "#1a365d" }}>
-                📋 Importar do Google Forms
-              </h2>
-              <button
-                onClick={() => setShowGoogleModal(false)}
-                style={{ background: "none", border: "none", fontSize: "24px", cursor: "pointer", color: "#94a3b8" }}
-              >
-                ×
-              </button>
-            </div>
 
-            <div style={{ marginBottom: "16px" }}>
-              <label style={modalLabelStyle}>Link do Google Forms</label>
-              <input
-                type="url"
-                value={googleFormsLink}
-                onChange={(e) => setGoogleFormsLink(e.target.value)}
-                placeholder="https://docs.google.com/forms/..."
-                style={{ width: "100%", padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", boxSizing: "border-box" }}
-              />
-              <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px" }}>
-                Cole o link do formulário. As respostas precisam ser preenchidas manualmente abaixo.
-              </p>
-            </div>
-
-            <p style={{ fontSize: "13px", color: "#64748b", marginBottom: "12px" }}>
-              Preencha os campos abaixo com as respostas do formulário:
-            </p>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {fields.map(field => (
-                <div key={field.id}>
-                  <label style={modalLabelStyle}>{field.label || "(sem nome)"}</label>
-                  <textarea
-                    rows={2}
-                    style={modalTextareaStyle}
-                    value={googleData[field.id] || ""}
-                    onChange={(e) => setGoogleData({ ...googleData, [field.id]: e.target.value })}
-                  />
-                </div>
-              ))}
-            </div>
-
-            <div style={{ display: "flex", gap: "12px", marginTop: "20px", justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setShowGoogleModal(false)}
-                style={{ padding: "10px 20px", background: "#e2e8f0", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "600", color: "#475569" }}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={importarGoogleForms}
-                style={{ padding: "10px 20px", background: "#4285f4", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "600" }}
-              >
-                Importar Dados
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
@@ -374,20 +319,20 @@ const rowStyle = {
 const campoPequenoStyle = {
   flex: 1,
   minWidth: 0,
+  display: "flex" as const,
+  flexDirection: "column" as const,
 };
+
+const campoLabelStyle = {
+  fontSize: "12px",
+  fontWeight: 600,
+  color: "#475569",
+  marginBottom: "4px",
+} as const;
 
 const inputLinhaStyle = {
   width: "100%",
   padding: "12px",
-  border: "1px solid #cbd5e1",
-  borderRadius: "8px",
-  fontSize: "14px",
-} as const;
-
-const inputStyle = {
-  width: "100%",
-  padding: "12px",
-  marginBottom: "12px",
   border: "1px solid #cbd5e1",
   borderRadius: "8px",
   fontSize: "14px",
@@ -403,57 +348,4 @@ const textareaStyle = {
   boxSizing: "border-box" as const,
 } as const;
 
-const googleBtnStyle = {
-  padding: "12px 20px",
-  backgroundColor: "#4285f4",
-  color: "white",
-  border: "none",
-  borderRadius: "8px",
-  cursor: "pointer",
-  fontWeight: "600",
-  display: "flex",
-  alignItems: "center",
-  gap: "6px",
-} as const;
 
-const modalOverlayStyle: React.CSSProperties = {
-  position: "fixed",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  background: "rgba(0,0,0,0.5)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 1000,
-};
-
-const modalContentStyle: React.CSSProperties = {
-  background: "white",
-  borderRadius: "16px",
-  padding: "30px",
-  width: "90%",
-  maxWidth: "600px",
-  maxHeight: "85vh",
-  overflowY: "auto",
-  boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
-};
-
-const modalLabelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: "13px",
-  fontWeight: 600,
-  color: "#374151",
-  marginBottom: "4px",
-};
-
-const modalTextareaStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 12px",
-  border: "1.5px solid #e2e8f0",
-  borderRadius: "8px",
-  fontSize: "13px",
-  resize: "vertical",
-  boxSizing: "border-box",
-};
