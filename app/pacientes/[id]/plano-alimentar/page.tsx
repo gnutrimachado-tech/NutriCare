@@ -118,6 +118,7 @@ export default async function PlanoAlimentarPage({ params }: Props) {
       </div>
 
       <PlanoAlimentarLayout
+        pacienteId={id}
         sexoPaciente={sexoPaciente}
         nomePaciente={paciente.nome}
         gastoCaloricoTotal={gastoCaloricoTotal}

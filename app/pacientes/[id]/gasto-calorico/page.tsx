@@ -117,6 +117,7 @@ export default async function GastoCaloricoPage({ params }: Props) {
       </div>
 
       <GastoCaloricoLayout
+        pacienteId={id}
         sexoPaciente={sexoPaciente}
         idade={idade}
         pesoKg={pesoKg}

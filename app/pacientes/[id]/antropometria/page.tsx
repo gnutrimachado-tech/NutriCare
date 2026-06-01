@@ -149,6 +149,7 @@ export default async function AntropometriaPage({
 
       {/* LAYOUT */}
       <AntropometriaLayout
+        pacienteId={id}
         sexoPaciente={sexoPaciente}
         idade={idade}
         pesoKg={pesoKg}
