@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 
 // ==================== TYPES ====================
 type Props = {
@@ -403,6 +403,75 @@ export default function GastoCaloricoLayout({
       // ignore (modo privado/sem storage)
     }
   }, [pacienteId, caloriaFinal, selectedStrat]);
+
+  // ==============================
+  // PERSISTÊNCIA POR PACIENTE (Gasto Calórico)
+  // Mantém tudo que o nutri configurou (estratégia, fator de atividade,
+  // MET/treinos, caloria final manual, protocolo) ao navegar entre abas.
+  // Salva por paciente; não apaga nada automaticamente.
+  // ==============================
+  const gastoHydratedRef = useRef(false);
+
+  // Restaura ao montar (uma vez), de forma adiada para não disparar
+  // setState síncrono dentro do efeito.
+  useEffect(() => {
+    if (!pacienteId) {
+      gastoHydratedRef.current = true;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      try {
+        const raw = window.localStorage.getItem(`nutricare:gasto:${pacienteId}`);
+        if (raw) {
+          const s = JSON.parse(raw);
+          if (typeof s.protocolo === "string") setProtocolo(s.protocolo);
+          if (typeof s.useFA === "boolean") setUseFA(s.useFA);
+          if (typeof s.useTreino === "boolean") setUseTreino(s.useTreino);
+          if (typeof s.fatorAtividade === "number") setFatorAtividade(s.fatorAtividade);
+          if (typeof s.selectedStrat === "number") setSelectedStrat(s.selectedStrat);
+          if (Array.isArray(s.treinos)) setTreinos(s.treinos);
+          if (s.manualCalorie === null || typeof s.manualCalorie === "number") {
+            setManualCalorie(s.manualCalorie);
+          }
+        }
+      } catch {
+        // ignore
+      } finally {
+        gastoHydratedRef.current = true;
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [pacienteId]);
+
+  // Salva sempre que algo mudar (após a restauração inicial).
+  useEffect(() => {
+    if (!pacienteId || !gastoHydratedRef.current) return;
+    try {
+      window.localStorage.setItem(
+        `nutricare:gasto:${pacienteId}`,
+        JSON.stringify({
+          protocolo,
+          useFA,
+          useTreino,
+          fatorAtividade,
+          selectedStrat,
+          treinos,
+          manualCalorie,
+        })
+      );
+    } catch {
+      // ignore
+    }
+  }, [
+    pacienteId,
+    protocolo,
+    useFA,
+    useTreino,
+    fatorAtividade,
+    selectedStrat,
+    treinos,
+    manualCalorie,
+  ]);
 
   const addTreino = () => {
     if (treinos.length < 3) {

@@ -635,7 +635,9 @@ export default function AntropometriaLayout({
   // ==============================
   // LINK COM A ANAMNESE
   // Salva massa muscular, % de gordura e % de água nas barras da Anamnese.
-  // Regra: primeiro valor vence (só preenche o que estiver vazio na Anamnese).
+  // Regra: a Antropometria é a fonte — sempre que houver valor calculado,
+  // ele corrige a barra correspondente na Anamnese (e, por consequência,
+  // a massa muscular usada no Gasto Calórico).
   // ==============================
   const syncRef = useRef<() => void>(() => {});
   useEffect(() => {
@@ -958,8 +960,7 @@ function VO2MaxJackDaniels({ sexoPaciente }: { sexoPaciente: SexoPaciente }) {
     return Math.round(valor * 10) / 10;
   }, [dist, min]);
 
-  const vdot = vo2max;
-  const cls = vdot !== null ? classifyVdot(vdot) : null;
+  const cls = vo2max !== null ? classifyVdot(vo2max) : null;
 
   return (
     <div style={{ ...resultCardStyle, marginTop: 24 }}>
@@ -1001,31 +1002,24 @@ function VO2MaxJackDaniels({ sexoPaciente }: { sexoPaciente: SexoPaciente }) {
       </div>
 
       <div style={vo2ResultRowStyle}>
-        <div style={vo2ResultBoxStyle}>
-          <div style={vo2ResultLabelStyle}>VO2max estimado</div>
-          <div style={vo2ResultValueStyle}>
-            {vo2max !== null ? (
-              <>
-                {formatPt(vo2max)}{" "}
-                <span style={{ fontSize: 12, fontWeight: 500, color: "#64748b" }}>
-                  ml/kg/min
-                </span>
-              </>
-            ) : (
-              "—"
-            )}
-          </div>
-        </div>
-
         <div
           style={{
             ...vo2ResultBoxStyle,
             background: cls ? cls.bg : "#f8fafc",
           }}
         >
-          <div style={vo2ResultLabelStyle}>VDOT</div>
+          <div style={vo2ResultLabelStyle}>VO2max estimado</div>
           <div style={{ ...vo2ResultValueStyle, color: cls ? cls.color : "#0f172a" }}>
-            {vdot !== null ? formatPt(vdot) : "—"}
+            {vo2max !== null ? (
+              <>
+                {formatPt(vo2max)}{" "}
+                <span style={{ fontSize: 12, fontWeight: 500, color: cls ? cls.color : "#64748b" }}>
+                  ml/kg/min
+                </span>
+              </>
+            ) : (
+              "—"
+            )}
           </div>
           {cls && (
             <div style={{ fontSize: 13, fontWeight: 700, color: cls.color, marginTop: 2 }}>

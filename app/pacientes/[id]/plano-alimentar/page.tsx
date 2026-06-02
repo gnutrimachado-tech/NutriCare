@@ -109,7 +109,7 @@ export default async function PlanoAlimentarPage({ params }: Props) {
           }}
         >
           <Link href={`/pacientes/${id}/gasto-calorico`}>
-            <button style={buttonNav}>← Anterior</button>
+            <button style={buttonNav}>← Gasto Calórico</button>
           </Link>
           <Link href={`/pacientes/${id}`}>
             <button style={buttonNav}>← Voltar ao Paciente</button>

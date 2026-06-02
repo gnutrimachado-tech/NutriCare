@@ -72,8 +72,10 @@ type ResultadoAntropometria = {
 };
 
 // Liga os resultados da Antropometria às barras da Anamnese.
-// Regra: o primeiro valor vence. Só preenche um campo se ele ainda
-// estiver vazio na Anamnese, preservando qualquer valor editado pelo nutri.
+// A Antropometria é a fonte: sempre que houver um valor calculado/editado
+// na Antropometria, ele atualiza (corrige) a barra correspondente na Anamnese.
+// Quando a Antropometria não tem valor (null), a Anamnese é preservada como
+// está — nada é apagado automaticamente.
 export async function sincronizarAntropometria(
   pacienteId: string,
   resultado: ResultadoAntropometria
@@ -81,9 +83,6 @@ export async function sincronizarAntropometria(
   const existente = await prisma.anamneses.findFirst({
     where: { paciente_id: pacienteId },
   });
-
-  const isEmpty = (valor: unknown) =>
-    valor === null || valor === undefined || valor === "";
 
   const limpar = (valor: number | null | undefined) => {
     if (valor === null || valor === undefined) return null;
@@ -93,17 +92,17 @@ export async function sincronizarAntropometria(
 
   const patch: ResultadoAntropometria = {};
 
-  if (isEmpty(existente?.massa_muscular) && limpar(resultado.massa_muscular) !== null) {
+  if (limpar(resultado.massa_muscular) !== null) {
     patch.massa_muscular = limpar(resultado.massa_muscular);
   }
-  if (isEmpty(existente?.percentual_gordura) && limpar(resultado.percentual_gordura) !== null) {
+  if (limpar(resultado.percentual_gordura) !== null) {
     patch.percentual_gordura = limpar(resultado.percentual_gordura);
   }
-  if (isEmpty(existente?.agua_corporal) && limpar(resultado.agua_corporal) !== null) {
+  if (limpar(resultado.agua_corporal) !== null) {
     patch.agua_corporal = limpar(resultado.agua_corporal);
   }
 
-  if (Object.keys(patch).length === 0) return; // nada novo -> mantem como esta
+  if (Object.keys(patch).length === 0) return; // nada calculado -> mantem como esta
 
   if (existente) {
     await prisma.anamneses.update({

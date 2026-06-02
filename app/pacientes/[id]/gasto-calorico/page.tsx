@@ -108,10 +108,10 @@ export default async function GastoCaloricoPage({ params }: Props) {
           }}
         >
           <Link href={`/pacientes/${id}/antropometria`}>
-            <button style={buttonNav}>← Anterior</button>
+            <button style={buttonNav}>← Antropometria</button>
           </Link>
           <Link href={`/pacientes/${id}/plano-alimentar`}>
-            <button style={buttonNavNext}>Próxima →</button>
+            <button style={buttonNavNext}>Plano Alimentar →</button>
           </Link>
         </div>
       </div>

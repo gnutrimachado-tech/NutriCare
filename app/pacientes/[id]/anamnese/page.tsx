@@ -88,7 +88,7 @@ export default async function AnamnesePage({ params }: Props) {
               border: "1px solid #cbd5e1",
             }}
           >
-            ← Anterior
+            ← Paciente
           </Link>
 
           <Link
@@ -104,7 +104,7 @@ export default async function AnamnesePage({ params }: Props) {
               border: "none",
             }}
           >
-            Próxima →
+            Antropometria →
           </Link>
         </div>
       </div>

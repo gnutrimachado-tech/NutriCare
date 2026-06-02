@@ -135,13 +135,13 @@ export default async function AntropometriaPage({
         >
           <Link href={`/pacientes/${id}/anamnese`}>
             <button style={buttonSecondary}>
-              ← Anterior
+              ← Anamnese
             </button>
           </Link>
 
           <Link href={`/pacientes/${id}/gasto-calorico`}>
             <button style={buttonPrimary}>
-              Próxima →
+              Gasto Calórico →
             </button>
           </Link>
         </div>
