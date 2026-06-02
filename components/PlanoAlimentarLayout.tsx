@@ -117,6 +117,12 @@ const MICRO_KEY: Record<string, keyof TBCAFood> = {
   Zinco: 'zn',
   Cobre: 'cu',
   Manganês: 'mn',
+  // Complemento TBCA (USP/FoRC):
+  'Vitamina D': 'vd',
+  'Vitamina E': 've',
+  'Vitamina B9': 'b9',
+  'Vitamina B12': 'b12',
+  Selênio: 'se',
 }
 
 // ==================== TYPES ====================
@@ -484,6 +490,40 @@ export default function PlanoAlimentarLayout({
         microTotals[microName] = (microTotals[microName] || 0) + val * factor
       }
     }
+  }
+
+  // Linha de micronutriente (lista expandida): mostra consumido/meta + barra quando há
+  // dado na tabela; caso contrário indica que não há dado na tabela brasileira.
+  const renderMicroExpandedRow = (micro: MicroIDR) => {
+    const meta = sex === 'Masculino' ? micro.male : micro.female
+    const temDado = MICRO_KEY[micro.name] !== undefined
+    const consumido = temDado ? Math.round((microTotals[micro.name] || 0) * 10) / 10 : 0
+    const pct = temDado && meta > 0 ? Math.min(Math.round((consumido / meta) * 100), 100) : 0
+    const falta = Math.round(Math.max(meta - consumido, 0) * 10) / 10
+    return (
+      <div key={micro.name} style={{ padding: '5px 0', borderBottom: '1px solid #f7fafc' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+          <span style={{ color: '#4a5568', fontWeight: 600, fontSize: 11 }}>{micro.name}</span>
+          <span style={{ fontWeight: 700, color: '#1a365d', fontSize: 10 }}>
+            {temDado ? `${consumido}/${meta}` : `meta ${meta}`} {micro.unit}
+          </span>
+        </div>
+        {temDado ? (
+          <>
+            <div style={{ height: 7, borderRadius: 4, background: '#edf2f7', overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${pct}%`, borderRadius: 4, background: 'linear-gradient(90deg, #68d391, #38a169)', transition: 'width 0.4s' }} />
+            </div>
+            <div style={{ fontSize: 9, marginTop: 2, fontWeight: 600, color: falta > 0 ? '#e53e3e' : '#38a169' }}>
+              {falta > 0 ? `Faltam ${falta} ${micro.unit} (${pct}%)` : `Meta atingida (${pct}%)`}
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize: 9, marginTop: 2, fontStyle: 'italic', color: '#a0aec0' }}>
+            Sem dados na tabela brasileira
+          </div>
+        )}
+      </div>
+    )
   }
 
   // Estratégia: nome + percentuais vêm do Gasto Calórico (fallback p/ padrão).
@@ -1111,43 +1151,11 @@ export default function PlanoAlimentarLayout({
                   <div style={{ fontSize: 10, fontWeight: 800, color: '#1a365d', margin: '10px 0 6px', textTransform: 'uppercase', letterSpacing: 0.8, paddingBottom: 4, borderBottom: '2px solid #edf2f7' }}>
                     Vitaminas
                   </div>
-                  {MICRO_EXPANDED.filter((m) => m.name.startsWith('Vitamina')).map((micro) => (
-                    <div
-                      key={micro.name}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        padding: '4px 0',
-                        borderBottom: '1px solid #f7fafc',
-                        fontSize: 11,
-                      }}
-                    >
-                      <span style={{ color: '#4a5568', fontWeight: 500 }}>{micro.name}</span>
-                      <span style={{ fontWeight: 700, color: '#1a365d' }}>
-                        {sex === 'Masculino' ? micro.male : micro.female} {micro.unit}
-                      </span>
-                    </div>
-                  ))}
+                  {MICRO_EXPANDED.filter((m) => m.name.startsWith('Vitamina')).map(renderMicroExpandedRow)}
                   <div style={{ fontSize: 10, fontWeight: 800, color: '#1a365d', margin: '10px 0 6px', textTransform: 'uppercase', letterSpacing: 0.8, paddingBottom: 4, borderBottom: '2px solid #edf2f7' }}>
                     Minerais
                   </div>
-                  {MICRO_EXPANDED.filter((m) => !m.name.startsWith('Vitamina')).map((micro) => (
-                    <div
-                      key={micro.name}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        padding: '4px 0',
-                        borderBottom: '1px solid #f7fafc',
-                        fontSize: 11,
-                      }}
-                    >
-                      <span style={{ color: '#4a5568', fontWeight: 500 }}>{micro.name}</span>
-                      <span style={{ fontWeight: 700, color: '#1a365d' }}>
-                        {sex === 'Masculino' ? micro.male : micro.female} {micro.unit}
-                      </span>
-                    </div>
-                  ))}
+                  {MICRO_EXPANDED.filter((m) => !m.name.startsWith('Vitamina')).map(renderMicroExpandedRow)}
                 </div>
               )}
 
