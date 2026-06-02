@@ -18,6 +18,7 @@ function parseFormData(formData: FormData) {
     altura: toDecimal(formData.get("altura")),
     percentual_gordura: toDecimal(formData.get("percentual_gordura")),
     massa_muscular: toDecimal(formData.get("massa_muscular")),
+    massa_adiposa: toDecimal(formData.get("massa_adiposa")),
     agua_corporal: toDecimal(formData.get("agua_corporal")),
     historico_clinico: (formData.get("historico_clinico") as string) || null,
     alergias: (formData.get("alergias") as string) || null,
@@ -68,6 +69,7 @@ export async function autoSalvarAnamnese(
 type ResultadoAntropometria = {
   massa_muscular?: number | null;
   percentual_gordura?: number | null;
+  massa_adiposa?: number | null;
   agua_corporal?: number | null;
 };
 
@@ -97,6 +99,9 @@ export async function sincronizarAntropometria(
   }
   if (limpar(resultado.percentual_gordura) !== null) {
     patch.percentual_gordura = limpar(resultado.percentual_gordura);
+  }
+  if (limpar(resultado.massa_adiposa) !== null) {
+    patch.massa_adiposa = limpar(resultado.massa_adiposa);
   }
   if (limpar(resultado.agua_corporal) !== null) {
     patch.agua_corporal = limpar(resultado.agua_corporal);

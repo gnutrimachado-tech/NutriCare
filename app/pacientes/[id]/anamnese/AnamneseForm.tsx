@@ -211,6 +211,10 @@ export default function AnamneseForm({
             <input type="text" name="massa_muscular" style={inputLinhaStyle} defaultValue={valorDecimal(dados?.massa_muscular)} />
           </div>
           <div style={campoPequenoStyle}>
+            <label style={campoLabelStyle}>Massa Adiposa (kg)</label>
+            <input type="text" name="massa_adiposa" style={inputLinhaStyle} defaultValue={valorDecimal(dados?.massa_adiposa)} />
+          </div>
+          <div style={campoPequenoStyle}>
             <label style={campoLabelStyle}>Água Corporal (%)</label>
             <input type="text" name="agua_corporal" style={inputLinhaStyle} defaultValue={valorDecimal(dados?.agua_corporal)} />
           </div>

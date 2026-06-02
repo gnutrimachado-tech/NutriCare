@@ -98,6 +98,27 @@ const MICRO_CADASTRO = [
   'Cromo (mcg)', 'Molibdênio (mcg)', 'Iodo (mcg)',
 ]
 
+// Liga o nome do micronutriente à chave correspondente na tabela TACO (TBCAFood).
+// Apenas micronutrientes medidos pela TACO entram aqui.
+const MICRO_KEY: Record<string, keyof TBCAFood> = {
+  'Vitamina A': 'va',
+  'Vitamina C': 'vc',
+  'Vitamina B1': 'b1',
+  'Vitamina B2': 'b2',
+  'Vitamina B3': 'b3',
+  'Vitamina B6': 'b6',
+  Ferro: 'fe',
+  Cálcio: 'ca',
+  Fibras: 'f',
+  Magnésio: 'mg',
+  Fósforo: 'fo',
+  Potássio: 'po',
+  Sódio: 'na',
+  Zinco: 'zn',
+  Cobre: 'cu',
+  Manganês: 'mn',
+}
+
 // ==================== TYPES ====================
 interface FoodItem {
   id: string
@@ -241,7 +262,7 @@ function TacoAutocomplete({
       .toLowerCase()
       .split(/\s+/)
       .filter((w) => w.length > 0)
-    if (words.length === 0) return TBCA_FOODS.slice(0, 15)
+    if (words.length === 0) return [] // nada pré-preenchido: só mostra ao digitar
     const results: TBCAFood[] = []
     for (const food of TBCA_FOODS) {
       if (results.length >= 15) break
@@ -447,6 +468,23 @@ export default function PlanoAlimentarLayout({
     },
     { prot: 0, carb: 0, fat: 0, kcal: 0 }
   )
+
+  // Soma de micronutrientes do plano (a partir da tabela TACO), por 100 g ajustado
+  // pela quantidade em gramas de cada alimento principal de cada refeição.
+  const microTotals: Record<string, number> = {}
+  for (const meal of meals) {
+    for (const f of meal.foods) {
+      if (!f.name) continue
+      const src = TBCA_FOODS.find((t) => t.n === f.name)
+      if (!src) continue
+      const factor = (f.baseGrams || 0) / 100
+      for (const microName of Object.keys(MICRO_KEY)) {
+        const key = MICRO_KEY[microName]
+        const val = (src[key] as number | undefined) || 0
+        microTotals[microName] = (microTotals[microName] || 0) + val * factor
+      }
+    }
+  }
 
   // Estratégia: nome + percentuais vêm do Gasto Calórico (fallback p/ padrão).
   const fallbackStrat = STRATEGIES[3]
@@ -1039,7 +1077,7 @@ export default function PlanoAlimentarLayout({
               </div>
               {MICRO_IDR.map((micro) => {
                 const meta = sex === 'Masculino' ? micro.male : micro.female
-                const consumido = 0 // sem banco de alimentos com micronutrientes (aguardando nova tabela)
+                const consumido = Math.round((microTotals[micro.name] || 0) * 10) / 10
                 const pct = meta > 0 ? Math.min(Math.round((consumido / meta) * 100), 100) : 0
                 const falta = Math.max(meta - consumido, 0)
                 return (

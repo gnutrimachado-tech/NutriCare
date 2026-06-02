@@ -553,6 +553,52 @@ export default function AntropometriaLayout({
     return out;
   }, [circunferencias]);
 
+  // ==============================
+  // PERSISTÊNCIA POR PACIENTE (Antropometria)
+  // Mantém protocolo + dobras cutâneas + circunferências ao trocar de aba.
+  // Só muda quando o nutri edita/apaga; nada é apagado automaticamente.
+  // ==============================
+  const antroHydratedRef = useRef(false);
+
+  useEffect(() => {
+    if (!pacienteId) {
+      antroHydratedRef.current = true;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      try {
+        const raw = window.localStorage.getItem(`nutricare:antro:${pacienteId}`);
+        if (raw) {
+          const s = JSON.parse(raw);
+          if (typeof s.protocolId === "string") setProtocolId(s.protocolId);
+          if (s.dobras && typeof s.dobras === "object") {
+            setDobras((prev) => ({ ...prev, ...s.dobras }));
+          }
+          if (s.circunferencias && typeof s.circunferencias === "object") {
+            setCircunferencias((prev) => ({ ...prev, ...s.circunferencias }));
+          }
+        }
+      } catch {
+        // ignore
+      } finally {
+        antroHydratedRef.current = true;
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [pacienteId]);
+
+  useEffect(() => {
+    if (!pacienteId || !antroHydratedRef.current) return;
+    try {
+      window.localStorage.setItem(
+        `nutricare:antro:${pacienteId}`,
+        JSON.stringify({ protocolId, dobras, circunferencias })
+      );
+    } catch {
+      // ignore
+    }
+  }, [pacienteId, protocolId, dobras, circunferencias]);
+
   const requiredDobras = useMemo(() => protocoloAtual?.requiredDobras ?? [], [protocoloAtual]);
   const requiredCircs = useMemo(() => protocoloAtual?.requiredCircs ?? [], [protocoloAtual]);
 
@@ -645,6 +691,7 @@ export default function AntropometriaLayout({
       if (
         result.massaMuscular === null &&
         result.bodyFatPct === null &&
+        result.massaAdiposa === null &&
         aguaCorporalPct === null
       ) {
         return;
@@ -652,6 +699,7 @@ export default function AntropometriaLayout({
       sincronizarAntropometria(pacienteId, {
         massa_muscular: result.massaMuscular,
         percentual_gordura: result.bodyFatPct,
+        massa_adiposa: result.massaAdiposa,
         agua_corporal: aguaCorporalPct,
       }).catch(() => {});
     };
@@ -930,7 +978,7 @@ export default function AntropometriaLayout({
         </div>
 
         {/* VO2 MAX — Jack Daniels */}
-        <VO2MaxJackDaniels sexoPaciente={sexoPaciente} />
+        <VO2MaxJackDaniels sexoPaciente={sexoPaciente} pacienteId={pacienteId} />
       </div>
     </div>
   );
@@ -945,9 +993,51 @@ function classifyVdot(v: number): { label: string; color: string; bg: string } {
   return { label: "Elite", color: "#15803d", bg: "#dcfce7" };
 }
 
-function VO2MaxJackDaniels({ sexoPaciente }: { sexoPaciente: SexoPaciente }) {
+function VO2MaxJackDaniels({
+  sexoPaciente,
+  pacienteId,
+}: {
+  sexoPaciente: SexoPaciente;
+  pacienteId: string;
+}) {
   const [distancia, setDistancia] = useState(""); // metros
   const [tempo, setTempo] = useState(""); // minutos
+
+  // Persiste distância/tempo por paciente (não apaga ao trocar de aba).
+  const vo2HydratedRef = useRef(false);
+  useEffect(() => {
+    if (!pacienteId) {
+      vo2HydratedRef.current = true;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      try {
+        const raw = window.localStorage.getItem(`nutricare:antro-vo2:${pacienteId}`);
+        if (raw) {
+          const s = JSON.parse(raw);
+          if (typeof s.distancia === "string") setDistancia(s.distancia);
+          if (typeof s.tempo === "string") setTempo(s.tempo);
+        }
+      } catch {
+        // ignore
+      } finally {
+        vo2HydratedRef.current = true;
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [pacienteId]);
+
+  useEffect(() => {
+    if (!pacienteId || !vo2HydratedRef.current) return;
+    try {
+      window.localStorage.setItem(
+        `nutricare:antro-vo2:${pacienteId}`,
+        JSON.stringify({ distancia, tempo })
+      );
+    } catch {
+      // ignore
+    }
+  }, [pacienteId, distancia, tempo]);
 
   const dist = parsePtNumber(distancia);
   const min = parsePtNumber(tempo);
@@ -1289,7 +1379,7 @@ const aguaValueStyle: React.CSSProperties = {
 
 const vo2GridStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gridTemplateColumns: "1fr 1fr",
   gap: 16,
   marginTop: 16,
 };

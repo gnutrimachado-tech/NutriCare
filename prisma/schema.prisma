@@ -41,6 +41,7 @@ model anamneses {
   imc                 Decimal?  @db.Decimal(6, 2)
   percentual_gordura  Decimal?  @db.Decimal(5, 2)
   massa_muscular      Decimal?  @db.Decimal(6, 2)
+  massa_adiposa       Decimal?  @db.Decimal(6, 2)
   agua_corporal       Decimal?  @db.Decimal(5, 2)
   taxa_metabolica     Decimal?  @db.Decimal(8, 2)
   historico_clinico   String?

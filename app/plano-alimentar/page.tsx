@@ -238,7 +238,7 @@ function TacoAutocomplete({
       .toLowerCase()
       .split(/\s+/)
       .filter((w) => w.length > 0)
-    if (words.length === 0) return TBCA_FOODS.slice(0, 15)
+    if (words.length === 0) return [] // nada pré-preenchido: só mostra ao digitar
     const results: TBCAFood[] = []
     for (const food of TBCA_FOODS) {
       if (results.length >= 15) break
