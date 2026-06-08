@@ -1378,10 +1378,10 @@ const aguaValueStyle: React.CSSProperties = {
 };
 
 const vo2GridStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr",
+  display: "flex",
   gap: 16,
   marginTop: 16,
+  alignItems: "flex-end",
 };
 
 const vo2LabelStyle: React.CSSProperties = {
