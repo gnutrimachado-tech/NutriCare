@@ -114,6 +114,9 @@ export default async function PlanoAlimentarPage({ params }: Props) {
           <Link href={`/pacientes/${id}`}>
             <button style={buttonNav}>← Voltar ao Paciente</button>
           </Link>
+          <Link href={`/pacientes/${id}/envio-plano`}>
+            <button style={buttonNavNext}>Próxima → Envio do Plano</button>
+          </Link>
         </div>
       </div>
 
@@ -131,6 +134,16 @@ const buttonNav: React.CSSProperties = {
   padding: "10px 16px",
   backgroundColor: "#e2e8f0",
   color: "#0f172a",
+  border: "none",
+  borderRadius: "8px",
+  cursor: "pointer",
+  fontWeight: "600",
+};
+
+const buttonNavNext: React.CSSProperties = {
+  padding: "10px 16px",
+  backgroundColor: "#2563eb",
+  color: "#fff",
   border: "none",
   borderRadius: "8px",
   cursor: "pointer",
