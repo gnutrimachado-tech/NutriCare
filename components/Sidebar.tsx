@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 const menuItems = [
   { href: "/dashboard", label: "Dashboard" },
@@ -19,15 +20,16 @@ export default function Sidebar() {
         boxSizing: "border-box",
       }}
     >
-      <h1
-        style={{
-          fontSize: "28px",
-          fontWeight: "bold",
-          marginBottom: "40px",
-        }}
-      >
-        NutriCare
-      </h1>
+      <div style={{ marginBottom: "40px", textAlign: "center" }}>
+        <Image
+          src="/logo-nutricare.png"
+          alt="NutriCare"
+          width={180}
+          height={90}
+          style={{ objectFit: "contain" }}
+          priority
+        />
+      </div>
 
       <nav>
         {menuItems.map((item) => (
