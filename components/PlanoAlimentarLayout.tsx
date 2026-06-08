@@ -446,6 +446,21 @@ export default function PlanoAlimentarLayout({
     return () => window.clearTimeout(timer)
   }, [pacienteId])
 
+  // Persist meals to localStorage for the "Envio do Plano" tab
+  useEffect(() => {
+    if (!pacienteId) return
+    const mealsForEnvio = meals.map(m => ({
+      id: m.id,
+      name: m.name,
+      time: m.time,
+      foods: m.foods.filter(f => f.name).map(f => ({ id: f.id, name: f.name, qty: f.qty, unit: f.unit })),
+      subs: Object.fromEntries(
+        Object.entries(m.subs).map(([k, v]) => [k, v.filter(s => s.name).map(s => ({ id: s.id, name: s.name, qty: s.qty, unit: s.unit }))])
+      ),
+    }))
+    window.localStorage.setItem(`plano_meals_${pacienteId}`, JSON.stringify(mealsForEnvio))
+  }, [meals, pacienteId])
+
   // O gráfico de pizza sempre usa a Caloria Final do Gasto Calórico.
   const totalKcal = planoConfig.caloriaFinal ?? gastoCaloricoTotal ?? 1850
   const sex = sexoPaciente
