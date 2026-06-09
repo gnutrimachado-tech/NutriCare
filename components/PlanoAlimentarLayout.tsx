@@ -125,6 +125,12 @@ const MICRO_KEY: Record<string, keyof TBCAFood> = {
   Selênio: 'se',
 }
 
+// ==================== NUMBER FORMATTING ====================
+function fmtNum(n: number): string {
+  const rounded = Math.round(n * 10) / 10
+  return rounded.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+}
+
 // ==================== TYPES ====================
 interface FoodItem {
   id: string
@@ -159,6 +165,7 @@ interface Meal {
   subs: Record<string, SubItem[]>
   collapsed: boolean
   editing: boolean
+  editingTime: boolean
 }
 
 // ==================== HELPER: calculate macros from TBCA ====================
@@ -189,6 +196,7 @@ function createInitialMeals(): Meal[] {
       subs: {},
       collapsed: false,
       editing: false,
+      editingTime: false,
     },
     {
       id: 'almoco',
@@ -202,6 +210,7 @@ function createInitialMeals(): Meal[] {
       subs: {},
       collapsed: false,
       editing: false,
+      editingTime: false,
     },
     {
       id: 'lanche',
@@ -215,6 +224,7 @@ function createInitialMeals(): Meal[] {
       subs: {},
       collapsed: false,
       editing: false,
+      editingTime: false,
     },
     {
       id: 'jantar',
@@ -228,6 +238,7 @@ function createInitialMeals(): Meal[] {
       subs: {},
       collapsed: false,
       editing: false,
+      editingTime: false,
     },
     {
       id: 'ceia',
@@ -241,6 +252,7 @@ function createInitialMeals(): Meal[] {
       subs: {},
       collapsed: false,
       editing: false,
+      editingTime: false,
     },
   ]
 }
@@ -418,6 +430,33 @@ export default function PlanoAlimentarLayout({
 }: PlanoAlimentarProps) {
   void _nomePaciente
   const [meals, setMeals] = useState<Meal[]>(createInitialMeals)
+  const [mealsHydrated, setMealsHydrated] = useState(false)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const dragSrcId = useRef<string | null>(null)
+
+  // Load full meals from localStorage (PERSIST data across tab switches)
+  useEffect(() => {
+    if (!pacienteId) { setMealsHydrated(true); return }
+    const timer = window.setTimeout(() => {
+      try {
+        const raw = window.localStorage.getItem(`nutricare:plano_meals_full:${pacienteId}`)
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMeals(parsed.map((m: Meal) => ({ ...m, editingTime: m.editingTime ?? false })))
+          }
+        }
+      } catch { /* ignore */ }
+      setMealsHydrated(true)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [pacienteId])
+
+  // Save full meals to localStorage whenever they change
+  useEffect(() => {
+    if (!pacienteId || !mealsHydrated) return
+    window.localStorage.setItem(`nutricare:plano_meals_full:${pacienteId}`, JSON.stringify(meals))
+  }, [meals, pacienteId, mealsHydrated])
 
   // Caloria Final + Estratégia vindas da aba Gasto Calórico (via localStorage).
   const [planoConfig, setPlanoConfig] = useState<{
@@ -448,7 +487,7 @@ export default function PlanoAlimentarLayout({
 
   // Persist meals to localStorage for the "Envio do Plano" tab
   useEffect(() => {
-    if (!pacienteId) return
+    if (!pacienteId || !mealsHydrated) return
     const mealsForEnvio = meals.map(m => ({
       id: m.id,
       name: m.name,
@@ -459,7 +498,7 @@ export default function PlanoAlimentarLayout({
       ),
     }))
     window.localStorage.setItem(`plano_meals_${pacienteId}`, JSON.stringify(mealsForEnvio))
-  }, [meals, pacienteId])
+  }, [meals, pacienteId, mealsHydrated])
 
   // O gráfico de pizza sempre usa a Caloria Final do Gasto Calórico.
   const totalKcal = planoConfig.caloriaFinal ?? gastoCaloricoTotal ?? 1850
@@ -520,7 +559,7 @@ export default function PlanoAlimentarLayout({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
           <span style={{ color: '#4a5568', fontWeight: 600, fontSize: 11 }}>{micro.name}</span>
           <span style={{ fontWeight: 700, color: '#1a365d', fontSize: 10 }}>
-            {temDado ? `${consumido}/${meta}` : `meta ${meta}`} {micro.unit}
+            {temDado ? `${fmtNum(consumido)}/${fmtNum(meta)}` : `meta ${fmtNum(meta)}`} {micro.unit}
           </span>
         </div>
         {temDado ? (
@@ -529,7 +568,7 @@ export default function PlanoAlimentarLayout({
               <div style={{ height: '100%', width: `${pct}%`, borderRadius: 4, background: 'linear-gradient(90deg, #68d391, #38a169)', transition: 'width 0.4s' }} />
             </div>
             <div style={{ fontSize: 9, marginTop: 2, fontWeight: 600, color: falta > 0 ? '#e53e3e' : '#38a169' }}>
-              {falta > 0 ? `Faltam ${falta} ${micro.unit} (${pct}%)` : `Meta atingida (${pct}%)`}
+              {falta > 0 ? `Faltam ${fmtNum(falta)} ${micro.unit} (${pct}%)` : `Meta atingida (${pct}%)`}
             </div>
           </>
         ) : (
@@ -583,6 +622,11 @@ export default function PlanoAlimentarLayout({
   const saveMealName = (id: string, newName: string) =>
     updateMeal(id, (m) => ({ ...m, name: newName, editing: false }))
 
+  const editMealTime = (id: string) => updateMeal(id, (m) => ({ ...m, editingTime: true }))
+
+  const saveMealTime = (id: string, newTime: string) =>
+    updateMeal(id, (m) => ({ ...m, time: newTime, editingTime: false }))
+
   const moveMeal = (id: string, dir: 'up' | 'down') => {
     setMeals((prev) => {
       const idx = prev.findIndex((m) => m.id === id)
@@ -600,14 +644,28 @@ export default function PlanoAlimentarLayout({
       if (idx < 0) return prev
       const src = prev[idx]
       const newId = genId()
+      const foodIdMap: Record<string, string> = {}
+      const newFoods = src.foods.map((f) => {
+        const nid = genId()
+        foodIdMap[f.id] = nid
+        return { ...f, id: nid }
+      })
+      const newSubs: Record<string, SubItem[]> = {}
+      for (const [oldFoodId, subList] of Object.entries(src.subs)) {
+        const newFoodId = foodIdMap[oldFoodId]
+        if (newFoodId) {
+          newSubs[newFoodId] = subList.map(s => ({ ...s, id: genId() }))
+        }
+      }
       const clone: Meal = {
         ...src,
         id: newId,
         name: src.name + ' (Cópia)',
-        foods: src.foods.map((f) => ({ ...f, id: genId() })),
-        subs: {},
+        foods: newFoods,
+        subs: newSubs,
         collapsed: false,
         editing: false,
+        editingTime: false,
       }
       const next = [...prev]
       next.splice(idx + 1, 0, clone)
@@ -801,9 +859,9 @@ export default function PlanoAlimentarLayout({
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 18 }}>
           {[
             { value: totalKcal.toLocaleString('pt-BR'), sub: 'kcal', label: 'Calorias Totais', bg: 'linear-gradient(135deg, #fc5c65, #eb3b5a)' },
-            { value: totals.prot.toString(), sub: 'g', label: 'Proteínas', bg: 'linear-gradient(135deg, #45aaf2, #2d98da)' },
-            { value: totals.carb.toString(), sub: 'g', label: 'Carboidratos', bg: 'linear-gradient(135deg, #26de81, #20bf6b)' },
-            { value: totals.fat.toString(), sub: 'g', label: 'Gorduras', bg: 'linear-gradient(135deg, #fed330, #f7b731)' },
+            { value: fmtNum(totals.prot), sub: 'g', label: 'Proteínas', bg: 'linear-gradient(135deg, #45aaf2, #2d98da)' },
+            { value: fmtNum(totals.carb), sub: 'g', label: 'Carboidratos', bg: 'linear-gradient(135deg, #26de81, #20bf6b)' },
+            { value: fmtNum(totals.fat), sub: 'g', label: 'Gorduras', bg: 'linear-gradient(135deg, #fed330, #f7b731)' },
           ].map((card) => (
             <div
               key={card.label}
@@ -834,18 +892,41 @@ export default function PlanoAlimentarLayout({
               return (
                 <div
                   key={meal.id}
+                  draggable
+                  onDragStart={() => { dragSrcId.current = meal.id }}
+                  onDragOver={(e) => { e.preventDefault(); setDragOverId(meal.id) }}
+                  onDragLeave={() => setDragOverId(null)}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    setDragOverId(null)
+                    if (!dragSrcId.current || dragSrcId.current === meal.id) return
+                    setMeals(prev => {
+                      const srcIdx = prev.findIndex(m => m.id === dragSrcId.current)
+                      const dstIdx = prev.findIndex(m => m.id === meal.id)
+                      if (srcIdx < 0 || dstIdx < 0) return prev
+                      const next = [...prev]
+                      const [moved] = next.splice(srcIdx, 1)
+                      next.splice(dstIdx, 0, moved)
+                      return next
+                    })
+                    dragSrcId.current = null
+                  }}
+                  onDragEnd={() => { dragSrcId.current = null; setDragOverId(null) }}
                   style={{
                     background: '#fff',
                     borderRadius: 14,
                     boxShadow: '0 2px 12px rgba(0,0,0,0.05)',
                     padding: 16,
                     marginBottom: 14,
-                    border: '1px solid rgba(0,0,0,0.03)',
+                    border: dragOverId === meal.id ? '2px solid #3182ce' : '1px solid rgba(0,0,0,0.03)',
+                    cursor: 'grab',
+                    transition: 'border 0.15s',
                   }}
                 >
                   {/* Meal Header */}
                   <div style={getHeaderStyle(meal.colorClass)}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+                      <span style={{ cursor: 'grab', fontSize: 14, color: '#a0aec0', userSelect: 'none' }} title="Arraste para reordenar">☰</span>
                       {meal.editing ? (
                         <input
                           autoFocus
@@ -870,6 +951,7 @@ export default function PlanoAlimentarLayout({
                         <span
                           onDoubleClick={() => editMealName(meal.id)}
                           style={{ fontSize: 14, fontWeight: 700, color: '#1a365d', cursor: 'pointer' }}
+                          title="Duplo clique para editar"
                         >
                           {meal.name}
                         </span>
@@ -877,9 +959,6 @@ export default function PlanoAlimentarLayout({
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginLeft: 8 }}>
                       {[
-                        { title: 'Editar nome', icon: '✏️', fn: () => editMealName(meal.id) },
-                        { title: 'Mover para cima', icon: '⬆️', fn: () => moveMeal(meal.id, 'up') },
-                        { title: 'Mover para baixo', icon: '⬇️', fn: () => moveMeal(meal.id, 'down') },
                         { title: 'Copiar refeição', icon: '📋', fn: () => copyMeal(meal.id) },
                         { title: 'Excluir refeição', icon: '🗑️', fn: () => deleteMeal(meal.id) },
                         {
@@ -906,18 +985,43 @@ export default function PlanoAlimentarLayout({
                         </button>
                       ))}
                     </div>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        color: '#718096',
-                        fontWeight: 600,
-                        background: 'rgba(255,255,255,0.6)',
-                        padding: '2px 8px',
-                        borderRadius: 10,
-                      }}
-                    >
-                      {meal.time}
-                    </span>
+                    {meal.editingTime ? (
+                      <input
+                        autoFocus
+                        defaultValue={meal.time}
+                        onBlur={(e) => saveMealTime(meal.id, e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveMealTime(meal.id, (e.target as HTMLInputElement).value)
+                        }}
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: '#1a365d',
+                          border: '2px solid #63b3ed',
+                          borderRadius: 6,
+                          padding: '2px 8px',
+                          background: '#fff',
+                          width: 80,
+                          outline: 'none',
+                        }}
+                      />
+                    ) : (
+                      <span
+                        onDoubleClick={() => editMealTime(meal.id)}
+                        style={{
+                          fontSize: 11,
+                          color: '#718096',
+                          fontWeight: 600,
+                          background: 'rgba(255,255,255,0.6)',
+                          padding: '2px 8px',
+                          borderRadius: 10,
+                          cursor: 'pointer',
+                        }}
+                        title="Duplo clique para editar horário"
+                      >
+                        {meal.time}
+                      </span>
+                    )}
                   </div>
 
                   {/* Meal Body */}
@@ -1000,6 +1104,7 @@ export default function PlanoAlimentarLayout({
                               subs: {},
                               collapsed: false,
                               editing: false,
+                              editingTime: false,
                             },
                           ])
                         }}
@@ -1093,7 +1198,7 @@ export default function PlanoAlimentarLayout({
                         <span style={{ color: macro.color }}>●</span> {macro.name}
                       </span>
                       <span style={{ fontSize: 10, color: '#718096', fontWeight: 600 }}>
-                        {macro.current}g / {macro.target}g
+                        {fmtNum(macro.current)}g / {fmtNum(macro.target)}g
                       </span>
                     </div>
                     <div style={{ height: 10, borderRadius: 5, background: '#edf2f7', overflow: 'hidden' }}>
@@ -1116,8 +1221,8 @@ export default function PlanoAlimentarLayout({
                       }}
                     >
                       {diff > 0
-                        ? `⬇ Faltam ${diff}g para atingir a meta (${pct}%)`
-                        : `⬆ Excedeu ${Math.abs(diff)}g acima da meta (${pct}%)`}
+                        ? `⬇ Faltam ${fmtNum(diff)}g para atingir a meta (${pct}%)`
+                        : `⬆ Excedeu ${fmtNum(Math.abs(diff))}g acima da meta (${pct}%)`}
                     </div>
                   </div>
                 )
@@ -1140,7 +1245,7 @@ export default function PlanoAlimentarLayout({
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                       <span style={{ color: '#4a5568', fontWeight: 600, fontSize: 11 }}>{micro.name}</span>
                       <span style={{ fontWeight: 700, color: '#1a365d', fontSize: 10 }}>
-                        {consumido}/{meta} {micro.unit}
+                        {fmtNum(consumido)}/{fmtNum(meta)} {micro.unit}
                       </span>
                     </div>
                     <div style={{ height: 8, borderRadius: 4, background: '#edf2f7', overflow: 'hidden' }}>
@@ -1155,7 +1260,7 @@ export default function PlanoAlimentarLayout({
                       />
                     </div>
                     <div style={{ fontSize: 9, marginTop: 2, fontWeight: 600, color: falta > 0 ? '#e53e3e' : '#38a169' }}>
-                      {falta > 0 ? `Faltam ${falta} ${micro.unit} (${pct}%)` : `Meta atingida (${pct}%)`}
+                      {falta > 0 ? `Faltam ${fmtNum(falta)} ${micro.unit} (${pct}%)` : `Meta atingida (${pct}%)`}
                     </div>
                   </div>
                 )
@@ -1212,8 +1317,8 @@ export default function PlanoAlimentarLayout({
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, alignItems: 'end' }}>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <label style={labelStyle}>Quantidade informada</label>
                   <input
                     type="number"
@@ -1223,7 +1328,7 @@ export default function PlanoAlimentarLayout({
                     style={inputStyle}
                   />
                 </div>
-                <div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <label style={labelStyle}>Unidade</label>
                   <select value={cadUnit} onChange={(e) => setCadUnit(e.target.value)} style={inputStyle}>
                     {UNIT_OPTIONS.map((o) => (
@@ -1235,20 +1340,20 @@ export default function PlanoAlimentarLayout({
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
-                <div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8, alignItems: 'end' }}>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <label style={labelStyle}>Proteínas (g)</label>
                   <input type="number" placeholder="0" value={cadProt} onChange={(e) => setCadProt(e.target.value)} style={inputStyle} />
                 </div>
-                <div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <label style={labelStyle}>Carboidratos (g)</label>
                   <input type="number" placeholder="0" value={cadCarb} onChange={(e) => setCadCarb(e.target.value)} style={inputStyle} />
                 </div>
-                <div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <label style={labelStyle}>Gordura (g)</label>
                   <input type="number" placeholder="0" value={cadFat} onChange={(e) => setCadFat(e.target.value)} style={inputStyle} />
                 </div>
-                <div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <label style={labelStyle}>Calorias (kcal)</label>
                   <input type="number" placeholder="0" value={cadKcal} onChange={(e) => setCadKcal(e.target.value)} style={inputStyle} />
                 </div>
@@ -1267,17 +1372,17 @@ export default function PlanoAlimentarLayout({
                     fontWeight: 600,
                   }}
                 >
-                  Valores por 100g: P: {Math.round(cadProtNum * cadFactor * 10) / 10}g · C:{' '}
-                  {Math.round(cadCarbNum * cadFactor * 10) / 10}g · G: {Math.round(cadFatNum * cadFactor * 10) / 10}g ·{' '}
-                  {Math.round(cadKcalNum * cadFactor * 10) / 10} kcal
+                  Valores por 100g: P: {fmtNum(cadProtNum * cadFactor)}g · C:{' '}
+                  {fmtNum(cadCarbNum * cadFactor)}g · G: {fmtNum(cadFatNum * cadFactor)}g ·{' '}
+                  {fmtNum(cadKcalNum * cadFactor)} kcal
                 </div>
               )}
 
               {cadMicroExpanded && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5, marginTop: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8, alignItems: 'center' }}>
                   {MICRO_CADASTRO.map((m) => (
-                    <div key={m} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                      <label style={{ fontSize: 9, color: '#a0aec0', minWidth: 65, fontWeight: 600 }}>{m}</label>
+                    <div key={m} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <label style={{ fontSize: 9, color: '#a0aec0', minWidth: 70, fontWeight: 600 }}>{m}</label>
                       <input
                         type="number"
                         style={{
@@ -1421,10 +1526,10 @@ function FoodRow({
             </select>
           </div>
         </td>
-        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: '#4a5568' }}>{food.prot}g</td>
-        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: '#4a5568' }}>{food.carb}g</td>
-        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: '#4a5568' }}>{food.fat}g</td>
-        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, color: '#1a365d' }}>{food.kcal}</td>
+        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: '#4a5568' }}>{fmtNum(food.prot)}g</td>
+        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: '#4a5568' }}>{fmtNum(food.carb)}g</td>
+        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: '#4a5568' }}>{fmtNum(food.fat)}g</td>
+        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, color: '#1a365d' }}>{fmtNum(food.kcal)}</td>
         <td style={tdStyle}>
           <span onClick={onRemove} style={{ cursor: 'pointer', color: '#cbd5e0', fontSize: 16, padding: '2px 4px' }}>
             ×
@@ -1535,10 +1640,10 @@ function FoodRow({
               </select>
             </div>
           </td>
-          <td style={{ ...tdStyle, borderBottom: '1px solid #bee3f8', textAlign: 'right', fontWeight: 600, color: '#4a5568', fontSize: 12 }}>{sub.prot}g</td>
-          <td style={{ ...tdStyle, borderBottom: '1px solid #bee3f8', textAlign: 'right', fontWeight: 600, color: '#4a5568', fontSize: 12 }}>{sub.carb}g</td>
-          <td style={{ ...tdStyle, borderBottom: '1px solid #bee3f8', textAlign: 'right', fontWeight: 600, color: '#4a5568', fontSize: 12 }}>{sub.fat}g</td>
-          <td style={{ ...tdStyle, borderBottom: '1px solid #bee3f8', textAlign: 'right', fontWeight: 800, color: '#1a365d', fontSize: 12 }}>{sub.kcal}</td>
+          <td style={{ ...tdStyle, borderBottom: '1px solid #bee3f8', textAlign: 'right', fontWeight: 600, color: '#4a5568', fontSize: 12 }}>{fmtNum(sub.prot)}g</td>
+          <td style={{ ...tdStyle, borderBottom: '1px solid #bee3f8', textAlign: 'right', fontWeight: 600, color: '#4a5568', fontSize: 12 }}>{fmtNum(sub.carb)}g</td>
+          <td style={{ ...tdStyle, borderBottom: '1px solid #bee3f8', textAlign: 'right', fontWeight: 600, color: '#4a5568', fontSize: 12 }}>{fmtNum(sub.fat)}g</td>
+          <td style={{ ...tdStyle, borderBottom: '1px solid #bee3f8', textAlign: 'right', fontWeight: 800, color: '#1a365d', fontSize: 12 }}>{fmtNum(sub.kcal)}</td>
           <td style={{ ...tdStyle, borderBottom: '1px solid #bee3f8' }}>
             <span onClick={() => onRemoveSub(sub.id)} style={{ cursor: 'pointer', color: '#e53e3e', fontSize: 16, padding: '2px 4px', fontWeight: 700 }}>
               ×
