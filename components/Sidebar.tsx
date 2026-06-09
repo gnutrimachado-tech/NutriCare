@@ -2,7 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 
 const menuItems = [
-  { href: "/dashboard", label: "Dashboard" },
+  { href: "/dashboard", label: "Página Inicial" },
   { href: "/pacientes", label: "Pacientes" },
   { href: "/agenda", label: "Agenda" },
   { href: "/planos", label: "Planos Alimentares" },
