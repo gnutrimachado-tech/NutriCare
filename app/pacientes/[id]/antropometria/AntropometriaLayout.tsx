@@ -956,29 +956,34 @@ export default function AntropometriaLayout({
           )}
         </div>
 
-        {/* ÁGUA CORPORAL — Fórmula de Watson */}
-        <div style={{ ...resultCardStyle, marginTop: 24 }}>
-          <div style={resultHeaderStyle}>
-            <div style={headerBlockStyle}>
-              <div style={iconBubbleBlue}>💧</div>
-              <div>
-                <h3 style={sectionTitleStyle}>% de água corporal</h3>
-                <p style={subTitleStyle}>
-                  Fórmula de Watson ({sexoPaciente})
-                </p>
+        {/* ÁGUA CORPORAL + VO2 MAX — lado a lado */}
+        <div style={{ display: 'flex', gap: 16, marginTop: 24, alignItems: 'flex-start' }}>
+          {/* ÁGUA CORPORAL — Fórmula de Watson */}
+          <div style={{ ...resultCardStyle, flex: 1, margin: 0 }}>
+            <div style={resultHeaderStyle}>
+              <div style={headerBlockStyle}>
+                <div style={iconBubbleBlue}>💧</div>
+                <div>
+                  <h3 style={sectionTitleStyle}>% de água corporal</h3>
+                  <p style={subTitleStyle}>
+                    Fórmula de Watson ({sexoPaciente})
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <div style={aguaValueBoxStyle}>
-              <div style={aguaValueStyle}>
-                {aguaCorporalPct !== null ? formatPt(aguaCorporalPct, " %") : "—"}
+              <div style={aguaValueBoxStyle}>
+                <div style={aguaValueStyle}>
+                  {aguaCorporalPct !== null ? formatPt(aguaCorporalPct, " %") : "—"}
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* VO2 MAX — Jack Daniels */}
-        <VO2MaxJackDaniels sexoPaciente={sexoPaciente} pacienteId={pacienteId} />
+          {/* VO2 MAX — Jack Daniels */}
+          <div style={{ flex: 1 }}>
+            <VO2MaxJackDaniels sexoPaciente={sexoPaciente} pacienteId={pacienteId} />
+          </div>
+        </div>
       </div>
     </div>
   );
