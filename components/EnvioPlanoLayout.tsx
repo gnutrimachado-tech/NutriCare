@@ -138,8 +138,8 @@ function PrintableLayout({
                 style={{
                   border: '1px solid #d1d5db',
                   borderRadius: 8,
-                  padding: 10,
-                  minHeight: 100,
+                  padding: 12,
+                  minHeight: 140,
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, borderBottom: '1px solid #e5e7eb', paddingBottom: 6 }}>
@@ -150,8 +150,8 @@ function PrintableLayout({
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 10, color: '#16a34a', marginBottom: 4, textTransform: 'uppercase' }}>Principais</div>
                     {meal.foods.length > 0 ? meal.foods.map(f => (
-                      <div key={f.id} style={{ marginBottom: 2 }}>
-                        {f.name} — {f.qty}{f.unit}
+                      <div key={f.id} style={{ marginBottom: 3 }}>
+                        {f.name} — <strong>{f.qty}{f.unit}</strong>
                       </div>
                     )) : <div style={{ color: '#999', fontStyle: 'italic' }}>—</div>}
                   </div>
@@ -160,8 +160,8 @@ function PrintableLayout({
                     {Object.values(meal.subs).flat().length > 0 ? (
                       Object.entries(meal.subs).map(([, subs]) =>
                         subs.map(s => (
-                          <div key={s.id} style={{ marginBottom: 2 }}>
-                            {s.name} — {s.qty}{s.unit}
+                          <div key={s.id} style={{ marginBottom: 3 }}>
+                            {s.name} — <strong>{s.qty}{s.unit}</strong>
                           </div>
                         ))
                       )
@@ -238,6 +238,10 @@ export default function EnvioPlanoLayout({
   const [attachments, setAttachments] = useState<File[]>([])
   const [pdfType, setPdfType] = useState<'plano' | 'orientacoes'>('plano')
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null)
+  const [shoppingDays, setShoppingDays] = useState(30)
+  const [includeShoppingList, setIncludeShoppingList] = useState(true)
+  const [includeProtocols, setIncludeProtocols] = useState(true)
+  const [sending, setSending] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Load meals from localStorage (synced from PlanoAlimentarLayout)
@@ -272,30 +276,43 @@ export default function EnvioPlanoLayout({
     setExpandedMeals(prev => ({ ...prev, [id]: !prev[id] }))
   }
 
-  // Shopping list: aggregate all foods + subs for 30 days
+  // Shopping list: aggregate all foods + subs for N days
   const shoppingList = (() => {
+    const days = shoppingDays > 0 ? shoppingDays : 1
     const map: Record<string, { qty: number; unit: string }> = {}
     for (const meal of meals) {
       for (const f of meal.foods) {
         if (!f.name) continue
         const key = `${f.name}|${f.unit}`
         if (!map[key]) map[key] = { qty: 0, unit: f.unit }
-        map[key].qty += f.qty * 30
+        map[key].qty += f.qty * days
       }
       for (const subs of Object.values(meal.subs)) {
         for (const s of subs) {
           if (!s.name) continue
           const key = `${s.name}|${s.unit}`
           if (!map[key]) map[key] = { qty: 0, unit: s.unit }
-          map[key].qty += s.qty * 30
+          map[key].qty += s.qty * days
         }
       }
     }
-    return Object.entries(map).map(([key, val]) => ({
-      name: key.split('|')[0],
-      qty: Math.round(val.qty),
-      unit: val.unit,
-    }))
+    return Object.entries(map).map(([key, val]) => {
+      const totalQty = Math.round(val.qty)
+      let displayQty: string
+      if (val.unit === 'g' && totalQty > 900) {
+        const kg = Math.floor(totalQty / 1000)
+        const gRest = totalQty % 1000
+        displayQty = gRest > 0 ? `${kg}kg e ${gRest}g` : `${kg}kg`
+      } else {
+        displayQty = `${totalQty} ${val.unit}`
+      }
+      return {
+        name: key.split('|')[0],
+        qty: totalQty,
+        unit: val.unit,
+        displayQty,
+      }
+    })
   })()
 
   const filteredProtocols = protocols.filter(p =>
@@ -357,10 +374,36 @@ export default function EnvioPlanoLayout({
     }
   }
 
-  const handleSendEmail = () => {
-    const patientEmail = prompt('Email do paciente:')
-    if (!patientEmail) return
-    alert(`Plano enviado para ${patientEmail} com sucesso! (simulação)`)
+  const handleSendEmail = async () => {
+    setSending(true)
+    try {
+      const body = {
+        pacienteId,
+        nomePaciente,
+        message,
+        includeShoppingList,
+        includeProtocols,
+        meals: meals.map(m => ({ name: m.name, time: m.time, foods: m.foods, subs: m.subs })),
+        protocols: includeProtocols ? protocols : [],
+        shoppingList: includeShoppingList ? shoppingList : [],
+        shoppingDays,
+      }
+      const res = await fetch('/api/send-plano', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        alert(data.message || 'Plano enviado com sucesso!')
+      } else {
+        alert(data.error || 'Erro ao enviar o plano.')
+      }
+    } catch {
+      alert('Erro de conexão ao enviar o plano.')
+    } finally {
+      setSending(false)
+    }
   }
 
   const selectedProtocol = protocols.find(p => p.id === selectedProtocolId)
@@ -465,9 +508,21 @@ export default function EnvioPlanoLayout({
 
           {/* Shopping List */}
           <div style={sectionCardStyle}>
-            <h3 style={{ margin: '0 0 12px 0', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
-              🛒 Lista de compras (1 mês)
-            </h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+                🛒 Lista de compras
+              </h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <label style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>Dias:</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={shoppingDays}
+                  onChange={e => setShoppingDays(Math.max(1, parseInt(e.target.value) || 1))}
+                  style={{ width: 60, padding: '4px 8px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 13, textAlign: 'center', fontWeight: 700 }}
+                />
+              </div>
+            </div>
             {shoppingList.length === 0 ? (
               <p style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: 13 }}>
                 Adicione alimentos no plano alimentar para gerar a lista.
@@ -476,7 +531,7 @@ export default function EnvioPlanoLayout({
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                 {shoppingList.map((item, i) => (
                   <div key={i} style={{ fontSize: 12, padding: '4px 8px', background: '#f8fafc', borderRadius: 6, color: '#334155' }}>
-                    • {item.name} — <b>{item.qty} {item.unit}</b>
+                    • {item.name} — <b>{item.displayQty}</b>
                   </div>
                 ))}
               </div>
@@ -609,7 +664,7 @@ export default function EnvioPlanoLayout({
           {/* Attachments */}
           <div style={sectionCardStyle}>
             <h3 style={{ margin: '0 0 8px 0', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
-              📎 Anexos (opcional)
+              📎 Anexos
             </h3>
             <input
               type="file"
@@ -651,32 +706,47 @@ export default function EnvioPlanoLayout({
             )}
           </div>
 
-          {/* Send */}
+          {/* Send options */}
           <div style={sectionCardStyle}>
-            <h3 style={{ margin: '0 0 12px 0', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Enviar por</h3>
-            <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-              <button style={{ ...sendMethodBtn, opacity: 0.5, cursor: 'not-allowed' }} disabled title="Requer integração via API">
-                📱 WhatsApp
-              </button>
-              <button onClick={handleSendEmail} style={sendMethodBtn}>
-                ✉️ E-mail
-              </button>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Enviar</h3>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#334155', cursor: 'pointer', marginBottom: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={includeShoppingList}
+                  onChange={e => setIncludeShoppingList(e.target.checked)}
+                  style={{ width: 18, height: 18, accentColor: '#16a34a' }}
+                />
+                Incluir lista de compras
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#334155', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={includeProtocols}
+                  onChange={e => setIncludeProtocols(e.target.checked)}
+                  style={{ width: 18, height: 18, accentColor: '#16a34a' }}
+                />
+                Incluir protocolos / orientações
+              </label>
             </div>
+
             <button
               onClick={handleSendEmail}
+              disabled={sending}
               style={{
                 width: '100%',
                 padding: '14px',
-                background: '#16a34a',
+                background: sending ? '#86efac' : '#16a34a',
                 color: '#fff',
                 border: 'none',
                 borderRadius: 10,
                 fontSize: 16,
                 fontWeight: 700,
-                cursor: 'pointer',
+                cursor: sending ? 'not-allowed' : 'pointer',
               }}
             >
-              ✈️ Enviar plano para o paciente
+              {sending ? 'Enviando...' : '✈️ Enviar plano para o paciente'}
             </button>
           </div>
         </div>
