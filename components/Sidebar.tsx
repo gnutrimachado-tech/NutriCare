@@ -24,8 +24,8 @@ export default function Sidebar() {
         <Image
           src="/logo-nutricare.png"
           alt="NutriCare"
-          width={180}
-          height={90}
+          width={220}
+          height={110}
           style={{ objectFit: "contain" }}
           priority
         />
