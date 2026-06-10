@@ -957,9 +957,9 @@ export default function AntropometriaLayout({
         </div>
 
         {/* ÁGUA CORPORAL + VO2 MAX — lado a lado */}
-        <div style={{ display: 'flex', gap: 16, marginTop: 24, alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', gap: 16, marginTop: 24, alignItems: 'stretch' }}>
           {/* ÁGUA CORPORAL — Fórmula de Watson */}
-          <div style={{ ...resultCardStyle, flex: 1, margin: 0 }}>
+          <div style={{ ...resultCardStyle, flex: 1, margin: 0, display: 'flex', flexDirection: 'column' }}>
             <div style={resultHeaderStyle}>
               <div style={headerBlockStyle}>
                 <div style={iconBubbleBlue}>💧</div>
@@ -970,9 +970,18 @@ export default function AntropometriaLayout({
                   </p>
                 </div>
               </div>
+            </div>
 
-              <div style={aguaValueBoxStyle}>
-                <div style={aguaValueStyle}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 16 }}>
+              <div style={{
+                background: '#eff6ff',
+                border: '1px solid #dbeafe',
+                borderRadius: 14,
+                padding: '20px 32px',
+                textAlign: 'center',
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>% de água corporal</div>
+                <div style={{ fontSize: 32, fontWeight: 800, color: '#2563eb' }}>
                   {aguaCorporalPct !== null ? formatPt(aguaCorporalPct, " %") : "—"}
                 </div>
               </div>
@@ -980,7 +989,7 @@ export default function AntropometriaLayout({
           </div>
 
           {/* VO2 MAX — Jack Daniels */}
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, display: 'flex' }}>
             <VO2MaxJackDaniels sexoPaciente={sexoPaciente} pacienteId={pacienteId} />
           </div>
         </div>
@@ -1058,7 +1067,7 @@ function VO2MaxJackDaniels({
   const cls = vo2max !== null ? classifyVdot(vo2max) : null;
 
   return (
-    <div style={{ ...resultCardStyle, marginTop: 24 }}>
+    <div style={{ ...resultCardStyle, margin: 0, flex: 1, display: 'flex', flexDirection: 'column' }}>
       <div style={resultHeaderStyle}>
         <div style={headerBlockStyle}>
           <div style={iconBubblePurple}>🏃</div>
