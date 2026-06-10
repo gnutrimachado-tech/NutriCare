@@ -663,12 +663,14 @@ export default function GastoCaloricoLayout({
                   Massa Muscular (kg)
                 </label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   value={massaMuscularEditada ?? ""}
                   placeholder="Auto"
                   onChange={(e) => {
+                    const v = e.target.value.replace(/[^\d.,]/g, '');
                     setMassaMuscularEditada(
-                      e.target.value ? Number(e.target.value) : null
+                      v ? Number(v.replace(',', '.')) : null
                     );
                   }}
                   style={inputStyle}
@@ -693,9 +695,10 @@ export default function GastoCaloricoLayout({
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   value={caloriaFinal}
-                  onChange={(e) => setManualCalorie(Number(e.target.value))}
+                  onChange={(e) => { const v = e.target.value.replace(/[^\d]/g, ''); setManualCalorie(v ? Number(v) : 0) }}
                   style={{
                     width: "120px",
                     textAlign: "center",
@@ -881,12 +884,13 @@ export default function GastoCaloricoLayout({
                     <div>
                       <label style={labelStyle}>Tempo (min)</label>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
                         value={treino.tempo}
-                        min={1}
-                        onChange={(e) =>
-                          updateTreino(idx, "tempo", Number(e.target.value))
-                        }
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/[^\d]/g, '');
+                          updateTreino(idx, "tempo", v ? Number(v) : 0)
+                        }}
                         style={inputStyle}
                       />
                     </div>
