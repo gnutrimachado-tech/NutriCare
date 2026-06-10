@@ -131,40 +131,52 @@ function PrintableLayout({
       {/* Content */}
       <div style={{ position: 'relative', zIndex: 1 }}>
         {type === 'plano' ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             {meals.map((meal, idx) => (
               <div
                 key={meal.id}
                 style={{
                   border: '1px solid #d1d5db',
-                  borderRadius: 8,
-                  padding: 12,
-                  minHeight: 140,
+                  borderRadius: 10,
+                  padding: 14,
+                  minHeight: 180,
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, borderBottom: '1px solid #e5e7eb', paddingBottom: 6 }}>
-                  <span style={{ fontWeight: 700, fontSize: 13 }}>{meal.name || `Refeição ${idx + 1}`}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, borderBottom: '1px solid #e5e7eb', paddingBottom: 8 }}>
+                  <span style={{ fontWeight: 700, fontSize: 14 }}>{meal.name || `Refeição ${idx + 1}`}</span>
                   <span style={{ fontSize: 11, color: '#666' }}>{meal.time}</span>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 11 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 11 }}>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 10, color: '#16a34a', marginBottom: 4, textTransform: 'uppercase' }}>Principais</div>
-                    {meal.foods.length > 0 ? meal.foods.map(f => (
-                      <div key={f.id} style={{ marginBottom: 3 }}>
+                    <div style={{ fontWeight: 700, fontSize: 10, color: '#16a34a', marginBottom: 6, textTransform: 'uppercase' }}>Principais</div>
+                    {meal.foods.filter(f => f.name).length > 0 ? meal.foods.filter(f => f.name).map(f => (
+                      <div key={f.id} style={{ marginBottom: 4, lineHeight: 1.4 }}>
                         {f.name} — <strong>{f.qty}{f.unit}</strong>
                       </div>
                     )) : <div style={{ color: '#999', fontStyle: 'italic' }}>—</div>}
                   </div>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 10, color: '#2563eb', marginBottom: 4, textTransform: 'uppercase' }}>Substituições</div>
-                    {Object.values(meal.subs).flat().length > 0 ? (
-                      Object.entries(meal.subs).map(([, subs]) =>
-                        subs.map(s => (
-                          <div key={s.id} style={{ marginBottom: 3 }}>
-                            {s.name} — <strong>{s.qty}{s.unit}</strong>
+                    <div style={{ fontWeight: 700, fontSize: 10, color: '#2563eb', marginBottom: 6, textTransform: 'uppercase' }}>Substituições</div>
+                    {Object.entries(meal.subs).filter(([, subs]) => subs.some(s => s.name)).length > 0 ? (
+                      Object.entries(meal.subs).map(([foodId, subs]) => {
+                        const mainFood = meal.foods.find(f => f.id === foodId)
+                        const validSubs = subs.filter(s => s.name)
+                        if (validSubs.length === 0) return null
+                        return (
+                          <div key={foodId} style={{ marginBottom: 6 }}>
+                            {mainFood?.name && (
+                              <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 2 }}>
+                                Substituições p/ {mainFood.name}:
+                              </div>
+                            )}
+                            {validSubs.map(s => (
+                              <div key={s.id} style={{ marginBottom: 3, lineHeight: 1.4 }}>
+                                {s.name} — <strong>{s.qty}{s.unit}</strong>
+                              </div>
+                            ))}
                           </div>
-                        ))
-                      )
+                        )
+                      })
                     ) : <div style={{ color: '#999', fontStyle: 'italic' }}>—</div>}
                   </div>
                 </div>
@@ -238,6 +250,7 @@ export default function EnvioPlanoLayout({
   const [attachments, setAttachments] = useState<File[]>([])
   const [pdfType, setPdfType] = useState<'plano' | 'orientacoes'>('plano')
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null)
+  const [selectedProtocolIds, setSelectedProtocolIds] = useState<Set<string>>(new Set())
   const [shoppingDays, setShoppingDays] = useState(30)
   const [includeShoppingList, setIncludeShoppingList] = useState(true)
   const [includeProtocols, setIncludeProtocols] = useState(true)
@@ -315,6 +328,15 @@ export default function EnvioPlanoLayout({
     })
   })()
 
+  const toggleProtocolSelection = (id: string) => {
+    setSelectedProtocolIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   const filteredProtocols = protocols.filter(p =>
     p.name.toLowerCase().includes(protocolSearch.toLowerCase())
   )
@@ -384,7 +406,7 @@ export default function EnvioPlanoLayout({
         includeShoppingList,
         includeProtocols,
         meals: meals.map(m => ({ name: m.name, time: m.time, foods: m.foods, subs: m.subs })),
-        protocols: includeProtocols ? protocols : [],
+        protocols: includeProtocols ? protocols.filter(p => selectedProtocolIds.has(p.id)) : [],
         shoppingList: includeShoppingList ? shoppingList : [],
         shoppingDays,
       }
@@ -515,10 +537,10 @@ export default function EnvioPlanoLayout({
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <label style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>Dias:</label>
                 <input
-                  type="number"
-                  min={1}
+                  type="text"
+                  inputMode="numeric"
                   value={shoppingDays}
-                  onChange={e => setShoppingDays(Math.max(1, parseInt(e.target.value) || 1))}
+                  onChange={e => { const v = e.target.value.replace(/[^\d]/g, ''); setShoppingDays(Math.max(1, parseInt(v) || 1)) }}
                   style={{ width: 60, padding: '4px 8px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 13, textAlign: 'center', fontWeight: 700 }}
                 />
               </div>
@@ -577,7 +599,16 @@ export default function EnvioPlanoLayout({
                 ) : (
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{p.name}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedProtocolIds.has(p.id)}
+                          onChange={() => toggleProtocolSelection(p.id)}
+                          style={{ width: 18, height: 18, accentColor: '#16a34a', cursor: 'pointer' }}
+                          title="Selecionar para envio"
+                        />
+                        <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{p.name}</span>
+                      </div>
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button onClick={() => handlePrint('orientacoes', p.id)} style={smallBtnStyle} title="Imprimir">🖨️</button>
                         <button onClick={() => setEditingProtocol({ ...p })} style={smallBtnStyle} title="Editar">✏️</button>
