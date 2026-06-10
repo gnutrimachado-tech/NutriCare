@@ -36,6 +36,17 @@ interface Protocol {
   content: string
 }
 
+function shortFoodName(fullName: string): string {
+  if (!fullName) return fullName
+  const parts = fullName.split(',').map(p => p.trim())
+  if (parts.length <= 1) return fullName
+  const generic = ['carne', 'peixe', 'leite', 'queijo', 'pão', 'óleo', 'farinha']
+  if (generic.includes(parts[0].toLowerCase()) && parts.length >= 3) {
+    return parts[2].charAt(0).toUpperCase() + parts[2].slice(1)
+  }
+  return parts[0]
+}
+
 // ==================== PRINTABLE PDF LAYOUT ====================
 function PrintableLayout({
   type,
@@ -166,7 +177,7 @@ function PrintableLayout({
                           <div key={foodId} style={{ marginBottom: 6 }}>
                             {mainFood?.name && (
                               <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 2 }}>
-                                Substituições p/ {mainFood.name}:
+                                Substituições p/ {shortFoodName(mainFood.name)}:
                               </div>
                             )}
                             {validSubs.map(s => (
@@ -409,6 +420,13 @@ export default function EnvioPlanoLayout({
         protocols: includeProtocols ? protocols.filter(p => selectedProtocolIds.has(p.id)) : [],
         shoppingList: includeShoppingList ? shoppingList : [],
         shoppingDays,
+        dataNascimento,
+        sexoPaciente,
+        pesoKg,
+        alturaCm,
+        massaMuscular,
+        massaAdiposa,
+        percGordura,
       }
       const res = await fetch('/api/send-plano', {
         method: 'POST',
