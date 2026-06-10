@@ -936,7 +936,7 @@ export default function PlanoAlimentarLayout({
                             if (e.key === 'Enter') saveMealName(meal.id, (e.target as HTMLInputElement).value)
                           }}
                           style={{
-                            fontSize: 13,
+                            fontSize: 14,
                             fontWeight: 600,
                             color: '#1a365d',
                             border: '2px solid #63b3ed',
@@ -950,10 +950,48 @@ export default function PlanoAlimentarLayout({
                       ) : (
                         <span
                           onDoubleClick={() => editMealName(meal.id)}
-                          style={{ fontSize: 14, fontWeight: 700, color: '#1a365d', cursor: 'pointer' }}
+                          style={{ fontSize: 15, fontWeight: 700, color: '#1a365d', cursor: 'pointer' }}
                           title="Duplo clique para editar"
                         >
                           {meal.name}
+                        </span>
+                      )}
+                      {meal.editingTime ? (
+                        <input
+                          autoFocus
+                          defaultValue={meal.time}
+                          onBlur={(e) => saveMealTime(meal.id, e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveMealTime(meal.id, (e.target as HTMLInputElement).value)
+                          }}
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: '#1a365d',
+                            border: '2px solid #63b3ed',
+                            borderRadius: 6,
+                            padding: '2px 8px',
+                            background: '#fff',
+                            width: 80,
+                            outline: 'none',
+                          }}
+                        />
+                      ) : (
+                        <span
+                          onDoubleClick={() => editMealTime(meal.id)}
+                          style={{
+                            fontSize: 13,
+                            color: '#718096',
+                            fontWeight: 600,
+                            background: 'rgba(255,255,255,0.6)',
+                            padding: '2px 8px',
+                            borderRadius: 10,
+                            cursor: 'pointer',
+                            marginLeft: 4,
+                          }}
+                          title="Duplo clique para editar horário"
+                        >
+                          {meal.time}
                         </span>
                       )}
                     </div>
@@ -985,43 +1023,6 @@ export default function PlanoAlimentarLayout({
                         </button>
                       ))}
                     </div>
-                    {meal.editingTime ? (
-                      <input
-                        autoFocus
-                        defaultValue={meal.time}
-                        onBlur={(e) => saveMealTime(meal.id, e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') saveMealTime(meal.id, (e.target as HTMLInputElement).value)
-                        }}
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 600,
-                          color: '#1a365d',
-                          border: '2px solid #63b3ed',
-                          borderRadius: 6,
-                          padding: '2px 8px',
-                          background: '#fff',
-                          width: 80,
-                          outline: 'none',
-                        }}
-                      />
-                    ) : (
-                      <span
-                        onDoubleClick={() => editMealTime(meal.id)}
-                        style={{
-                          fontSize: 11,
-                          color: '#718096',
-                          fontWeight: 600,
-                          background: 'rgba(255,255,255,0.6)',
-                          padding: '2px 8px',
-                          borderRadius: 10,
-                          cursor: 'pointer',
-                        }}
-                        title="Duplo clique para editar horário"
-                      >
-                        {meal.time}
-                      </span>
-                    )}
                   </div>
 
                   {/* Meal Body */}
@@ -1321,10 +1322,11 @@ export default function PlanoAlimentarLayout({
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <label style={labelStyle}>Quantidade informada</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     placeholder="Ex: 150"
                     value={cadQty}
-                    onChange={(e) => setCadQty(e.target.value)}
+                    onChange={(e) => setCadQty(e.target.value.replace(/[^\d.,]/g, ''))}
                     style={inputStyle}
                   />
                 </div>
@@ -1343,19 +1345,19 @@ export default function PlanoAlimentarLayout({
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8, alignItems: 'end' }}>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <label style={labelStyle}>Proteínas (g)</label>
-                  <input type="number" placeholder="0" value={cadProt} onChange={(e) => setCadProt(e.target.value)} style={inputStyle} />
+                  <input type="text" inputMode="numeric" placeholder="0" value={cadProt} onChange={(e) => setCadProt(e.target.value.replace(/[^\d.,]/g, ''))} style={inputStyle} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <label style={labelStyle}>Carboidratos (g)</label>
-                  <input type="number" placeholder="0" value={cadCarb} onChange={(e) => setCadCarb(e.target.value)} style={inputStyle} />
+                  <input type="text" inputMode="numeric" placeholder="0" value={cadCarb} onChange={(e) => setCadCarb(e.target.value.replace(/[^\d.,]/g, ''))} style={inputStyle} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <label style={labelStyle}>Gordura (g)</label>
-                  <input type="number" placeholder="0" value={cadFat} onChange={(e) => setCadFat(e.target.value)} style={inputStyle} />
+                  <input type="text" inputMode="numeric" placeholder="0" value={cadFat} onChange={(e) => setCadFat(e.target.value.replace(/[^\d.,]/g, ''))} style={inputStyle} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <label style={labelStyle}>Calorias (kcal)</label>
-                  <input type="number" placeholder="0" value={cadKcal} onChange={(e) => setCadKcal(e.target.value)} style={inputStyle} />
+                  <input type="text" inputMode="numeric" placeholder="0" value={cadKcal} onChange={(e) => setCadKcal(e.target.value.replace(/[^\d.,]/g, ''))} style={inputStyle} />
                 </div>
               </div>
 
@@ -1384,7 +1386,8 @@ export default function PlanoAlimentarLayout({
                     <div key={m} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <label style={{ fontSize: 9, color: '#a0aec0', minWidth: 70, fontWeight: 600 }}>{m}</label>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
                         style={{
                           width: 55,
                           padding: '4px 6px',
@@ -1491,10 +1494,11 @@ function FoodRow({
         <td style={tdStyle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={food.qty || ''}
               placeholder="0"
-              onChange={(e) => onUpdateQty(parseFloat(e.target.value) || 0)}
+              onChange={(e) => { const v = e.target.value.replace(/[^\d.,]/g, ''); onUpdateQty(parseFloat(v.replace(',', '.')) || 0) }}
               style={{
                 width: 50,
                 padding: '5px 6px',
@@ -1573,11 +1577,13 @@ function FoodRow({
           <td style={{ ...tdStyle, borderBottom: '1px solid #bee3f8' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={sub.qty || ''}
                 placeholder="0"
                 onChange={(e) => {
-                  const qty = parseFloat(e.target.value) || 0
+                  const v = e.target.value.replace(/[^\d.,]/g, '')
+                  const qty = parseFloat(v.replace(',', '.')) || 0
                   const tbcaFood = TBCA_FOODS.find((t) => t.n === sub.name)
                   if (tbcaFood) {
                     const grams = qty * (UNIT_FACTORS[sub.unit] || 1)
