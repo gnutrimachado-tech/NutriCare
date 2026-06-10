@@ -997,6 +997,8 @@ export default function PlanoAlimentarLayout({
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginLeft: 8 }}>
                       {[
+                        { title: 'Mover para cima', icon: '⬆', fn: () => moveMeal(meal.id, 'up') },
+                        { title: 'Mover para baixo', icon: '⬇', fn: () => moveMeal(meal.id, 'down') },
                         { title: 'Copiar refeição', icon: '📋', fn: () => copyMeal(meal.id) },
                         { title: 'Excluir refeição', icon: '🗑️', fn: () => deleteMeal(meal.id) },
                         {
@@ -1100,7 +1102,7 @@ export default function PlanoAlimentarLayout({
                               name: `Refeição ${prev.length + 1}`,
                               icon: '',
                               colorClass: colorClasses[prev.length % colorClasses.length],
-                              time: '',
+                              time: '00:00h',
                               foods: [{ id: genId(), name: '', qty: 0, unit: 'g', prot: 0, carb: 0, fat: 0, kcal: 0, baseGrams: 100 }],
                               subs: {},
                               collapsed: false,
