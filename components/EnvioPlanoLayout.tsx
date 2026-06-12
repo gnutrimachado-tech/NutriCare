@@ -60,8 +60,10 @@ function PrintableLayout({
   percGordura,
   meals,
   protocol,
+  shoppingList,
+  shoppingDays,
 }: {
-  type: 'plano' | 'orientacoes'
+  type: 'plano' | 'orientacoes' | 'compras'
   nomePaciente: string
   dataNascimento: string
   sexoPaciente: string
@@ -72,6 +74,8 @@ function PrintableLayout({
   percGordura: number
   meals: EnvioMeal[]
   protocol?: Protocol
+  shoppingList?: { name: string; displayQty: string }[]
+  shoppingDays?: number
 }) {
   return (
     <div
@@ -136,7 +140,7 @@ function PrintableLayout({
 
       {/* Title */}
       <div style={{ textAlign: 'center', fontSize: 22, fontWeight: 700, marginBottom: 18, position: 'relative', zIndex: 1 }}>
-        {type === 'plano' ? 'Plano Alimentar' : 'Orientações'}
+        {type === 'plano' ? 'Plano Alimentar' : type === 'compras' ? 'Lista de Compras' : 'Orientações'}
       </div>
 
       {/* Content */}
@@ -176,7 +180,7 @@ function PrintableLayout({
                         return (
                           <div key={foodId} style={{ marginBottom: 6 }}>
                             {mainFood?.name && (
-                              <div style={{ fontSize: 9, fontWeight: 700, color: '#475569', marginBottom: 2 }}>
+                              <div style={{ fontSize: 12, fontWeight: 800, color: '#1e3a8a', marginBottom: 3 }}>
                                 Substituições p/ {shortFoodName(mainFood.name)}:
                               </div>
                             )}
@@ -193,6 +197,37 @@ function PrintableLayout({
                 </div>
               </div>
             ))}
+          </div>
+        ) : type === 'compras' ? (
+          /* Lista de Compras layout */
+          <div>
+            <div style={{ fontSize: 12, color: '#475569', marginBottom: 12 }}>
+              Quantidades totais para <strong>{shoppingDays || 30} dias</strong>.
+            </div>
+            {shoppingList && shoppingList.length > 0 ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {shoppingList.map((item, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      border: '1px solid #d1d5db',
+                      borderRadius: 10,
+                      padding: '10px 14px',
+                      fontSize: 12,
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    <span>{item.name}</span>
+                    <strong style={{ whiteSpace: 'nowrap' }}>{item.displayQty}</strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ color: '#999', fontStyle: 'italic' }}>—</div>
+            )}
           </div>
         ) : (
           /* Orientações layout */
@@ -259,7 +294,7 @@ export default function EnvioPlanoLayout({
   const [expandedMeals, setExpandedMeals] = useState<Record<string, boolean>>({})
   const [message, setMessage] = useState('')
   const [attachments, setAttachments] = useState<File[]>([])
-  const [pdfType, setPdfType] = useState<'plano' | 'orientacoes'>('plano')
+  const [pdfType, setPdfType] = useState<'plano' | 'orientacoes' | 'compras'>('plano')
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null)
   const [selectedProtocolIds, setSelectedProtocolIds] = useState<Set<string>>(new Set())
   const [shoppingDays, setShoppingDays] = useState(30)
@@ -375,7 +410,7 @@ export default function EnvioPlanoLayout({
     setEditingProtocol(null)
   }
 
-  const handlePrint = (type: 'plano' | 'orientacoes', protocolId?: string) => {
+  const handlePrint = (type: 'plano' | 'orientacoes' | 'compras', protocolId?: string) => {
     setPdfType(type)
     if (protocolId) setSelectedProtocolId(protocolId)
     setTimeout(() => {
@@ -383,8 +418,9 @@ export default function EnvioPlanoLayout({
       if (!el) return
       const w = window.open('', '_blank')
       if (!w) return
+      const docTitle = type === 'plano' ? 'Plano Alimentar' : type === 'compras' ? 'Lista de Compras' : 'Orientações'
       w.document.write(`
-        <html><head><title>${type === 'plano' ? 'Plano Alimentar' : 'Orientações'}</title>
+        <html><head><title>${docTitle}</title>
         <style>
           @page { size: A4; margin: 0; }
           body { margin: 0; }
@@ -561,6 +597,9 @@ export default function EnvioPlanoLayout({
                   onChange={e => { const v = e.target.value.replace(/[^\d]/g, ''); setShoppingDays(Math.max(1, parseInt(v) || 1)) }}
                   style={{ width: 60, padding: '4px 8px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 13, textAlign: 'center', fontWeight: 700 }}
                 />
+                <button onClick={() => handlePrint('compras')} style={smallBtnStyle} title="Imprimir lista de compras">
+                  🖨️ Imprimir Lista
+                </button>
               </div>
             </div>
             {shoppingList.length === 0 ? (
@@ -670,7 +709,7 @@ export default function EnvioPlanoLayout({
           <div style={sectionCardStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
-                {pdfType === 'plano' ? 'Plano alimentar em PDF' : 'Orientações em PDF'}
+                {pdfType === 'plano' ? 'Plano alimentar em PDF' : pdfType === 'compras' ? 'Lista de compras em PDF' : 'Orientações em PDF'}
               </h3>
               <button onClick={() => handlePrint(pdfType, selectedProtocolId ?? undefined)} style={smallBtnStyle}>
                 👁️ Revisar PDF
@@ -691,6 +730,8 @@ export default function EnvioPlanoLayout({
                 percGordura={percGordura}
                 meals={meals}
                 protocol={selectedProtocol}
+                shoppingList={shoppingList}
+                shoppingDays={shoppingDays}
               />
             </div>
           </div>
@@ -827,6 +868,20 @@ export default function EnvioPlanoLayout({
           percGordura={percGordura}
           meals={meals}
           protocol={selectedProtocol}
+        />
+        <PrintableLayout
+          type="compras"
+          nomePaciente={nomePaciente}
+          dataNascimento={dataNascimento}
+          sexoPaciente={sexoPaciente}
+          pesoKg={pesoKg}
+          alturaCm={alturaCm}
+          massaMuscular={massaMuscular}
+          massaAdiposa={massaAdiposa}
+          percGordura={percGordura}
+          meals={meals}
+          shoppingList={shoppingList}
+          shoppingDays={shoppingDays}
         />
       </div>
     </div>
