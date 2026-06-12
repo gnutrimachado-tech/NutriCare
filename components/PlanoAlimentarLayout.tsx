@@ -431,8 +431,6 @@ export default function PlanoAlimentarLayout({
   void _nomePaciente
   const [meals, setMeals] = useState<Meal[]>(createInitialMeals)
   const [mealsHydrated, setMealsHydrated] = useState(false)
-  const [dragOverId, setDragOverId] = useState<string | null>(null)
-  const dragSrcId = useRef<string | null>(null)
 
   // Load full meals from localStorage (PERSIST data across tab switches)
   useEffect(() => {
@@ -892,41 +890,18 @@ export default function PlanoAlimentarLayout({
               return (
                 <div
                   key={meal.id}
-                  draggable
-                  onDragStart={() => { dragSrcId.current = meal.id }}
-                  onDragOver={(e) => { e.preventDefault(); setDragOverId(meal.id) }}
-                  onDragLeave={() => setDragOverId(null)}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    setDragOverId(null)
-                    if (!dragSrcId.current || dragSrcId.current === meal.id) return
-                    setMeals(prev => {
-                      const srcIdx = prev.findIndex(m => m.id === dragSrcId.current)
-                      const dstIdx = prev.findIndex(m => m.id === meal.id)
-                      if (srcIdx < 0 || dstIdx < 0) return prev
-                      const next = [...prev]
-                      const [moved] = next.splice(srcIdx, 1)
-                      next.splice(dstIdx, 0, moved)
-                      return next
-                    })
-                    dragSrcId.current = null
-                  }}
-                  onDragEnd={() => { dragSrcId.current = null; setDragOverId(null) }}
                   style={{
                     background: '#fff',
                     borderRadius: 14,
                     boxShadow: '0 2px 12px rgba(0,0,0,0.05)',
                     padding: 16,
                     marginBottom: 14,
-                    border: dragOverId === meal.id ? '2px solid #3182ce' : '1px solid rgba(0,0,0,0.03)',
-                    cursor: 'grab',
-                    transition: 'border 0.15s',
+                    border: '1px solid rgba(0,0,0,0.03)',
                   }}
                 >
                   {/* Meal Header */}
                   <div style={getHeaderStyle(meal.colorClass)}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-                      <span style={{ cursor: 'grab', fontSize: 14, color: '#a0aec0', userSelect: 'none' }} title="Arraste para reordenar">☰</span>
                       {meal.editing ? (
                         <input
                           autoFocus
