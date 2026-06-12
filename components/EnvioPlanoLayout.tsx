@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import html2pdf from 'html2pdf.js'
 
 type EnvioPlanoProps = {
   pacienteId: string
@@ -123,7 +122,7 @@ function PrintableLayout({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-nutricare.png" alt="NutriCare" style={{ width: 80, height: 80, objectFit: 'contain' }} />
+          <img src="/logo-nutricare.png" alt="NutriCare" style={{ width: 120, height: 120, objectFit: 'contain' }} />
           <div>
             <div style={{ fontSize: 20, fontWeight: 700 }}>{nomePaciente}</div>
             <div style={{ fontSize: 11, color: '#555' }}>
@@ -182,7 +181,7 @@ function PrintableLayout({
                           <div key={foodId} style={{ marginBottom: 6 }}>
                             {mainFood?.name && (
                               <div style={{ fontSize: 12, fontWeight: 800, color: '#1e3a8a', marginBottom: 3 }}>
-                                Substituições p/ {shortFoodName(mainFood.name)}:
+                                Substitui p/ {shortFoodName(mainFood.name)}:
                               </div>
                             )}
                             {validSubs.map(s => (
@@ -295,8 +294,6 @@ export default function EnvioPlanoLayout({
   const [expandedMeals, setExpandedMeals] = useState<Record<string, boolean>>({})
   const [message, setMessage] = useState('')
   const [attachments, setAttachments] = useState<File[]>([])
-  const [pdfType, setPdfType] = useState<'plano' | 'orientacoes' | 'compras'>('plano')
-  const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null)
   const [selectedProtocolIds, setSelectedProtocolIds] = useState<Set<string>>(new Set())
   const [shoppingDays, setShoppingDays] = useState(30)
   const [includeShoppingList, setIncludeShoppingList] = useState(true)
@@ -304,7 +301,7 @@ export default function EnvioPlanoLayout({
   const [sending, setSending] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Load meals from localStorage (synced from PlanoAlimentarLayout)
+  // Load meals from localStorage
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(`plano_meals_${pacienteId}`)
@@ -411,53 +408,6 @@ export default function EnvioPlanoLayout({
     setEditingProtocol(null)
   }
 
-  // ==================== PDF DOWNLOAD ====================
-  const generateAndDownloadPDF = (type: 'plano' | 'orientacoes' | 'compras', protocolId?: string) => {
-    const el = document.getElementById(`printable-${type}`)
-    if (!el) {
-      alert('Não foi possível gerar o PDF')
-      return
-    }
-
-    const selectedProtocol = protocolId ? protocols.find(p => p.id === protocolId) : selectedProtocolId ? protocols.find(p => p.id === selectedProtocolId) : undefined
-
-    const docTitle = type === 'plano' ? 'Plano Alimentar' : type === 'compras' ? 'Lista de Compras' : 'Orientações'
-    const fileName = `${nomePaciente.replace(/\s+/g, '_')}_${docTitle.replace(/\s+/g, '_')}.pdf`
-
-    const opt = {
-      margin: 0,
-      filename: fileName,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { format: 'a4', orientation: 'portrait' },
-    }
-
-    html2pdf().set(opt).from(el).save()
-  }
-
-  const handlePrint = (type: 'plano' | 'orientacoes' | 'compras', protocolId?: string) => {
-    setPdfType(type)
-    if (protocolId) setSelectedProtocolId(protocolId)
-    setTimeout(() => {
-      const el = document.getElementById(`printable-${type}`)
-      if (!el) return
-      const w = window.open('', '_blank')
-      if (!w) return
-      const docTitle = type === 'plano' ? 'Plano Alimentar' : type === 'compras' ? 'Lista de Compras' : 'Orientações'
-      w.document.write(`
-        <html><head><title>${docTitle}</title>
-        <style>
-          @page { size: A4; margin: 0; }
-          body { margin: 0; }
-          @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-        </style></head><body>${el.outerHTML}</body></html>
-      `)
-      w.document.close()
-      w.focus()
-      w.print()
-    }, 200)
-  }
-
   const handleAddAttachment = () => {
     fileInputRef.current?.click()
   }
@@ -469,9 +419,13 @@ export default function EnvioPlanoLayout({
   }
 
   const handleSendEmail = async () => {
+    if (meals.length === 0) {
+      alert('Adicione alimentos ao plano alimentar primeiro!')
+      return
+    }
+
     setSending(true)
     try {
-      // Preparar FormData para enviar com anexos
       const formData = new FormData()
       formData.append('pacienteId', pacienteId)
       formData.append('nomePaciente', nomePaciente)
@@ -501,7 +455,9 @@ export default function EnvioPlanoLayout({
       })
       const data = await res.json()
       if (res.ok) {
-        alert(data.message || 'Plano enviado com sucesso! O paciente receberá PDFs em download e anexos também.')
+        alert(data.message || '✅ Plano enviado com sucesso!\n\nO paciente receberá por email:\n✓ PDF Plano Alimentar\n✓ PDF Lista de Compras\n✓ PDF Protocolos/Orientações\n✓ Seus anexos e imagens')
+        setMessage('')
+        setAttachments([])
       } else {
         alert(data.error || 'Erro ao enviar o plano.')
       }
@@ -512,424 +468,324 @@ export default function EnvioPlanoLayout({
     }
   }
 
-  const selectedProtocol = protocols.find(p => p.id === selectedProtocolId)
-
   return (
-    <div>
-      {/* Two-column layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}>
-        {/* LEFT COLUMN */}
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
+      {/* Patient Info */}
+      <div style={patientHeaderStyle}>
         <div>
-          {/* Patient header card */}
-          <div style={patientHeaderStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-              <div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{nomePaciente}</div>
-                <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
-                  {dataNascimento && `${dataNascimento.split('-').reverse().join('/')}`}
-                  {' | '}{sexoPaciente}
-                  {' | '}{pesoKg} kg | {alturaCm} cm
-                </div>
-              </div>
-              <div style={{ textAlign: 'right', fontSize: 12, color: '#64748b' }}>
-                <div>Massa muscular: <b>{massaMuscular.toFixed(1)} kg</b></div>
-                <div>Massa adiposa: <b>{massaAdiposa.toFixed(1)} kg</b></div>
-                <div>% gordura: <b>{percGordura.toFixed(1)}%</b></div>
-              </div>
-            </div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a' }}>{nomePaciente}</div>
+          <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
+            {dataNascimento && `${dataNascimento.split('-').reverse().join('/')}`}
+            {' | '}{sexoPaciente} | {pesoKg} kg | {alturaCm} cm
           </div>
-
-          {/* Meals */}
-          <div style={sectionCardStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Plano alimentar diário</h3>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  onClick={() => generateAndDownloadPDF('plano')}
-                  style={smallBtnStyle}
-                  title="Baixar Plano em PDF"
-                >
-                  ⬇️ PDF
-                </button>
-                <button
-                  onClick={() => handlePrint('plano')}
-                  style={smallBtnStyle}
-                  title="Imprimir Plano"
-                >
-                  🖨️ Imprimir
-                </button>
-              </div>
-            </div>
-
-            {meals.length === 0 ? (
-              <p style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: 13 }}>
-                Nenhuma refeição cadastrada. Monte o plano na aba &quot;Plano Alimentar&quot;.
-              </p>
-            ) : (
-              meals.map((meal, idx) => (
-                <div key={meal.id} style={mealCardStyle}>
-                  <div
-                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
-                    onClick={() => toggleMealExpand(meal.id)}
-                  >
-                    <div>
-                      <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>
-                        {idx + 1}. {meal.name}
-                      </span>
-                      <span style={{ marginLeft: 12, fontSize: 12, color: '#64748b' }}>{meal.time}</span>
-                    </div>
-                    <span style={{ fontSize: 18, color: '#94a3b8' }}>{expandedMeals[meal.id] ? '▲' : '▼'}</span>
-                  </div>
-
-                  {expandedMeals[meal.id] && (
-                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: 11, color: '#16a34a', marginBottom: 6, textTransform: 'uppercase' }}>
-                            Alimentos Principais
-                          </div>
-                          {meal.foods.filter(f => f.name).length > 0 ? (
-                            meal.foods.filter(f => f.name).map(f => (
-                              <div key={f.id} style={{ fontSize: 12, marginBottom: 3, color: '#334155' }}>
-                                • {f.name} — {f.qty} {f.unit}
-                              </div>
-                            ))
-                          ) : (
-                            <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>Nenhum alimento</div>
-                          )}
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: 11, color: '#2563eb', marginBottom: 6, textTransform: 'uppercase' }}>
-                            Substituições
-                          </div>
-                          {Object.values(meal.subs).flat().filter(s => s.name).length > 0 ? (
-                            Object.entries(meal.subs).map(([, subs]) =>
-                              subs.filter(s => s.name).map(s => (
-                                <div key={s.id} style={{ fontSize: 12, marginBottom: 3, color: '#334155' }}>
-                                  • {s.name} — {s.qty} {s.unit}
-                                </div>
-                              ))
-                            )
-                          ) : (
-                            <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>Nenhuma substituição</div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Shopping List */}
-          <div style={sectionCardStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
-                🛒 Lista de compras
-              </h3>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <label style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>Dias:</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={shoppingDays}
-                  onChange={e => { const v = e.target.value.replace(/[^\d]/g, ''); setShoppingDays(Math.max(1, parseInt(v) || 1)) }}
-                  style={{ width: 60, padding: '4px 8px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 13, textAlign: 'center', fontWeight: 700 }}
-                />
-                <button onClick={() => generateAndDownloadPDF('compras')} style={smallBtnStyle} title="Baixar lista de compras em PDF">
-                  ⬇️ PDF
-                </button>
-                <button onClick={() => handlePrint('compras')} style={smallBtnStyle} title="Imprimir lista de compras">
-                  🖨️ Imprimir
-                </button>
-              </div>
-            </div>
-            {shoppingList.length === 0 ? (
-              <p style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: 13 }}>
-                Adicione alimentos no plano alimentar para gerar a lista.
-              </p>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                {shoppingList.map((item, i) => (
-                  <div key={i} style={{ fontSize: 12, padding: '4px 8px', background: '#f8fafc', borderRadius: 6, color: '#334155' }}>
-                    • {item.name} — <b>{item.displayQty}</b>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Protocols */}
-          <div style={sectionCardStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Protocolos / Orientações</h3>
-            </div>
-
-            {/* Search */}
-            <input
-              type="text"
-              placeholder="Buscar protocolo pelo nome..."
-              value={protocolSearch}
-              onChange={e => setProtocolSearch(e.target.value)}
-              style={inputStyle}
-            />
-
-            {/* Protocol list */}
-            {filteredProtocols.map(p => (
-              <div key={p.id} style={{ ...mealCardStyle, marginTop: 8 }}>
-                {editingProtocol?.id === p.id ? (
-                  <div>
-                    <input
-                      type="text"
-                      value={editingProtocol.name}
-                      onChange={e => setEditingProtocol({ ...editingProtocol, name: e.target.value })}
-                      style={{ ...inputStyle, marginBottom: 8, fontWeight: 700 }}
-                    />
-                    <textarea
-                      value={editingProtocol.content}
-                      onChange={e => setEditingProtocol({ ...editingProtocol, content: e.target.value })}
-                      style={{ ...inputStyle, minHeight: 100, resize: 'vertical' }}
-                    />
-                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                      <button onClick={updateProtocol} style={{ ...smallBtnStyle, background: '#16a34a', color: '#fff' }}>Salvar</button>
-                      <button onClick={() => setEditingProtocol(null)} style={smallBtnStyle}>Cancelar</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <input
-                          type="checkbox"
-                          checked={selectedProtocolIds.has(p.id)}
-                          onChange={() => toggleProtocolSelection(p.id)}
-                          style={{ width: 18, height: 18, accentColor: '#16a34a', cursor: 'pointer' }}
-                          title="Selecionar para envio"
-                        />
-                        <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{p.name}</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button onClick={() => generateAndDownloadPDF('orientacoes', p.id)} style={smallBtnStyle} title="Baixar em PDF">⬇️</button>
-                        <button onClick={() => handlePrint('orientacoes', p.id)} style={smallBtnStyle} title="Imprimir">🖨️</button>
-                        <button onClick={() => setEditingProtocol({ ...p })} style={smallBtnStyle} title="Editar">✏️</button>
-                        <button onClick={() => deleteProtocol(p.id)} style={{ ...smallBtnStyle, color: '#dc2626' }} title="Excluir">🗑️</button>
-                      </div>
-                    </div>
-                    <p style={{ fontSize: 12, color: '#64748b', marginTop: 6, whiteSpace: 'pre-wrap' }}>
-                      {p.content.length > 150 ? p.content.slice(0, 150) + '...' : p.content}
-                    </p>
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {/* New protocol */}
-            <div style={{ marginTop: 16, padding: 12, background: '#f8fafc', borderRadius: 10 }}>
-              <div style={{ fontWeight: 600, fontSize: 13, color: '#475569', marginBottom: 8 }}>Novo protocolo / orientação</div>
-              <input
-                type="text"
-                placeholder="Nome do protocolo"
-                value={newProtocolName}
-                onChange={e => setNewProtocolName(e.target.value)}
-                style={{ ...inputStyle, marginBottom: 8, fontWeight: 600 }}
-              />
-              <textarea
-                placeholder="Conteúdo / orientações..."
-                value={newProtocolContent}
-                onChange={e => setNewProtocolContent(e.target.value)}
-                style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }}
-              />
-              <button onClick={addProtocol} style={{ ...smallBtnStyle, marginTop: 8, background: '#0f172a', color: '#fff' }}>
-                + Adicionar protocolo
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT COLUMN */}
-        <div>
-          {/* PDF Preview */}
-          <div style={sectionCardStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
-                {pdfType === 'plano' ? 'Plano alimentar em PDF' : pdfType === 'compras' ? 'Lista de compras em PDF' : 'Orientações em PDF'}
-              </h3>
-              <button onClick={() => generateAndDownloadPDF(pdfType, selectedProtocolId ?? undefined)} style={smallBtnStyle}>
-                ⬇️ Baixar
-              </button>
-            </div>
-
-            {/* Mini preview */}
-            <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 12, background: '#fafafa', maxHeight: 300, overflow: 'auto', transform: 'scale(0.48)', transformOrigin: 'top left', width: '208%', marginLeft: '-54%' }}>
-              <PrintableLayout
-                type={pdfType}
-                nomePaciente={nomePaciente}
-                dataNascimento={dataNascimento}
-                sexoPaciente={sexoPaciente}
-                pesoKg={pesoKg}
-                alturaCm={alturaCm}
-                massaMuscular={massaMuscular}
-                massaAdiposa={massaAdiposa}
-                percGordura={percGordura}
-                meals={meals}
-                protocol={selectedProtocol}
-                shoppingList={shoppingList}
-                shoppingDays={shoppingDays}
-              />
-            </div>
-          </div>
-
-          {/* Message */}
-          <div style={sectionCardStyle}>
-            <h3 style={{ margin: '0 0 8px 0', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
-              ✉️ Mensagem para o paciente
-            </h3>
-            <textarea
-              placeholder="Escreva uma mensagem personalizada..."
-              value={message}
-              onChange={e => setMessage(e.target.value)}
-              style={{ ...inputStyle, minHeight: 100, resize: 'vertical' }}
-              maxLength={500}
-            />
-            <div style={{ textAlign: 'right', fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{message.length}/500</div>
-          </div>
-
-          {/* Attachments */}
-          <div style={sectionCardStyle}>
-            <h3 style={{ margin: '0 0 8px 0', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
-              📎 Anexos (PDF, Imagens, Documentos)
-            </h3>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              multiple
-              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.gif,.webp"
-              style={{ display: 'none' }}
-            />
-            <div
-              onClick={handleAddAttachment}
-              style={{
-                border: '2px dashed #cbd5e1',
-                borderRadius: 10,
-                padding: 20,
-                textAlign: 'center',
-                cursor: 'pointer',
-                color: '#64748b',
-                fontSize: 13,
-              }}
-            >
-              📁 Adicionar anexos<br />
-              <span style={{ fontSize: 11, color: '#94a3b8' }}>PDF, imagens ou documentos (máx. 10MB)</span>
-            </div>
-            {attachments.length > 0 && (
-              <div style={{ marginTop: 8 }}>
-                {attachments.map((f, i) => (
-                  <div key={i} style={{ fontSize: 12, padding: '4px 8px', background: '#f1f5f9', borderRadius: 6, marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
-                    <span>{f.name}</span>
-                    <button
-                      onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))}
-                      style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 12 }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Send options */}
-          <div style={sectionCardStyle}>
-            <h3 style={{ margin: '0 0 12px 0', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Enviar via E-mail</h3>
-
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#334155', cursor: 'pointer', marginBottom: 8 }}>
-                <input
-                  type="checkbox"
-                  checked={includeShoppingList}
-                  onChange={e => setIncludeShoppingList(e.target.checked)}
-                  style={{ width: 18, height: 18, accentColor: '#16a34a' }}
-                />
-                ✓ PDF da lista de compras
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#334155', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={includeProtocols}
-                  onChange={e => setIncludeProtocols(e.target.checked)}
-                  style={{ width: 18, height: 18, accentColor: '#16a34a' }}
-                />
-                ✓ PDFs de protocolos / orientações
-              </label>
-            </div>
-
-            <button
-              onClick={handleSendEmail}
-              disabled={sending}
-              style={{
-                width: '100%',
-                padding: '14px',
-                background: sending ? '#86efac' : '#16a34a',
-                color: '#fff',
-                border: 'none',
-                borderRadius: 10,
-                fontSize: 16,
-                fontWeight: 700,
-                cursor: sending ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {sending ? 'Enviando...' : '✈️ Enviar plano para o paciente'}
-            </button>
-            <p style={{ fontSize: 11, color: '#64748b', marginTop: 8, textAlign: 'center' }}>
-              O paciente receberá: PDFs para download (Plano, Lista, Protocolos) + Anexos + Mensagem
-            </p>
+          <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
+            Massa muscular: <b>{massaMuscular.toFixed(1)} kg</b> | Massa adiposa: <b>{massaAdiposa.toFixed(1)} kg</b> | % gordura: <b>{percGordura.toFixed(1)}%</b>
           </div>
         </div>
       </div>
 
-      {/* Hidden printable layouts */}
-      <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
-        <PrintableLayout
-          type="plano"
-          nomePaciente={nomePaciente}
-          dataNascimento={dataNascimento}
-          sexoPaciente={sexoPaciente}
-          pesoKg={pesoKg}
-          alturaCm={alturaCm}
-          massaMuscular={massaMuscular}
-          massaAdiposa={massaAdiposa}
-          percGordura={percGordura}
-          meals={meals}
+      {/* Meals Section */}
+      <div style={sectionCardStyle}>
+        <h3 style={{ margin: '0 0 16px 0', fontSize: 18, fontWeight: 700, color: '#0f172a' }}>📋 Plano Alimentar Diário</h3>
+
+        {meals.length === 0 ? (
+          <p style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: 13 }}>
+            Nenhuma refeição cadastrada. Monte o plano na aba "Plano Alimentar".
+          </p>
+        ) : (
+          meals.map((meal, idx) => (
+            <div key={meal.id} style={mealCardStyle}>
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+                onClick={() => toggleMealExpand(meal.id)}
+              >
+                <div>
+                  <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>
+                    {idx + 1}. {meal.name}
+                  </span>
+                  <span style={{ marginLeft: 12, fontSize: 12, color: '#64748b' }}>{meal.time}</span>
+                </div>
+                <span style={{ fontSize: 18, color: '#94a3b8' }}>{expandedMeals[meal.id] ? '▲' : '▼'}</span>
+              </div>
+
+              {expandedMeals[meal.id] && (
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 11, color: '#16a34a', marginBottom: 6, textTransform: 'uppercase' }}>
+                        Alimentos Principais
+                      </div>
+                      {meal.foods.filter(f => f.name).length > 0 ? (
+                        meal.foods.filter(f => f.name).map(f => (
+                          <div key={f.id} style={{ fontSize: 12, marginBottom: 3, color: '#334155' }}>
+                            • {f.name} — {f.qty} {f.unit}
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>Nenhum alimento</div>
+                      )}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 11, color: '#2563eb', marginBottom: 6, textTransform: 'uppercase' }}>
+                        Substituições
+                      </div>
+                      {Object.values(meal.subs).flat().filter(s => s.name).length > 0 ? (
+                        Object.entries(meal.subs).map(([, subs]) =>
+                          subs.filter(s => s.name).map(s => (
+                            <div key={s.id} style={{ fontSize: 12, marginBottom: 3, color: '#334155' }}>
+                              • {s.name} — {s.qty} {s.unit}
+                            </div>
+                          ))
+                        )
+                      ) : (
+                        <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>Nenhuma substituição</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Shopping List Section */}
+      <div style={sectionCardStyle}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
+            🛒 Lista de Compras
+          </h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <label style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>Dias:</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={shoppingDays}
+              onChange={e => { const v = e.target.value.replace(/[^\d]/g, ''); setShoppingDays(Math.max(1, parseInt(v) || 1)) }}
+              style={{ width: 60, padding: '6px 10px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 13, textAlign: 'center', fontWeight: 700 }}
+            />
+          </div>
+        </div>
+
+        {shoppingList.length === 0 ? (
+          <p style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: 13 }}>
+            Adicione alimentos no plano alimentar para gerar a lista.
+          </p>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {shoppingList.map((item, i) => (
+              <div key={i} style={{ fontSize: 12, padding: '8px 12px', background: '#f8fafc', borderRadius: 8, color: '#334155', border: '1px solid #e2e8f0' }}>
+                • {item.name} — <b>{item.displayQty}</b>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Protocols Section */}
+      <div style={sectionCardStyle}>
+        <h3 style={{ margin: '0 0 16px 0', fontSize: 18, fontWeight: 700, color: '#0f172a' }}>📝 Protocolos / Orientações</h3>
+
+        {/* Search */}
+        <input
+          type="text"
+          placeholder="Buscar protocolo..."
+          value={protocolSearch}
+          onChange={e => setProtocolSearch(e.target.value)}
+          style={{ ...inputStyle, marginBottom: 12 }}
         />
-        <PrintableLayout
-          type="orientacoes"
-          nomePaciente={nomePaciente}
-          dataNascimento={dataNascimento}
-          sexoPaciente={sexoPaciente}
-          pesoKg={pesoKg}
-          alturaCm={alturaCm}
-          massaMuscular={massaMuscular}
-          massaAdiposa={massaAdiposa}
-          percGordura={percGordura}
-          meals={meals}
-          protocol={selectedProtocol}
+
+        {/* Protocol list */}
+        {filteredProtocols.map(p => (
+          <div key={p.id} style={mealCardStyle}>
+            {editingProtocol?.id === p.id ? (
+              <div>
+                <input
+                  type="text"
+                  value={editingProtocol.name}
+                  onChange={e => setEditingProtocol({ ...editingProtocol, name: e.target.value })}
+                  style={{ ...inputStyle, marginBottom: 8, fontWeight: 700 }}
+                />
+                <textarea
+                  value={editingProtocol.content}
+                  onChange={e => setEditingProtocol({ ...editingProtocol, content: e.target.value })}
+                  style={{ ...inputStyle, minHeight: 100, resize: 'vertical' }}
+                />
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <button onClick={updateProtocol} style={{ ...smallBtnStyle, background: '#16a34a', color: '#fff' }}>✓ Salvar</button>
+                  <button onClick={() => setEditingProtocol(null)} style={smallBtnStyle}>✕ Cancelar</button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedProtocolIds.has(p.id)}
+                      onChange={() => toggleProtocolSelection(p.id)}
+                      style={{ width: 18, height: 18, accentColor: '#16a34a', cursor: 'pointer' }}
+                      title="Selecionar para envio"
+                    />
+                    <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{p.name}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={() => setEditingProtocol({ ...p })} style={smallBtnStyle} title="Editar">✏️</button>
+                    <button onClick={() => deleteProtocol(p.id)} style={{ ...smallBtnStyle, color: '#dc2626' }} title="Excluir">🗑️</button>
+                  </div>
+                </div>
+                <p style={{ fontSize: 12, color: '#64748b', margin: '0', whiteSpace: 'pre-wrap' }}>
+                  {p.content.length > 200 ? p.content.slice(0, 200) + '...' : p.content}
+                </p>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* New protocol */}
+        <div style={{ marginTop: 16, padding: 12, background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+          <div style={{ fontWeight: 600, fontSize: 13, color: '#475569', marginBottom: 8 }}>➕ Novo protocolo</div>
+          <input
+            type="text"
+            placeholder="Nome do protocolo"
+            value={newProtocolName}
+            onChange={e => setNewProtocolName(e.target.value)}
+            style={{ ...inputStyle, marginBottom: 8 }}
+          />
+          <textarea
+            placeholder="Conteúdo / orientações..."
+            value={newProtocolContent}
+            onChange={e => setNewProtocolContent(e.target.value)}
+            style={{ ...inputStyle, minHeight: 80, resize: 'vertical', marginBottom: 8 }}
+          />
+          <button onClick={addProtocol} style={{ ...smallBtnStyle, background: '#0f172a', color: '#fff', width: '100%' }}>
+            + Adicionar protocolo
+          </button>
+        </div>
+      </div>
+
+      {/* Message Section */}
+      <div style={sectionCardStyle}>
+        <h3 style={{ margin: '0 0 12px 0', fontSize: 18, fontWeight: 700, color: '#0f172a' }}>💬 Mensagem para o Paciente</h3>
+        <textarea
+          placeholder="Escreva uma mensagem personalizada que o paciente receberá no email..."
+          value={message}
+          onChange={e => setMessage(e.target.value)}
+          style={{ ...inputStyle, minHeight: 100, resize: 'vertical' }}
+          maxLength={500}
         />
-        <PrintableLayout
-          type="compras"
-          nomePaciente={nomePaciente}
-          dataNascimento={dataNascimento}
-          sexoPaciente={sexoPaciente}
-          pesoKg={pesoKg}
-          alturaCm={alturaCm}
-          massaMuscular={massaMuscular}
-          massaAdiposa={massaAdiposa}
-          percGordura={percGordura}
-          meals={meals}
-          shoppingList={shoppingList}
-          shoppingDays={shoppingDays}
+        <div style={{ textAlign: 'right', fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{message.length}/500</div>
+      </div>
+
+      {/* Attachments Section */}
+      <div style={sectionCardStyle}>
+        <h3 style={{ margin: '0 0 12px 0', fontSize: 18, fontWeight: 700, color: '#0f172a' }}>📎 Anexos (PDF, Imagens, Documentos)</h3>
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          multiple
+          accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.gif,.webp"
+          style={{ display: 'none' }}
         />
+        <div
+          onClick={handleAddAttachment}
+          style={{
+            border: '2px dashed #cbd5e1',
+            borderRadius: 10,
+            padding: 20,
+            textAlign: 'center',
+            cursor: 'pointer',
+            color: '#64748b',
+            fontSize: 13,
+            fontWeight: 600,
+            transition: 'all 0.3s',
+          }}
+          onMouseEnter={e => {
+            const el = e.currentTarget as HTMLElement
+            el.style.background = '#f8fafc'
+            el.style.borderColor = '#cbd5e1'
+          }}
+          onMouseLeave={e => {
+            const el = e.currentTarget as HTMLElement
+            el.style.background = 'transparent'
+          }}
+        >
+          📁 Clique para adicionar anexos<br />
+          <span style={{ fontSize: 11, color: '#94a3b8' }}>PDF, imagens ou documentos (máx. 10MB)</span>
+        </div>
+        {attachments.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', marginBottom: 8 }}>Arquivos adicionados ({attachments.length}):</div>
+            {attachments.map((f, i) => (
+              <div key={i} style={{ fontSize: 12, padding: '8px 12px', background: '#f1f5f9', borderRadius: 6, marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #e2e8f0' }}>
+                <span>📄 {f.name} ({(f.size / 1024).toFixed(1)} KB)</span>
+                <button
+                  onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))}
+                  style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 14, padding: 0 }}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Send Section */}
+      <div style={{ ...sectionCardStyle, background: '#f0fdf4', borderLeft: '4px solid #16a34a' }}>
+        <h3 style={{ margin: '0 0 12px 0', fontSize: 18, fontWeight: 700, color: '#0f172a' }}>✈️ Enviar Plano para o Paciente</h3>
+
+        <div style={{ marginBottom: 16, padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #bbf7d0', fontSize: 13, color: '#166534' }}>
+          <strong>O paciente receberá via email:</strong>
+          <ul style={{ margin: '8px 0 0 0', paddingLeft: 20 }}>
+            <li>✓ PDF do Plano Alimentar</li>
+            <li>✓ PDF da Lista de Compras ({shoppingDays} dias)</li>
+            {includeProtocols && <li>✓ PDFs de Protocolos/Orientações</li>}
+            <li>✓ Seus anexos e imagens</li>
+            <li>✓ Sua mensagem personalizada</li>
+          </ul>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#334155', cursor: 'pointer', marginBottom: 8 }}>
+            <input
+              type="checkbox"
+              checked={includeShoppingList}
+              onChange={e => setIncludeShoppingList(e.target.checked)}
+              style={{ width: 18, height: 18, accentColor: '#16a34a' }}
+            />
+            ✓ Incluir PDF da Lista de Compras
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#334155', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={includeProtocols}
+              onChange={e => setIncludeProtocols(e.target.checked)}
+              style={{ width: 18, height: 18, accentColor: '#16a34a' }}
+            />
+            ✓ Incluir PDFs de Protocolos/Orientações
+          </label>
+        </div>
+
+        <button
+          onClick={handleSendEmail}
+          disabled={sending}
+          style={{
+            width: '100%',
+            padding: '16px',
+            background: sending ? '#86efac' : '#16a34a',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 10,
+            fontSize: 16,
+            fontWeight: 700,
+            cursor: sending ? 'not-allowed' : 'pointer',
+            transition: 'all 0.3s',
+          }}
+        >
+          {sending ? '⏳ Enviando...' : '✈️ Enviar Plano para o Paciente'}
+        </button>
       </div>
     </div>
   )
@@ -941,7 +797,7 @@ const patientHeaderStyle: React.CSSProperties = {
   border: '1px solid #e2e8f0',
   borderRadius: 14,
   padding: 20,
-  marginBottom: 16,
+  marginBottom: 20,
 }
 
 const sectionCardStyle: React.CSSProperties = {
@@ -949,7 +805,7 @@ const sectionCardStyle: React.CSSProperties = {
   border: '1px solid #e2e8f0',
   borderRadius: 14,
   padding: 20,
-  marginBottom: 16,
+  marginBottom: 20,
 }
 
 const mealCardStyle: React.CSSProperties = {
@@ -962,20 +818,22 @@ const mealCardStyle: React.CSSProperties = {
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  padding: '8px 12px',
+  padding: '10px 12px',
   border: '1.5px solid #e2e8f0',
   borderRadius: 8,
   fontSize: 13,
   background: '#fff',
   boxSizing: 'border-box',
+  fontFamily: 'inherit',
 }
 
 const smallBtnStyle: React.CSSProperties = {
-  padding: '6px 12px',
+  padding: '8px 12px',
   border: '1px solid #e2e8f0',
   borderRadius: 8,
   background: '#f1f5f9',
   cursor: 'pointer',
   fontSize: 12,
   fontWeight: 600,
+  transition: 'all 0.2s',
 }
