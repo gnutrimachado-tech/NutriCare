@@ -972,13 +972,18 @@ export default function AntropometriaLayout({
               </div>
             </div>
 
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 16 }}>
+            <div style={{ flex: 1, display: 'flex', marginTop: 16 }}>
               <div style={{
+                flex: 1,
                 background: '#eff6ff',
                 border: '1px solid #dbeafe',
                 borderRadius: 14,
                 padding: '20px 32px',
                 textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>% de água corporal</div>
                 <div style={{ fontSize: 32, fontWeight: 800, color: '#2563eb' }}>
