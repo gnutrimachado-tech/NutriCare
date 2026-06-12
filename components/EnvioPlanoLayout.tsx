@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import html2pdf from 'html2pdf.js'
 
 type EnvioPlanoProps = {
   pacienteId: string
@@ -91,20 +92,20 @@ function PrintableLayout({
         boxSizing: 'border-box',
       }}
     >
-      {/* Watermark */}
+      {/* Watermark - Coração Centralizado */}
       <div
         style={{
           position: 'absolute',
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          opacity: 0.05,
+          opacity: 0.12,
           pointerEvents: 'none',
           zIndex: 0,
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/nutri-coracao.png" alt="" style={{ width: '400px', height: 'auto' }} />
+        <img src="/nutri-coracao.png" alt="" style={{ width: '500px', height: 'auto' }} />
       </div>
 
       {/* Header */}
@@ -122,7 +123,7 @@ function PrintableLayout({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-nutricare.png" alt="NutriCare" style={{ width: 50, height: 50, objectFit: 'contain' }} />
+          <img src="/logo-nutricare.png" alt="NutriCare" style={{ width: 80, height: 80, objectFit: 'contain' }} />
           <div>
             <div style={{ fontSize: 20, fontWeight: 700 }}>{nomePaciente}</div>
             <div style={{ fontSize: 11, color: '#555' }}>
@@ -410,6 +411,30 @@ export default function EnvioPlanoLayout({
     setEditingProtocol(null)
   }
 
+  // ==================== PDF DOWNLOAD ====================
+  const generateAndDownloadPDF = (type: 'plano' | 'orientacoes' | 'compras', protocolId?: string) => {
+    const el = document.getElementById(`printable-${type}`)
+    if (!el) {
+      alert('Não foi possível gerar o PDF')
+      return
+    }
+
+    const selectedProtocol = protocolId ? protocols.find(p => p.id === protocolId) : selectedProtocolId ? protocols.find(p => p.id === selectedProtocolId) : undefined
+
+    const docTitle = type === 'plano' ? 'Plano Alimentar' : type === 'compras' ? 'Lista de Compras' : 'Orientações'
+    const fileName = `${nomePaciente.replace(/\s+/g, '_')}_${docTitle.replace(/\s+/g, '_')}.pdf`
+
+    const opt = {
+      margin: 0,
+      filename: fileName,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { format: 'a4', orientation: 'portrait' },
+    }
+
+    html2pdf().set(opt).from(el).save()
+  }
+
   const handlePrint = (type: 'plano' | 'orientacoes' | 'compras', protocolId?: string) => {
     setPdfType(type)
     if (protocolId) setSelectedProtocolId(protocolId)
@@ -446,32 +471,37 @@ export default function EnvioPlanoLayout({
   const handleSendEmail = async () => {
     setSending(true)
     try {
-      const body = {
-        pacienteId,
-        nomePaciente,
-        message,
-        includeShoppingList,
-        includeProtocols,
-        meals: meals.map(m => ({ name: m.name, time: m.time, foods: m.foods, subs: m.subs })),
-        protocols: includeProtocols ? protocols.filter(p => selectedProtocolIds.has(p.id)) : [],
-        shoppingList: includeShoppingList ? shoppingList : [],
-        shoppingDays,
-        dataNascimento,
-        sexoPaciente,
-        pesoKg,
-        alturaCm,
-        massaMuscular,
-        massaAdiposa,
-        percGordura,
-      }
+      // Preparar FormData para enviar com anexos
+      const formData = new FormData()
+      formData.append('pacienteId', pacienteId)
+      formData.append('nomePaciente', nomePaciente)
+      formData.append('message', message)
+      formData.append('includeShoppingList', includeShoppingList.toString())
+      formData.append('includeProtocols', includeProtocols.toString())
+      formData.append('meals', JSON.stringify(meals.map(m => ({ name: m.name, time: m.time, foods: m.foods, subs: m.subs }))))
+      formData.append('protocols', JSON.stringify(includeProtocols ? protocols.filter(p => selectedProtocolIds.has(p.id)) : []))
+      formData.append('shoppingList', JSON.stringify(shoppingList))
+      formData.append('shoppingDays', shoppingDays.toString())
+      formData.append('dataNascimento', dataNascimento)
+      formData.append('sexoPaciente', sexoPaciente)
+      formData.append('pesoKg', pesoKg.toString())
+      formData.append('alturaCm', alturaCm.toString())
+      formData.append('massaMuscular', massaMuscular.toString())
+      formData.append('massaAdiposa', massaAdiposa.toString())
+      formData.append('percGordura', percGordura.toString())
+
+      // Adicionar anexos
+      attachments.forEach((file) => {
+        formData.append('attachments', file)
+      })
+
       const res = await fetch('/api/send-plano', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: formData,
       })
       const data = await res.json()
       if (res.ok) {
-        alert(data.message || 'Plano enviado com sucesso!')
+        alert(data.message || 'Plano enviado com sucesso! O paciente receberá PDFs em download e anexos também.')
       } else {
         alert(data.error || 'Erro ao enviar o plano.')
       }
@@ -513,12 +543,22 @@ export default function EnvioPlanoLayout({
           <div style={sectionCardStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Plano alimentar diário</h3>
-              <button
-                onClick={() => handlePrint('plano')}
-                style={smallBtnStyle}
-              >
-                🖨️ Imprimir Plano
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => generateAndDownloadPDF('plano')}
+                  style={smallBtnStyle}
+                  title="Baixar Plano em PDF"
+                >
+                  ⬇️ PDF
+                </button>
+                <button
+                  onClick={() => handlePrint('plano')}
+                  style={smallBtnStyle}
+                  title="Imprimir Plano"
+                >
+                  🖨️ Imprimir
+                </button>
+              </div>
             </div>
 
             {meals.length === 0 ? (
@@ -597,8 +637,11 @@ export default function EnvioPlanoLayout({
                   onChange={e => { const v = e.target.value.replace(/[^\d]/g, ''); setShoppingDays(Math.max(1, parseInt(v) || 1)) }}
                   style={{ width: 60, padding: '4px 8px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 13, textAlign: 'center', fontWeight: 700 }}
                 />
+                <button onClick={() => generateAndDownloadPDF('compras')} style={smallBtnStyle} title="Baixar lista de compras em PDF">
+                  ⬇️ PDF
+                </button>
                 <button onClick={() => handlePrint('compras')} style={smallBtnStyle} title="Imprimir lista de compras">
-                  🖨️ Imprimir Lista
+                  🖨️ Imprimir
                 </button>
               </div>
             </div>
@@ -667,6 +710,7 @@ export default function EnvioPlanoLayout({
                         <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{p.name}</span>
                       </div>
                       <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => generateAndDownloadPDF('orientacoes', p.id)} style={smallBtnStyle} title="Baixar em PDF">⬇️</button>
                         <button onClick={() => handlePrint('orientacoes', p.id)} style={smallBtnStyle} title="Imprimir">🖨️</button>
                         <button onClick={() => setEditingProtocol({ ...p })} style={smallBtnStyle} title="Editar">✏️</button>
                         <button onClick={() => deleteProtocol(p.id)} style={{ ...smallBtnStyle, color: '#dc2626' }} title="Excluir">🗑️</button>
@@ -711,13 +755,13 @@ export default function EnvioPlanoLayout({
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
                 {pdfType === 'plano' ? 'Plano alimentar em PDF' : pdfType === 'compras' ? 'Lista de compras em PDF' : 'Orientações em PDF'}
               </h3>
-              <button onClick={() => handlePrint(pdfType, selectedProtocolId ?? undefined)} style={smallBtnStyle}>
-                👁️ Revisar PDF
+              <button onClick={() => generateAndDownloadPDF(pdfType, selectedProtocolId ?? undefined)} style={smallBtnStyle}>
+                ⬇️ Baixar
               </button>
             </div>
 
             {/* Mini preview */}
-            <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 12, background: '#fafafa', maxHeight: 300, overflow: 'auto', transform: 'scale(0.48)', transformOrigin: 'top left', width: '210%', marginBottom: -120 }}>
+            <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 12, background: '#fafafa', maxHeight: 300, overflow: 'auto', transform: 'scale(0.48)', transformOrigin: 'top left', width: '208%', marginLeft: '-54%' }}>
               <PrintableLayout
                 type={pdfType}
                 nomePaciente={nomePaciente}
@@ -754,14 +798,14 @@ export default function EnvioPlanoLayout({
           {/* Attachments */}
           <div style={sectionCardStyle}>
             <h3 style={{ margin: '0 0 8px 0', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
-              📎 Anexos
+              📎 Anexos (PDF, Imagens, Documentos)
             </h3>
             <input
               type="file"
               ref={fileInputRef}
               onChange={handleFileChange}
               multiple
-              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.gif,.webp"
               style={{ display: 'none' }}
             />
             <div
@@ -798,7 +842,7 @@ export default function EnvioPlanoLayout({
 
           {/* Send options */}
           <div style={sectionCardStyle}>
-            <h3 style={{ margin: '0 0 12px 0', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Enviar</h3>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Enviar via E-mail</h3>
 
             <div style={{ marginBottom: 12 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#334155', cursor: 'pointer', marginBottom: 8 }}>
@@ -808,7 +852,7 @@ export default function EnvioPlanoLayout({
                   onChange={e => setIncludeShoppingList(e.target.checked)}
                   style={{ width: 18, height: 18, accentColor: '#16a34a' }}
                 />
-                Incluir lista de compras
+                ✓ PDF da lista de compras
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#334155', cursor: 'pointer' }}>
                 <input
@@ -817,7 +861,7 @@ export default function EnvioPlanoLayout({
                   onChange={e => setIncludeProtocols(e.target.checked)}
                   style={{ width: 18, height: 18, accentColor: '#16a34a' }}
                 />
-                Incluir protocolos / orientações
+                ✓ PDFs de protocolos / orientações
               </label>
             </div>
 
@@ -838,6 +882,9 @@ export default function EnvioPlanoLayout({
             >
               {sending ? 'Enviando...' : '✈️ Enviar plano para o paciente'}
             </button>
+            <p style={{ fontSize: 11, color: '#64748b', marginTop: 8, textAlign: 'center' }}>
+              O paciente receberá: PDFs para download (Plano, Lista, Protocolos) + Anexos + Mensagem
+            </p>
           </div>
         </div>
       </div>
@@ -931,16 +978,4 @@ const smallBtnStyle: React.CSSProperties = {
   cursor: 'pointer',
   fontSize: 12,
   fontWeight: 600,
-}
-
-const sendMethodBtn: React.CSSProperties = {
-  flex: 1,
-  padding: '10px 16px',
-  border: '1.5px solid #e2e8f0',
-  borderRadius: 10,
-  background: '#fff',
-  cursor: 'pointer',
-  fontSize: 14,
-  fontWeight: 600,
-  textAlign: 'center',
 }
