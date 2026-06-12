@@ -109,7 +109,7 @@ export async function POST(request: Request) {
             if (validSubs.length === 0) continue;
             const mainFood = meal.foods.find((f: { id: string }) => f.id === foodId);
             if (mainFood?.name) {
-              html += `<div style="font-size:10px;font-weight:700;color:#475569;margin-bottom:2px;">Substituições p/ ${shortFoodName(mainFood.name)}:</div>`;
+              html += `<div style="font-size:13px;font-weight:800;color:#1e3a8a;margin-bottom:3px;">Substituições p/ ${shortFoodName(mainFood.name)}:</div>`;
             }
             for (const s of validSubs) {
               html += `<div style="font-size:12px;margin-bottom:3px;line-height:1.5;">${s.name} — <strong>${s.qty}${s.unit}</strong></div>`;
