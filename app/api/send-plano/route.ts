@@ -554,6 +554,173 @@ async function buildPlanoPdf(params: {
   return Buffer.from(await doc.pdf.save());
 }
 
+// ==================== FUNÇÃO OTIMIZADA: Pré-carregar assets uma vez ====================
+// Cache global para assets compartilhados entre chamadas
+let cachedAssets: { logo: Buffer | null; background: Buffer | null; fontScript: Buffer | null } | null = null;
+
+async function preloadAssets(): Promise<{ logo: Buffer | null; background: Buffer | null; fontScript: Buffer | null }> {
+  if (cachedAssets) return cachedAssets;
+  
+  const [fontScript, logo, background] = await Promise.all([
+    readPublicAsset("fonts/GreatVibes-Regular.ttf"),
+    readPublicAsset("layouts/logo-nutricare-ref.png", "logo-nutricare.png"),
+    readPublicAsset("layouts/fundo-layout.png", "nutri-coracao.png"),
+  ]);
+  
+  cachedAssets = { fontScript, logo, background };
+  return cachedAssets;
+}
+
+// Função para criar documento PDF com assets pré-carregados
+async function createLayoutDocOptimized(): Promise<LayoutDoc> {
+  const pdf = await PDFDocument.create();
+  pdf.registerFontkit(fontkit);
+
+  const fontRegular = await pdf.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+  // Usar assets pré-carregados
+  const assets = await preloadAssets();
+  
+  const fontScript = assets.fontScript ? await pdf.embedFont(assets.fontScript) : null;
+  const logo = assets.logo ? await pdf.embedPng(assets.logo) : null;
+  const background = assets.background ? await pdf.embedPng(assets.background) : null;
+
+  return { pdf, fontRegular, fontBold, fontScript, logo, background };
+}
+
+// Função otimizada para gerar todos os PDFs usando assets compartilhados
+async function buildAllPdfsOptimized(params: {
+  nomePaciente: string;
+  dataNascimento: string;
+  sexoPaciente: string;
+  pesoKg: number;
+  alturaCm: number;
+  massaMuscular: number;
+  massaAdiposa: number;
+  percGordura: number;
+  meals: EnvioMeal[];
+  includeShoppingList: boolean;
+  shoppingDays: number;
+  shoppingList: ShoppingItem[];
+  includeProtocols: boolean;
+  protocols: Protocol[];
+}): Promise<{ planoPdf: Buffer; shoppingPdf: Buffer | null; protocolsPdf: Buffer | null }> {
+  // Pré-carregar assets UMA vez
+  await preloadAssets();
+  
+  // Criar documentos para cada tipo de PDF
+  const [planoDoc, shoppingDoc, protocolsDoc] = await Promise.all([
+    createLayoutDocOptimized(),
+    params.includeShoppingList ? createLayoutDocOptimized() : Promise.resolve(null),
+    params.includeProtocols ? createLayoutDocOptimized() : Promise.resolve(null),
+  ]);
+
+  // Gerar páginas do Plano Alimentar
+  const chunks: EnvioMeal[][] = [];
+  const meals = params.meals.length > 0 ? params.meals : [];
+  for (let index = 0; index < Math.max(meals.length, 1); index += 6) {
+    chunks.push(meals.slice(index, index + 6));
+  }
+
+  chunks.forEach((chunk) => {
+    const page = planoDoc.pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+    drawHeader(planoDoc, page, {
+      title: "plano alimentar",
+      nomePaciente: params.nomePaciente,
+      dataNascimento: params.dataNascimento,
+      sexoPaciente: params.sexoPaciente,
+      pesoKg: params.pesoKg,
+      alturaCm: params.alturaCm,
+      massaMuscular: params.massaMuscular,
+      massaAdiposa: params.massaAdiposa,
+      percGordura: params.percGordura,
+      showMetrics: true,
+    });
+
+    const gridX = PAGE_MARGIN_X + 10;
+    const gridY = 154;
+    const colGap = 10;
+    const rowGap = 12;
+    const boxWidth = 248;
+    const boxHeight = 145;
+
+    for (let row = 0; row < 3; row++) {
+      for (let col = 0; col < 2; col++) {
+        const slotIndex = row * 2 + col;
+        const meal = chunk[slotIndex];
+        const x = gridX + col * (boxWidth + colGap);
+        const y = gridY + (2 - row) * (boxHeight + rowGap);
+        drawMealBox(planoDoc, page, x, y, boxWidth, boxHeight, meal);
+      }
+    }
+    drawFooter(planoDoc, page);
+  });
+
+  // Gerar páginas da Lista de Compras
+  let shoppingPdf: Buffer | null = null;
+  if (shoppingDoc && params.includeShoppingList) {
+    const items = params.shoppingList.length > 0 ? params.shoppingList : [{ name: "Nenhum item disponível", displayQty: "—" }];
+    const perPage = 24;
+
+    for (let start = 0; start < items.length; start += perPage) {
+      const page = shoppingDoc.pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+      drawHeader(shoppingDoc, page, {
+        title: "lista de compras",
+        nomePaciente: params.nomePaciente,
+        dataNascimento: params.dataNascimento,
+        sexoPaciente: params.sexoPaciente,
+        pesoKg: params.pesoKg,
+        alturaCm: params.alturaCm,
+        showMetrics: false,
+      });
+      drawShoppingFrame(shoppingDoc, page, items.slice(start, start + perPage), params.shoppingDays);
+      drawFooter(shoppingDoc, page);
+    }
+    shoppingPdf = Buffer.from(await shoppingDoc.pdf.save());
+  }
+
+  // Gerar páginas de Orientações
+  let protocolsPdf: Buffer | null = null;
+  if (protocolsDoc && params.includeProtocols) {
+    const protos = params.protocols.length > 0 ? params.protocols : [{ name: "Sem orientações", content: "" }];
+    const perPage = 7;
+
+    for (let start = 0; start < protos.length; start += perPage) {
+      const page = protocolsDoc.pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+      drawHeader(protocolsDoc, page, {
+        title: "orientações",
+        nomePaciente: params.nomePaciente,
+        dataNascimento: params.dataNascimento,
+        sexoPaciente: params.sexoPaciente,
+        pesoKg: params.pesoKg,
+        alturaCm: params.alturaCm,
+        showMetrics: false,
+      });
+
+      const slice = protos.slice(start, start + perPage);
+      const boxX = PAGE_MARGIN_X + 10;
+      const boxWidth = PAGE_WIDTH - (PAGE_MARGIN_X + 10) * 2;
+      const boxHeight = 58;
+      const gap = 12;
+      let currentY = 160 + (perPage - 1) * (boxHeight + gap);
+
+      slice.forEach((protocol) => {
+        drawProtocolBox(protocolsDoc, page, boxX, currentY, boxWidth, boxHeight, protocol);
+        currentY -= boxHeight + gap;
+      });
+      drawFooter(protocolsDoc, page);
+    }
+    protocolsPdf = Buffer.from(await protocolsDoc.pdf.save());
+  }
+
+  return {
+    planoPdf: Buffer.from(await planoDoc.pdf.save()),
+    shoppingPdf,
+    protocolsPdf,
+  };
+}
+
 function drawShoppingFrame(doc: LayoutDoc, page: PDFPage, items: ShoppingItem[], shoppingDays: number) {
   const boxX = PAGE_MARGIN_X + 12;
   const boxY = 150;
@@ -804,40 +971,23 @@ export async function POST(request: Request) {
       ...(uploadedFiles.length > 0 ? ["arquivos complementares anexados"] : []),
     ];
 
-    const [planoPdf, shoppingPdf, protocolsPdf] = await Promise.all([
-      buildPlanoPdf({
-        nomePaciente: paciente.nome || nomePaciente,
-        dataNascimento,
-        sexoPaciente,
-        pesoKg,
-        alturaCm,
-        massaMuscular,
-        massaAdiposa,
-        percGordura,
-        meals,
-      }),
-      includeShoppingList && shoppingList.length > 0
-        ? buildShoppingListPdf({
-            nomePaciente: paciente.nome || nomePaciente,
-            dataNascimento,
-            sexoPaciente,
-            pesoKg,
-            alturaCm,
-            shoppingDays,
-            shoppingList,
-          })
-        : Promise.resolve(null),
-      includeProtocols && protocols.length > 0
-        ? buildProtocolsPdf({
-            nomePaciente: paciente.nome || nomePaciente,
-            dataNascimento,
-            sexoPaciente,
-            pesoKg,
-            alturaCm,
-            protocols,
-          })
-        : Promise.resolve(null),
-    ]);
+    // Usar função otimizada que pré-carrega assets uma única vez
+    const { planoPdf, shoppingPdf, protocolsPdf } = await buildAllPdfsOptimized({
+      nomePaciente: paciente.nome || nomePaciente,
+      dataNascimento,
+      sexoPaciente,
+      pesoKg,
+      alturaCm,
+      massaMuscular,
+      massaAdiposa,
+      percGordura,
+      meals,
+      includeShoppingList,
+      shoppingDays,
+      shoppingList,
+      includeProtocols,
+      protocols,
+    });
 
     const mailAttachments: Array<{ filename: string; content: Buffer; contentType: string }> = [
       {
