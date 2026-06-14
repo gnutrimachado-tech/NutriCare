@@ -957,9 +957,9 @@ export default function AntropometriaLayout({
         </div>
 
         {/* ÁGUA CORPORAL + VO2 MAX — lado a lado */}
-        <div style={{ display: 'flex', gap: 16, marginTop: 24, alignItems: 'stretch' }}>
+        <div style={metricPairGridStyle}>
           {/* ÁGUA CORPORAL — Fórmula de Watson */}
-          <div style={{ ...resultCardStyle, flex: 1, margin: 0, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ ...resultCardStyle, ...metricPairCardStyle, margin: 0 }}>
             <div style={resultHeaderStyle}>
               <div style={headerBlockStyle}>
                 <div style={iconBubbleBlue}>💧</div>
@@ -971,6 +971,8 @@ export default function AntropometriaLayout({
                 </div>
               </div>
             </div>
+
+            <div style={metricPairSpacerStyle} />
 
             <div style={vo2ResultRowStyle}>
               <div
@@ -1067,7 +1069,7 @@ function VO2MaxJackDaniels({
   const cls = vo2max !== null ? classifyVdot(vo2max) : null;
 
   return (
-    <div style={{ ...resultCardStyle, margin: 0, flex: 1, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ ...resultCardStyle, ...metricPairCardStyle, margin: 0, flex: 1 }}>
       <div style={resultHeaderStyle}>
         <div style={headerBlockStyle}>
           <div style={iconBubblePurple}>🏃</div>
@@ -1391,11 +1393,32 @@ const aguaValueStyle: React.CSSProperties = {
   color: "#2563eb",
 };
 
-const vo2GridStyle: React.CSSProperties = {
+const metricPairGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: 16,
+  marginTop: 24,
+  alignItems: "stretch",
+};
+
+const metricPairCardStyle: React.CSSProperties = {
   display: "flex",
+  flexDirection: "column",
+  minHeight: 260,
+};
+
+const metricPairSpacerStyle: React.CSSProperties = {
+  minHeight: 74,
+  marginTop: 16,
+};
+
+const vo2GridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
   gap: 16,
   marginTop: 16,
-  alignItems: "flex-end",
+  alignItems: "end",
+  minHeight: 74,
 };
 
 const vo2LabelStyle: React.CSSProperties = {
@@ -1408,9 +1431,9 @@ const vo2LabelStyle: React.CSSProperties = {
 
 const vo2ResultRowStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-  gap: 16,
-  marginTop: 18,
+  gridTemplateColumns: "1fr",
+  gap: 0,
+  marginTop: "auto",
 };
 
 const vo2ResultBoxStyle: React.CSSProperties = {
@@ -1419,7 +1442,7 @@ const vo2ResultBoxStyle: React.CSSProperties = {
   borderRadius: 14,
   padding: "18px 20px",
   textAlign: "center",
-  minHeight: 92,
+  minHeight: 108,
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
