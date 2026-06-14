@@ -972,21 +972,16 @@ export default function AntropometriaLayout({
               </div>
             </div>
 
-            <div style={{ flex: 1, display: 'flex', marginTop: 16 }}>
-              <div style={{
-                flex: 1,
-                background: '#eff6ff',
-                border: '1px solid #dbeafe',
-                borderRadius: 14,
-                padding: '20px 32px',
-                textAlign: 'center',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>% de água corporal</div>
-                <div style={{ fontSize: 32, fontWeight: 800, color: '#2563eb' }}>
+            <div style={vo2ResultRowStyle}>
+              <div
+                style={{
+                  ...vo2ResultBoxStyle,
+                  background: '#eff6ff',
+                  border: '1px solid #dbeafe',
+                }}
+              >
+                <div style={vo2ResultLabelStyle}>% de água corporal</div>
+                <div style={{ ...vo2ResultValueStyle, color: '#2563eb', fontSize: 32 }}>
                   {aguaCorporalPct !== null ? formatPt(aguaCorporalPct, " %") : "—"}
                 </div>
               </div>
@@ -1077,7 +1072,7 @@ function VO2MaxJackDaniels({
         <div style={headerBlockStyle}>
           <div style={iconBubblePurple}>🏃</div>
           <div>
-            <h3 style={sectionTitleStyle}>VO2max — Jack Daniels (corredores)</h3>
+            <h3 style={sectionTitleStyle}>VO2max — (corredores)</h3>
             <p style={subTitleStyle}>
               Cálculo automático para {sexoPaciente.toLowerCase()}
             </p>
@@ -1422,8 +1417,13 @@ const vo2ResultBoxStyle: React.CSSProperties = {
   background: "#f8fafc",
   border: "1px solid #e2e8f0",
   borderRadius: 14,
-  padding: "14px 18px",
+  padding: "18px 20px",
   textAlign: "center",
+  minHeight: 92,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
 };
 
 const vo2ResultLabelStyle: React.CSSProperties = {
