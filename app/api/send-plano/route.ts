@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
+import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFFont, type PDFPage } from "pdf-lib";
+import { promises as fs } from "fs";
+import path from "path";
 
 type MealFood = {
   id?: string;
@@ -30,16 +33,40 @@ type ShoppingItem = {
   unit?: string;
 };
 
-type PdfContext = {
+type LayoutDoc = {
   pdf: PDFDocument;
-  page: ReturnType<PDFDocument["addPage"]>;
-  fontRegular: Awaited<ReturnType<PDFDocument["embedFont"]>>;
-  fontBold: Awaited<ReturnType<PDFDocument["embedFont"]>>;
-  width: number;
-  height: number;
-  margin: number;
-  y: number;
+  fontRegular: PDFFont;
+  fontBold: PDFFont;
+  fontScript: PDFFont | null;
+  logo: PDFImage | null;
+  background: PDFImage | null;
 };
+
+type BasePageOptions = {
+  title: string;
+  nomePaciente: string;
+  dataNascimento?: string;
+  sexoPaciente?: string;
+  pesoKg?: number;
+  alturaCm?: number;
+  massaMuscular?: number;
+  massaAdiposa?: number;
+  percGordura?: number;
+  showMetrics?: boolean;
+};
+
+const PAGE_WIDTH = 595.28;
+const PAGE_HEIGHT = 841.89;
+const PAGE_MARGIN_X = 28;
+const HEADER_TOP = PAGE_HEIGHT - 24;
+const BACKGROUND_OPACITY = 0.15; // 85% de transparência
+const FOOTER_LOGO_OPACITY = 0.15; // 85% de transparência
+const CRN_LABEL = process.env.NUTRICARE_CRN || "CRN:";
+
+const assetCache = new Map<string, Buffer | null>();
+let cachedTransporter:
+  | { key: string; transporter: { sendMail: (options: Record<string, unknown>) => Promise<unknown> } }
+  | null = null;
 
 function shortFoodName(fullName: string): string {
   if (!fullName) return fullName;
@@ -76,6 +103,11 @@ function formatDate(value: string) {
   return value ? String(value).split("-").reverse().join("/") : "—";
 }
 
+function formatMetric(value: number | undefined, suffix = "") {
+  const numeric = Number(value || 0);
+  return `${numeric.toFixed(1).replace(".", ",")}${suffix}`;
+}
+
 function sanitizeFilename(value: string) {
   return value
     .normalize("NFD")
@@ -95,8 +127,8 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#039;");
 }
 
-function wrapText(text: string, maxWidth: number, font: PdfContext["fontRegular"], size: number) {
-  const paragraphs = (text || "").split(/\n+/);
+function wrapText(text: string, maxWidth: number, font: PDFFont, size: number) {
+  const paragraphs = String(text || "").split(/\n+/);
   const lines: string[] = [];
 
   for (const paragraph of paragraphs) {
@@ -109,8 +141,7 @@ function wrapText(text: string, maxWidth: number, font: PdfContext["fontRegular"
     let currentLine = "";
     for (const word of words) {
       const candidate = currentLine ? `${currentLine} ${word}` : word;
-      const width = font.widthOfTextAtSize(candidate, size);
-      if (width <= maxWidth) {
+      if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
         currentLine = candidate;
       } else {
         if (currentLine) lines.push(currentLine);
@@ -123,125 +154,350 @@ function wrapText(text: string, maxWidth: number, font: PdfContext["fontRegular"
   return lines;
 }
 
-async function createPdfContext() {
+function fitText(text: string, maxWidth: number, font: PDFFont, size: number) {
+  const safeText = String(text || "");
+  if (font.widthOfTextAtSize(safeText, size) <= maxWidth) return safeText;
+
+  let current = safeText;
+  while (current.length > 1 && font.widthOfTextAtSize(`${current}…`, size) > maxWidth) {
+    current = current.slice(0, -1);
+  }
+  return `${current.trimEnd()}…`;
+}
+
+async function readPublicAsset(...relativeCandidates: string[]) {
+  for (const relativePath of relativeCandidates) {
+    if (assetCache.has(relativePath)) {
+      const cached = assetCache.get(relativePath);
+      if (cached) return cached;
+      continue;
+    }
+
+    const absolutePath = path.join(process.cwd(), "public", relativePath);
+    try {
+      const buffer = await fs.readFile(absolutePath);
+      assetCache.set(relativePath, buffer);
+      return buffer;
+    } catch {
+      assetCache.set(relativePath, null);
+    }
+  }
+  return null;
+}
+
+async function createLayoutDoc(): Promise<LayoutDoc> {
   const pdf = await PDFDocument.create();
-  const page = pdf.addPage([595.28, 841.89]);
+  pdf.registerFontkit(fontkit);
+
   const fontRegular = await pdf.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-  return {
-    pdf,
-    page,
-    fontRegular,
-    fontBold,
-    width: page.getWidth(),
-    height: page.getHeight(),
-    margin: 42,
-    y: page.getHeight() - 42,
-  } satisfies PdfContext;
+  const [scriptFontBytes, logoBytes, backgroundBytes] = await Promise.all([
+    readPublicAsset("fonts/GreatVibes-Regular.ttf"),
+    readPublicAsset("layouts/logo-nutricare-ref.png", "logo-nutricare.png"),
+    readPublicAsset("layouts/fundo-layout.png", "nutri-coracao.png"),
+  ]);
+
+  const fontScript = scriptFontBytes ? await pdf.embedFont(scriptFontBytes) : null;
+  const logo = logoBytes ? await pdf.embedPng(logoBytes) : null;
+  const background = backgroundBytes ? await pdf.embedPng(backgroundBytes) : null;
+
+  return { pdf, fontRegular, fontBold, fontScript, logo, background };
 }
 
-function addNewPage(ctx: PdfContext) {
-  ctx.page = ctx.pdf.addPage([595.28, 841.89]);
-  ctx.width = ctx.page.getWidth();
-  ctx.height = ctx.page.getHeight();
-  ctx.y = ctx.height - ctx.margin;
+function drawCoverImage(page: PDFPage, image: PDFImage, opacity: number) {
+  const scale = Math.max(PAGE_WIDTH / image.width, PAGE_HEIGHT / image.height);
+  const width = image.width * scale;
+  const height = image.height * scale;
+  const x = (PAGE_WIDTH - width) / 2;
+  const y = (PAGE_HEIGHT - height) / 2;
+
+  page.drawImage(image, { x, y, width, height, opacity });
 }
 
-function ensureSpace(ctx: PdfContext, needed = 28) {
-  if (ctx.y - needed < ctx.margin) addNewPage(ctx);
-}
+function drawHeader(doc: LayoutDoc, page: PDFPage, options: BasePageOptions) {
+  if (doc.background) drawCoverImage(page, doc.background, BACKGROUND_OPACITY);
 
-function drawHeader(ctx: PdfContext, title: string, patientName: string) {
-  ensureSpace(ctx, 90);
+  if (doc.logo) {
+    const targetWidth = 84;
+    const targetHeight = (doc.logo.height / doc.logo.width) * targetWidth;
+    page.drawImage(doc.logo, {
+      x: PAGE_MARGIN_X,
+      y: HEADER_TOP - targetHeight - 4,
+      width: targetWidth,
+      height: targetHeight,
+    });
+  } else {
+    page.drawText("NutriCare", {
+      x: PAGE_MARGIN_X,
+      y: HEADER_TOP - 18,
+      size: 14,
+      font: doc.fontBold,
+      color: rgb(0.13, 0.2, 0.24),
+    });
+  }
 
-  ctx.page.drawText("NutriCare", {
-    x: ctx.margin,
-    y: ctx.y,
-    size: 12,
-    font: ctx.fontBold,
-    color: rgb(0.09, 0.18, 0.28),
+  const infoX = PAGE_MARGIN_X + 102;
+  const patientName = fitText(options.nomePaciente || "Paciente", 230, doc.fontBold, 16);
+  page.drawText(patientName, {
+    x: infoX,
+    y: HEADER_TOP - 28,
+    size: 16,
+    font: doc.fontBold,
+    color: rgb(0.1, 0.1, 0.1),
   });
 
-  ctx.page.drawText(title, {
-    x: ctx.margin,
-    y: ctx.y - 24,
-    size: 22,
-    font: ctx.fontBold,
-    color: rgb(0.06, 0.09, 0.16),
+  const patientInfo = [
+    `nascimento: ${formatDate(options.dataNascimento || "")}`,
+    `peso: ${Number(options.pesoKg || 0).toFixed(1).replace(".", ",")}kg`,
+    `altura: ${Math.round(Number(options.alturaCm || 0)) || 0}cm`,
+    `sexo: ${String(options.sexoPaciente || "—").toLowerCase()}`,
+  ].join("   |   ");
+
+  page.drawText(fitText(patientInfo, 265, doc.fontRegular, 7.5), {
+    x: infoX,
+    y: HEADER_TOP - 41,
+    size: 7.5,
+    font: doc.fontRegular,
+    color: rgb(0.38, 0.38, 0.38),
   });
 
-  ctx.page.drawText(patientName, {
-    x: ctx.margin,
-    y: ctx.y - 48,
-    size: 11,
-    font: ctx.fontRegular,
-    color: rgb(0.39, 0.45, 0.55),
-  });
+  if (options.showMetrics) {
+    const rightX = PAGE_WIDTH - PAGE_MARGIN_X - 120;
+    const metrics = [
+      `massa muscular: ${formatMetric(options.massaMuscular, "kg")}`,
+      `massa adiposa: ${formatMetric(options.massaAdiposa, "kg")}`,
+      `% de gordura: ${formatMetric(options.percGordura, "%")}`,
+    ];
 
-  ctx.page.drawLine({
-    start: { x: ctx.margin, y: ctx.y - 60 },
-    end: { x: ctx.width - ctx.margin, y: ctx.y - 60 },
+    metrics.forEach((line, index) => {
+      page.drawText(fitText(line, 120, doc.fontRegular, 7.2), {
+        x: rightX,
+        y: HEADER_TOP - 18 - index * 10,
+        size: 7.2,
+        font: doc.fontRegular,
+        color: rgb(0.24, 0.24, 0.24),
+      });
+    });
+  }
+
+  page.drawLine({
+    start: { x: PAGE_MARGIN_X, y: HEADER_TOP - 52 },
+    end: { x: PAGE_WIDTH - PAGE_MARGIN_X, y: HEADER_TOP - 52 },
     thickness: 1,
-    color: rgb(0.88, 0.91, 0.95),
+    color: rgb(0.15, 0.15, 0.15),
   });
 
-  ctx.y -= 80;
-}
-
-function drawSectionTitle(ctx: PdfContext, title: string) {
-  ensureSpace(ctx, 26);
-  ctx.page.drawText(title, {
-    x: ctx.margin,
-    y: ctx.y,
-    size: 13,
-    font: ctx.fontBold,
-    color: rgb(0.06, 0.09, 0.16),
+  const titleWidth = doc.fontBold.widthOfTextAtSize(options.title, 17);
+  page.drawText(options.title, {
+    x: (PAGE_WIDTH - titleWidth) / 2,
+    y: HEADER_TOP - 74,
+    size: 17,
+    font: doc.fontBold,
+    color: rgb(0.08, 0.08, 0.08),
   });
-  ctx.y -= 20;
 }
 
-function drawParagraph(
-  ctx: PdfContext,
-  text: string,
-  options?: { size?: number; color?: ReturnType<typeof rgb>; indent?: number; lineGap?: number; bold?: boolean }
-) {
-  const size = options?.size ?? 11;
-  const indent = options?.indent ?? 0;
-  const lineGap = options?.lineGap ?? 4;
-  const font = options?.bold ? ctx.fontBold : ctx.fontRegular;
-  const color = options?.color ?? rgb(0.2, 0.27, 0.35);
-  const lines = wrapText(text, ctx.width - ctx.margin * 2 - indent, font, size);
+function drawFooter(doc: LayoutDoc, page: PDFPage) {
+  const footerY = 56;
 
-  for (const line of lines) {
-    ensureSpace(ctx, size + lineGap + 6);
-    ctx.page.drawText(line || " ", {
-      x: ctx.margin + indent,
-      y: ctx.y,
-      size,
-      font,
-      color,
+  page.drawLine({
+    start: { x: PAGE_MARGIN_X + 4, y: footerY + 18 },
+    end: { x: PAGE_MARGIN_X + 132, y: footerY + 18 },
+    thickness: 0.8,
+    color: rgb(0.2, 0.2, 0.2),
+  });
+
+  if (doc.fontScript) {
+    page.drawText("Nutricionista", {
+      x: PAGE_MARGIN_X,
+      y: footerY + 20,
+      size: 22,
+      font: doc.fontScript,
+      color: rgb(0.12, 0.12, 0.12),
     });
-    ctx.y -= size + lineGap;
+  } else {
+    page.drawText("Nutricionista", {
+      x: PAGE_MARGIN_X,
+      y: footerY + 20,
+      size: 13,
+      font: doc.fontBold,
+      color: rgb(0.12, 0.12, 0.12),
+    });
+  }
+
+  page.drawText(CRN_LABEL, {
+    x: PAGE_MARGIN_X,
+    y: footerY + 5,
+    size: 9,
+    font: doc.fontRegular,
+    color: rgb(0.25, 0.25, 0.25),
+  });
+
+  if (doc.logo) {
+    const targetWidth = 42;
+    const targetHeight = (doc.logo.height / doc.logo.width) * targetWidth;
+    page.drawImage(doc.logo, {
+      x: PAGE_WIDTH - PAGE_MARGIN_X - targetWidth,
+      y: footerY - 2,
+      width: targetWidth,
+      height: targetHeight,
+      opacity: FOOTER_LOGO_OPACITY,
+    });
   }
 }
 
-function drawBulletList(ctx: PdfContext, items: string[]) {
-  for (const item of items) {
-    ensureSpace(ctx, 20);
-    ctx.page.drawCircle({
-      x: ctx.margin + 4,
-      y: ctx.y + 4,
-      size: 2,
-      color: rgb(0.09, 0.64, 0.29),
+function addBasePage(doc: LayoutDoc, options: BasePageOptions) {
+  const page = doc.pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+  drawHeader(doc, page, options);
+  drawFooter(doc, page);
+  return page;
+}
+
+function getMealLines(meal: EnvioMeal | undefined) {
+  const mainLines = (meal?.foods || [])
+    .filter((food) => food?.name)
+    .map((food) => `${food.name} — ${String(food.qty ?? "")} ${String(food.unit ?? "").trim()}`.replace(/\s+/g, " ").trim());
+
+  const subLines: string[] = [];
+  Object.entries(meal?.subs || {}).forEach(([foodId, subs]) => {
+    const validSubs = (subs || []).filter((sub) => sub?.name);
+    if (validSubs.length === 0) return;
+
+    const mainFood = (meal?.foods || []).find((food) => food.id === foodId);
+    if (mainFood?.name) subLines.push(`Para ${shortFoodName(mainFood.name)}:`);
+    validSubs.forEach((sub) => {
+      subLines.push(`${sub.name} — ${String(sub.qty ?? "")} ${String(sub.unit ?? "").trim()}`.replace(/\s+/g, " ").trim());
     });
-    drawParagraph(ctx, item, { indent: 14, size: 11 });
-    ctx.y -= 2;
+  });
+
+  return { mainLines, subLines };
+}
+
+function drawTextBlock(params: {
+  page: PDFPage;
+  font: PDFFont;
+  textLines: string[];
+  x: number;
+  y: number;
+  width: number;
+  maxHeight: number;
+  fontSize: number;
+  lineGap: number;
+  color: ReturnType<typeof rgb>;
+}) {
+  const { page, font, textLines, x, y, width, maxHeight, fontSize, lineGap, color } = params;
+  let cursorY = y;
+  let consumed = 0;
+  const lineHeight = fontSize + lineGap;
+
+  for (const line of textLines) {
+    const wrapped = wrapText(line, width, font, fontSize);
+    for (const subLine of wrapped) {
+      if (consumed + lineHeight > maxHeight) {
+        page.drawText("…", {
+          x,
+          y: cursorY,
+          size: fontSize,
+          font,
+          color,
+        });
+        return;
+      }
+      page.drawText(subLine || " ", { x, y: cursorY, size: fontSize, font, color });
+      cursorY -= lineHeight;
+      consumed += lineHeight;
+    }
   }
 }
 
-function drawInfoLine(ctx: PdfContext, label: string, value: string) {
-  drawParagraph(ctx, `${label}: ${value}`, { size: 10, color: rgb(0.39, 0.45, 0.55) });
+function drawMealBox(doc: LayoutDoc, page: PDFPage, x: number, y: number, width: number, height: number, meal?: EnvioMeal) {
+  page.drawRectangle({
+    x,
+    y,
+    width,
+    height,
+    borderColor: rgb(0.15, 0.15, 0.15),
+    borderWidth: 1,
+    color: rgb(1, 1, 1),
+  });
+
+  const headerY = y + height - 18;
+  page.drawText(fitText(meal?.name || "nome da refeição", width - 86, doc.fontBold, 10), {
+    x: x + 10,
+    y: headerY,
+    size: 10,
+    font: doc.fontBold,
+    color: rgb(0.05, 0.05, 0.05),
+  });
+
+  page.drawText(fitText(meal?.time || "horário", 48, doc.fontBold, 7.5), {
+    x: x + width - 54,
+    y: headerY + 1,
+    size: 7.5,
+    font: doc.fontBold,
+    color: rgb(0.05, 0.05, 0.05),
+  });
+
+  page.drawLine({
+    start: { x: x + 10, y: y + height - 24 },
+    end: { x: x + width - 10, y: y + height - 24 },
+    thickness: 0.9,
+    color: rgb(0.15, 0.15, 0.15),
+  });
+
+  const innerTop = y + height - 34;
+  const colGap = 12;
+  const innerWidth = width - 20;
+  const colWidth = (innerWidth - colGap) / 2;
+  const leftX = x + 10;
+  const rightX = leftX + colWidth + colGap;
+
+  page.drawText("principais", {
+    x: leftX,
+    y: innerTop,
+    size: 7.2,
+    font: doc.fontRegular,
+    color: rgb(0.09, 0.58, 0.21),
+  });
+
+  page.drawText("substituições", {
+    x: rightX,
+    y: innerTop,
+    size: 7.2,
+    font: doc.fontRegular,
+    color: rgb(0.14, 0.39, 0.84),
+  });
+
+  const { mainLines, subLines } = getMealLines(meal);
+  const contentY = innerTop - 11;
+  const maxContentHeight = height - 54;
+
+  drawTextBlock({
+    page,
+    font: doc.fontRegular,
+    textLines: mainLines.length > 0 ? mainLines : ["—"],
+    x: leftX,
+    y: contentY,
+    width: colWidth,
+    maxHeight: maxContentHeight,
+    fontSize: 6.8,
+    lineGap: 2.4,
+    color: rgb(0.14, 0.14, 0.14),
+  });
+
+  drawTextBlock({
+    page,
+    font: doc.fontRegular,
+    textLines: subLines.length > 0 ? subLines : ["—"],
+    x: rightX,
+    y: contentY,
+    width: colWidth,
+    maxHeight: maxContentHeight,
+    fontSize: 6.8,
+    lineGap: 2.4,
+    color: rgb(0.14, 0.14, 0.14),
+  });
 }
 
 async function buildPlanoPdf(params: {
@@ -253,219 +509,239 @@ async function buildPlanoPdf(params: {
   massaMuscular: number;
   massaAdiposa: number;
   percGordura: number;
-  message: string;
   meals: EnvioMeal[];
 }) {
-  const ctx = await createPdfContext();
+  const doc = await createLayoutDoc();
+  const chunks: EnvioMeal[][] = [];
+  const meals = params.meals.length > 0 ? params.meals : [];
 
-  drawHeader(ctx, "Plano Alimentar", params.nomePaciente);
-  drawInfoLine(ctx, "Nascimento", formatDate(params.dataNascimento));
-  drawInfoLine(ctx, "Sexo", params.sexoPaciente || "—");
-  drawInfoLine(ctx, "Peso", `${params.pesoKg || 0} kg`);
-  drawInfoLine(ctx, "Altura", `${params.alturaCm || 0} cm`);
-  drawInfoLine(ctx, "Massa muscular", `${Number(params.massaMuscular || 0).toFixed(1)} kg`);
-  drawInfoLine(ctx, "Massa adiposa", `${Number(params.massaAdiposa || 0).toFixed(1)} kg`);
-  drawInfoLine(ctx, "% de gordura", `${Number(params.percGordura || 0).toFixed(1)}%`);
-  ctx.y -= 10;
-
-  if (params.message.trim()) {
-    drawSectionTitle(ctx, "Mensagem para o Paciente");
-    drawParagraph(ctx, params.message.trim(), { size: 11 });
-    ctx.y -= 10;
+  for (let index = 0; index < Math.max(meals.length, 1); index += 6) {
+    chunks.push(meals.slice(index, index + 6));
   }
 
-  drawSectionTitle(ctx, "Plano diário");
-
-  if (params.meals.length === 0) {
-    drawParagraph(ctx, "Nenhuma refeição cadastrada.", { color: rgb(0.58, 0.65, 0.72) });
-  }
-
-  params.meals.forEach((meal, index) => {
-    ensureSpace(ctx, 36);
-    ctx.page.drawRectangle({
-      x: ctx.margin,
-      y: ctx.y - 8,
-      width: ctx.width - ctx.margin * 2,
-      height: 24,
-      color: rgb(0.96, 0.98, 1),
-      borderColor: rgb(0.89, 0.93, 0.98),
-      borderWidth: 1,
+  chunks.forEach((chunk) => {
+    const page = addBasePage(doc, {
+      title: "plano alimentar",
+      nomePaciente: params.nomePaciente,
+      dataNascimento: params.dataNascimento,
+      sexoPaciente: params.sexoPaciente,
+      pesoKg: params.pesoKg,
+      alturaCm: params.alturaCm,
+      massaMuscular: params.massaMuscular,
+      massaAdiposa: params.massaAdiposa,
+      percGordura: params.percGordura,
+      showMetrics: true,
     });
 
-    ctx.page.drawText(`${index + 1}. ${meal.name || "Refeição"}`, {
-      x: ctx.margin + 10,
-      y: ctx.y,
-      size: 11,
-      font: ctx.fontBold,
-      color: rgb(0.06, 0.09, 0.16),
-    });
+    const gridX = PAGE_MARGIN_X + 10;
+    const gridY = 154;
+    const colGap = 10;
+    const rowGap = 12;
+    const boxWidth = 248;
+    const boxHeight = 145;
 
-    if (meal.time) {
-      const timeText = meal.time;
-      const timeWidth = ctx.fontRegular.widthOfTextAtSize(timeText, 10);
-      ctx.page.drawText(timeText, {
-        x: ctx.width - ctx.margin - timeWidth - 10,
-        y: ctx.y,
-        size: 10,
-        font: ctx.fontRegular,
-        color: rgb(0.39, 0.45, 0.55),
-      });
+    for (let row = 0; row < 3; row++) {
+      for (let col = 0; col < 2; col++) {
+        const slotIndex = row * 2 + col;
+        const meal = chunk[slotIndex];
+        const x = gridX + col * (boxWidth + colGap);
+        const y = gridY + (2 - row) * (boxHeight + rowGap);
+        drawMealBox(doc, page, x, y, boxWidth, boxHeight, meal);
+      }
     }
-
-    ctx.y -= 32;
-
-    const foods = (meal.foods || []).filter((food) => food?.name);
-    const allSubs = Object.entries(meal.subs || {});
-
-    drawParagraph(ctx, "Alimentos principais", { size: 10, bold: true, color: rgb(0.09, 0.64, 0.29) });
-    if (foods.length === 0) {
-      drawParagraph(ctx, "—", { indent: 10, size: 10, color: rgb(0.58, 0.65, 0.72) });
-    } else {
-      drawBulletList(
-        ctx,
-        foods.map((food) => `${food.name} — ${food.qty ?? ""} ${food.unit ?? ""}`.trim())
-      );
-    }
-
-    const hasSubs = allSubs.some(([, subs]) => (subs || []).some((sub) => sub?.name));
-    drawParagraph(ctx, "Substituições", { size: 10, bold: true, color: rgb(0.15, 0.39, 0.92) });
-    if (!hasSubs) {
-      drawParagraph(ctx, "—", { indent: 10, size: 10, color: rgb(0.58, 0.65, 0.72) });
-    } else {
-      allSubs.forEach(([foodId, subs]) => {
-        const validSubs = (subs || []).filter((sub) => sub?.name);
-        if (validSubs.length === 0) return;
-        const food = foods.find((item) => item.id === foodId);
-        if (food?.name) {
-          drawParagraph(ctx, `Para ${shortFoodName(food.name)}:`, {
-            size: 10,
-            bold: true,
-            color: rgb(0.11, 0.23, 0.54),
-          });
-        }
-        drawBulletList(
-          ctx,
-          validSubs.map((sub) => `${sub.name} — ${sub.qty ?? ""} ${sub.unit ?? ""}`.trim())
-        );
-      });
-    }
-
-    ctx.y -= 8;
   });
 
-  return Buffer.from(await ctx.pdf.save());
+  return Buffer.from(await doc.pdf.save());
+}
+
+function drawShoppingFrame(doc: LayoutDoc, page: PDFPage, items: ShoppingItem[], shoppingDays: number) {
+  const boxX = PAGE_MARGIN_X + 12;
+  const boxY = 150;
+  const boxWidth = PAGE_WIDTH - (PAGE_MARGIN_X + 12) * 2;
+  const boxHeight = 476;
+
+  page.drawRectangle({
+    x: boxX,
+    y: boxY,
+    width: boxWidth,
+    height: boxHeight,
+    borderColor: rgb(0.16, 0.16, 0.16),
+    borderWidth: 1,
+    color: rgb(1, 1, 1),
+  });
+
+  page.drawText(`quantidades totais para ${shoppingDays} dias`, {
+    x: boxX + 16,
+    y: boxY + boxHeight - 22,
+    size: 8.5,
+    font: doc.fontRegular,
+    color: rgb(0.35, 0.35, 0.35),
+  });
+
+  let cursorY = boxY + boxHeight - 48;
+  const lineHeight = 17;
+
+  items.forEach((item, index) => {
+    if (cursorY < boxY + 18) return;
+
+    page.drawCircle({
+      x: boxX + 13,
+      y: cursorY + 4,
+      size: 3,
+      color: rgb(0.17, 0.63, 0.28),
+    });
+
+    const itemLabel = fitText(item.name, 220, doc.fontRegular, 11);
+    const qtyText = fitText(item.displayQty || `${item.qty ?? ""} ${item.unit ?? ""}`.trim(), 120, doc.fontRegular, 11);
+    const dots = ".".repeat(Math.max(6, 34 - itemLabel.length - qtyText.length));
+    const line = `${itemLabel}${dots}${qtyText}`;
+
+    page.drawText(line, {
+      x: boxX + 20,
+      y: cursorY,
+      size: 11,
+      font: doc.fontRegular,
+      color: rgb(0.1, 0.1, 0.1),
+    });
+
+    cursorY -= lineHeight;
+    if (index === items.length - 1 && items.length === 0) cursorY -= 0;
+  });
 }
 
 async function buildShoppingListPdf(params: {
   nomePaciente: string;
+  dataNascimento: string;
+  sexoPaciente: string;
+  pesoKg: number;
+  alturaCm: number;
   shoppingDays: number;
   shoppingList: ShoppingItem[];
 }) {
-  const ctx = await createPdfContext();
-  drawHeader(ctx, `Lista de Compras (${params.shoppingDays} dias)`, params.nomePaciente);
-  drawSectionTitle(ctx, "Itens");
+  const doc = await createLayoutDoc();
+  const items = params.shoppingList.length > 0 ? params.shoppingList : [{ name: "Nenhum item disponível", displayQty: "—" }];
+  const perPage = 24;
 
-  if (params.shoppingList.length === 0) {
-    drawParagraph(ctx, "Nenhum item disponível.", { color: rgb(0.58, 0.65, 0.72) });
-  } else {
-    drawBulletList(
-      ctx,
-      params.shoppingList.map((item) => `${item.name} — ${item.displayQty || `${item.qty ?? ""} ${item.unit ?? ""}`.trim()}`)
-    );
+  for (let start = 0; start < items.length; start += perPage) {
+    const page = addBasePage(doc, {
+      title: "lista de compras",
+      nomePaciente: params.nomePaciente,
+      dataNascimento: params.dataNascimento,
+      sexoPaciente: params.sexoPaciente,
+      pesoKg: params.pesoKg,
+      alturaCm: params.alturaCm,
+      showMetrics: false,
+    });
+
+    drawShoppingFrame(doc, page, items.slice(start, start + perPage), params.shoppingDays);
   }
 
-  return Buffer.from(await ctx.pdf.save());
+  return Buffer.from(await doc.pdf.save());
+}
+
+function drawProtocolBox(doc: LayoutDoc, page: PDFPage, x: number, y: number, width: number, height: number, protocol?: Protocol) {
+  page.drawRectangle({
+    x,
+    y,
+    width,
+    height,
+    borderColor: rgb(0.16, 0.16, 0.16),
+    borderWidth: 1,
+    color: rgb(1, 1, 1),
+  });
+
+  page.drawText(fitText(protocol?.name || "nome da orientação", width - 16, doc.fontRegular, 7.8), {
+    x: x + 8,
+    y: y + height - 12,
+    size: 7.8,
+    font: doc.fontRegular,
+    color: rgb(0.16, 0.16, 0.16),
+  });
+
+  page.drawText("orientação................................", {
+    x: x + 8,
+    y: y + height - 24,
+    size: 7,
+    font: doc.fontRegular,
+    color: rgb(0.28, 0.28, 0.28),
+  });
+
+  const contentLines = protocol?.content
+    ? wrapText(protocol.content, width - 16, doc.fontRegular, 8)
+    : [];
+
+  drawTextBlock({
+    page,
+    font: doc.fontRegular,
+    textLines: contentLines,
+    x: x + 8,
+    y: y + height - 38,
+    width: width - 16,
+    maxHeight: height - 46,
+    fontSize: 8,
+    lineGap: 3,
+    color: rgb(0.16, 0.16, 0.16),
+  });
 }
 
 async function buildProtocolsPdf(params: {
   nomePaciente: string;
+  dataNascimento: string;
+  sexoPaciente: string;
+  pesoKg: number;
+  alturaCm: number;
   protocols: Protocol[];
 }) {
-  const ctx = await createPdfContext();
-  drawHeader(ctx, "Protocolos e Orientações", params.nomePaciente);
+  const doc = await createLayoutDoc();
+  const protocols = params.protocols.length > 0 ? params.protocols : [{ name: "Sem orientações selecionadas", content: "" }];
+  const perPage = 7;
 
-  if (params.protocols.length === 0) {
-    drawParagraph(ctx, "Nenhum protocolo selecionado.", { color: rgb(0.58, 0.65, 0.72) });
+  for (let start = 0; start < protocols.length; start += perPage) {
+    const page = addBasePage(doc, {
+      title: "orientações",
+      nomePaciente: params.nomePaciente,
+      dataNascimento: params.dataNascimento,
+      sexoPaciente: params.sexoPaciente,
+      pesoKg: params.pesoKg,
+      alturaCm: params.alturaCm,
+      showMetrics: false,
+    });
+
+    const slice = protocols.slice(start, start + perPage);
+    const boxX = PAGE_MARGIN_X + 10;
+    const boxWidth = PAGE_WIDTH - (PAGE_MARGIN_X + 10) * 2;
+    const boxHeight = 58;
+    const gap = 12;
+    let currentY = 160 + (perPage - 1) * (boxHeight + gap);
+
+    slice.forEach((protocol) => {
+      drawProtocolBox(doc, page, boxX, currentY, boxWidth, boxHeight, protocol);
+      currentY -= boxHeight + gap;
+    });
   }
 
-  params.protocols.forEach((protocol, index) => {
-    drawSectionTitle(ctx, `${index + 1}. ${protocol.name || "Protocolo"}`);
-    drawParagraph(ctx, protocol.content || "Sem conteúdo.", { size: 11 });
-    ctx.y -= 8;
-  });
-
-  return Buffer.from(await ctx.pdf.save());
+  return Buffer.from(await doc.pdf.save());
 }
 
-async function buildImagesPdf(params: {
-  nomePaciente: string;
-  imageFiles: File[];
+async function getTransporter(config: {
+  smtpHost: string;
+  smtpPort: number;
+  smtpUser: string;
+  smtpPass: string;
 }) {
-  const pdf = await PDFDocument.create();
-  const fontRegular = await pdf.embedFont(StandardFonts.Helvetica);
-  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const key = `${config.smtpHost}:${config.smtpPort}:${config.smtpUser}`;
+  if (cachedTransporter?.key === key) return cachedTransporter.transporter;
 
-  let page = pdf.addPage([595.28, 841.89]);
-  page.drawText("Anexos em imagem", {
-    x: 42,
-    y: 790,
-    size: 22,
-    font: fontBold,
-    color: rgb(0.06, 0.09, 0.16),
-  });
-  page.drawText(params.nomePaciente, {
-    x: 42,
-    y: 768,
-    size: 11,
-    font: fontRegular,
-    color: rgb(0.39, 0.45, 0.55),
+  const nodemailer = await import("nodemailer");
+  const transporter = nodemailer.createTransport({
+    host: config.smtpHost,
+    port: config.smtpPort,
+    secure: config.smtpPort === 465,
+    auth: { user: config.smtpUser, pass: config.smtpPass },
   });
 
-  for (const file of params.imageFiles) {
-    page = pdf.addPage([595.28, 841.89]);
-    page.drawText(file.name, {
-      x: 42,
-      y: 790,
-      size: 13,
-      font: fontBold,
-      color: rgb(0.06, 0.09, 0.16),
-    });
-
-    const bytes = await file.arrayBuffer();
-    const mime = file.type || "";
-    let image;
-
-    if (mime.includes("png")) {
-      image = await pdf.embedPng(bytes);
-    } else if (mime.includes("jpeg") || mime.includes("jpg")) {
-      image = await pdf.embedJpg(bytes);
-    } else {
-      const note = `Formato não suportado para conversão em PDF: ${file.name}`;
-      page.drawText(note, {
-        x: 42,
-        y: 740,
-        size: 11,
-        font: fontRegular,
-        color: rgb(0.75, 0.13, 0.13),
-      });
-      continue;
-    }
-
-    const maxWidth = 511;
-    const maxHeight = 690;
-    const scale = Math.min(maxWidth / image.width, maxHeight / image.height, 1);
-    const width = image.width * scale;
-    const height = image.height * scale;
-
-    page.drawImage(image, {
-      x: (595.28 - width) / 2,
-      y: 60 + (maxHeight - height) / 2,
-      width,
-      height,
-    });
-  }
-
-  return Buffer.from(await pdf.save());
+  cachedTransporter = { key, transporter };
+  return transporter;
 }
 
 export async function POST(request: Request) {
@@ -520,33 +796,50 @@ export async function POST(request: Request) {
 
     const allAttachmentEntries = formData.getAll("attachments");
     const uploadedFiles = allAttachmentEntries.filter((entry): entry is File => entry instanceof File && entry.size > 0);
-    const imageFiles = uploadedFiles.filter((file) => file.type.startsWith("image/"));
-    const pdfFiles = uploadedFiles.filter((file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"));
-    const otherFiles = uploadedFiles.filter((file) => !imageFiles.includes(file) && !pdfFiles.includes(file));
 
     const emailSummaryItems = [
-      "PDF do Plano Alimentar",
-      ...(includeShoppingList && shoppingList.length > 0 ? [`PDF da Lista de Compras (${shoppingDays} dias)`] : []),
-      ...(includeProtocols && protocols.length > 0 ? ["PDFs de Protocolos/Orientações"] : []),
-      ...(imageFiles.length > 0 ? ["PDF com imagens anexadas"] : []),
-      ...(pdfFiles.length > 0 ? ["PDFs enviados em anexo"] : []),
-      ...(otherFiles.length > 0 ? ["Arquivos complementares em formato original"] : []),
+      "PDF do plano alimentar com o novo layout",
+      ...(includeShoppingList && shoppingList.length > 0 ? [`PDF da lista de compras (${shoppingDays} dias)`] : []),
+      ...(includeProtocols && protocols.length > 0 ? ["PDF das orientações"] : []),
+      ...(uploadedFiles.length > 0 ? ["arquivos complementares anexados"] : []),
     ];
 
-    const planoPdf = await buildPlanoPdf({
-      nomePaciente: paciente.nome || nomePaciente,
-      dataNascimento,
-      sexoPaciente,
-      pesoKg,
-      alturaCm,
-      massaMuscular,
-      massaAdiposa,
-      percGordura,
-      message,
-      meals,
-    });
+    const [planoPdf, shoppingPdf, protocolsPdf] = await Promise.all([
+      buildPlanoPdf({
+        nomePaciente: paciente.nome || nomePaciente,
+        dataNascimento,
+        sexoPaciente,
+        pesoKg,
+        alturaCm,
+        massaMuscular,
+        massaAdiposa,
+        percGordura,
+        meals,
+      }),
+      includeShoppingList && shoppingList.length > 0
+        ? buildShoppingListPdf({
+            nomePaciente: paciente.nome || nomePaciente,
+            dataNascimento,
+            sexoPaciente,
+            pesoKg,
+            alturaCm,
+            shoppingDays,
+            shoppingList,
+          })
+        : Promise.resolve(null),
+      includeProtocols && protocols.length > 0
+        ? buildProtocolsPdf({
+            nomePaciente: paciente.nome || nomePaciente,
+            dataNascimento,
+            sexoPaciente,
+            pesoKg,
+            alturaCm,
+            protocols,
+          })
+        : Promise.resolve(null),
+    ]);
 
-    const mailAttachments: Array<Record<string, unknown>> = [
+    const mailAttachments: Array<{ filename: string; content: Buffer; contentType: string }> = [
       {
         filename: `${sanitizeFilename(nomePaciente || paciente.nome || "paciente")}-plano-alimentar.pdf`,
         content: planoPdf,
@@ -554,12 +847,7 @@ export async function POST(request: Request) {
       },
     ];
 
-    if (includeShoppingList && shoppingList.length > 0) {
-      const shoppingPdf = await buildShoppingListPdf({
-        nomePaciente: paciente.nome || nomePaciente,
-        shoppingDays,
-        shoppingList,
-      });
+    if (shoppingPdf) {
       mailAttachments.push({
         filename: `${sanitizeFilename(nomePaciente || paciente.nome || "paciente")}-lista-de-compras.pdf`,
         content: shoppingPdf,
@@ -567,52 +855,15 @@ export async function POST(request: Request) {
       });
     }
 
-    if (includeProtocols && protocols.length > 0) {
-      const protocolsPdf = await buildProtocolsPdf({
-        nomePaciente: paciente.nome || nomePaciente,
-        protocols,
-      });
+    if (protocolsPdf) {
       mailAttachments.push({
-        filename: `${sanitizeFilename(nomePaciente || paciente.nome || "paciente")}-protocolos.pdf`,
+        filename: `${sanitizeFilename(nomePaciente || paciente.nome || "paciente")}-orientacoes.pdf`,
         content: protocolsPdf,
         contentType: "application/pdf",
       });
     }
 
-    if (imageFiles.length > 0) {
-      const imagesPdf = await buildImagesPdf({
-        nomePaciente: paciente.nome || nomePaciente,
-        imageFiles,
-      });
-      mailAttachments.push({
-        filename: `${sanitizeFilename(nomePaciente || paciente.nome || "paciente")}-anexos-imagens.pdf`,
-        content: imagesPdf,
-        contentType: "application/pdf",
-      });
-    }
-
-    const inlineImageCids: string[] = [];
-    for (const imageFile of imageFiles) {
-      const cid = `${sanitizeFilename(imageFile.name)}-${Math.random().toString(36).slice(2)}@nutricare`;
-      inlineImageCids.push(cid);
-      mailAttachments.push({
-        filename: imageFile.name,
-        content: Buffer.from(await imageFile.arrayBuffer()),
-        contentType: imageFile.type || "application/octet-stream",
-        cid,
-        contentDisposition: "inline",
-      });
-    }
-
-    for (const pdfFile of pdfFiles) {
-      mailAttachments.push({
-        filename: pdfFile.name,
-        content: Buffer.from(await pdfFile.arrayBuffer()),
-        contentType: pdfFile.type || "application/pdf",
-      });
-    }
-
-    for (const file of otherFiles) {
+    for (const file of uploadedFiles) {
       mailAttachments.push({
         filename: file.name,
         content: Buffer.from(await file.arrayBuffer()),
@@ -622,25 +873,9 @@ export async function POST(request: Request) {
 
     const messageHtml = message
       ? `
-        <div style="margin:0 30px 18px;padding:18px;border:1px solid #dbeafe;border-radius:12px;background:#eff6ff;">
-          <div style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:8px;">Mensagem para o Paciente</div>
+        <div style="margin:18px 28px 0;padding:16px 18px;border:1px solid #d7e3ef;border-radius:12px;background:#f8fbff;">
+          <div style="font-size:15px;font-weight:700;color:#14324a;margin-bottom:8px;">Mensagem do nutricionista</div>
           <div style="font-size:13px;line-height:1.7;color:#334155;">${escapeHtml(message).replace(/\n/g, "<br>")}</div>
-        </div>`
-      : "";
-
-    const imagePreviewHtml = inlineImageCids.length
-      ? `
-        <div style="margin:0 30px 20px;">
-          <div style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:10px;">Imagens anexadas</div>
-          ${inlineImageCids
-            .map(
-              (cid, index) => `
-                <div style="margin-bottom:16px;padding:12px;border:1px solid #e2e8f0;border-radius:12px;background:#fff;">
-                  <div style="font-size:12px;color:#64748b;margin-bottom:8px;">${escapeHtml(imageFiles[index]?.name || `Imagem ${index + 1}`)}</div>
-                  <img src="cid:${cid}" alt="Imagem anexada" style="max-width:100%;border-radius:8px;display:block;" />
-                </div>`
-            )
-            .join("")}
         </div>`
       : "";
 
@@ -648,51 +883,42 @@ export async function POST(request: Request) {
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
-<body style="margin:0;padding:0;background:#f5f5f5;font-family:'Segoe UI',Roboto,sans-serif;">
-  <div style="max-width:700px;margin:20px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
-    <div style="background:#0f172a;color:#fff;padding:24px 30px;">
-      <div style="font-size:22px;font-weight:700;">${escapeHtml(nomePaciente)}</div>
-      <div style="font-size:12px;color:#cbd5e1;margin-top:6px;">
-        ${dataNascimento ? `Nascimento: ${formatDate(dataNascimento)} | ` : ""}
-        Peso: ${pesoKg || "—"} kg | Altura: ${alturaCm || "—"} cm | Sexo: ${escapeHtml(sexoPaciente || "—")}
-      </div>
-      <div style="font-size:11px;color:#94a3b8;margin-top:4px;">
-        Massa muscular: ${Number(massaMuscular || 0).toFixed(1)} kg | Massa adiposa: ${Number(massaAdiposa || 0).toFixed(1)} kg | % gordura: ${Number(percGordura || 0).toFixed(1)}%
+<body style="margin:0;padding:24px;background:#eef3f8;font-family:'Segoe UI',Arial,sans-serif;">
+  <div style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #dbe3ec;">
+    <div style="padding:24px 28px;background:linear-gradient(180deg, #3f6faa 0%, #265d99 45%, #183865 100%);color:#ffffff;">
+      <div style="font-size:22px;font-weight:700;">NutriCare</div>
+      <div style="font-size:18px;font-weight:600;margin-top:8px;">Plano alimentar enviado para download</div>
+      <div style="font-size:12px;line-height:1.7;margin-top:10px;color:#dbe8f7;">
+        Paciente: ${escapeHtml(paciente.nome || nomePaciente)}<br>
+        ${dataNascimento ? `Nascimento: ${formatDate(dataNascimento)}<br>` : ""}
+        Peso: ${Number(pesoKg || 0).toFixed(1).replace(".", ",")} kg &nbsp;|&nbsp; Altura: ${Math.round(alturaCm || 0)} cm &nbsp;|&nbsp; Sexo: ${escapeHtml(sexoPaciente || "—")}
       </div>
     </div>
 
-    <div style="padding:22px 30px 10px;">
-      <div style="font-size:24px;font-weight:700;color:#0f172a;margin-bottom:8px;">Plano Alimentar enviado</div>
-      <div style="font-size:13px;color:#475569;line-height:1.7;">
-        Os arquivos em PDF seguem anexados para download. Abaixo está o resumo do envio realizado.
+    <div style="padding:24px 28px 12px;">
+      <div style="font-size:14px;line-height:1.8;color:#334155;">
+        Os layouts do plano alimentar, da lista de compras e das orientações seguem anexados em PDF para o paciente baixar diretamente pelo e-mail.
       </div>
     </div>
 
     ${messageHtml}
 
-    <div style="margin:0 30px 18px;padding:16px;border:1px solid #bbf7d0;border-radius:12px;background:#f0fdf4;">
-      <div style="font-size:16px;font-weight:700;color:#166534;margin-bottom:8px;">Arquivos enviados</div>
-      <ul style="margin:0;padding-left:20px;color:#166534;font-size:13px;line-height:1.8;">
+    <div style="margin:18px 28px 28px;padding:16px 18px;border-radius:12px;background:#f0fdf4;border:1px solid #bbf7d0;">
+      <div style="font-size:15px;font-weight:700;color:#166534;margin-bottom:8px;">Arquivos enviados</div>
+      <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.8;color:#166534;">
         ${emailSummaryItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
       </ul>
-    </div>
-
-    ${imagePreviewHtml}
-
-    <div style="padding:20px 30px;border-top:1px solid #e5e7eb;text-align:center;">
-      <p style="color:#888;font-size:11px;margin:0;">Enviado pelo NutriCare</p>
     </div>
   </div>
 </body>
 </html>`;
 
     try {
-      const nodemailer = await import("nodemailer");
-      const transporter = nodemailer.createTransport({
-        host: smtpHost,
-        port: smtpPort,
-        secure: smtpPort === 465,
-        auth: { user: smtpUser, pass: smtpPass },
+      const transporter = await getTransporter({
+        smtpHost,
+        smtpPort,
+        smtpUser,
+        smtpPass,
       });
 
       await transporter.sendMail({
