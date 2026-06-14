@@ -20,13 +20,23 @@ export default function Sidebar() {
         boxSizing: "border-box",
       }}
     >
-      <div style={{ marginBottom: "40px", textAlign: "center" }}>
+      <div
+        style={{
+          marginBottom: "32px",
+          textAlign: "center",
+          padding: "14px 10px 18px",
+          borderRadius: "18px",
+          background: "linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04))",
+          border: "1px solid rgba(255,255,255,0.08)",
+          boxShadow: "0 10px 24px rgba(0,0,0,0.18)",
+        }}
+      >
         <Image
           src="/logo-nutricare.png"
           alt="NutriCare"
-          width={260}
-          height={140}
-          style={{ objectFit: "contain" }}
+          width={320}
+          height={190}
+          style={{ objectFit: "contain", width: "100%", height: "auto", filter: "drop-shadow(0 8px 14px rgba(0,0,0,0.35))" }}
           priority
         />
       </div>
