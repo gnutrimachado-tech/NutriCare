@@ -13,7 +13,7 @@ export default function Sidebar() {
     <aside
       style={{
         width: "260px",
-        background: "#0f172a",
+        background: "linear-gradient(180deg, rgb(86, 132, 186) 0%, rgb(38, 93, 153) 38%, rgb(19, 49, 91) 100%)",
         color: "white",
         minHeight: "100vh",
         padding: "30px 20px",
@@ -22,13 +22,12 @@ export default function Sidebar() {
     >
       <div
         style={{
-          marginBottom: "32px",
+          marginBottom: "28px",
           textAlign: "center",
-          padding: "14px 10px 18px",
-          borderRadius: "18px",
-          background: "linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04))",
-          border: "1px solid rgba(255,255,255,0.08)",
-          boxShadow: "0 10px 24px rgba(0,0,0,0.18)",
+          padding: "0 6px 2px",
+          background: "transparent",
+          border: "none",
+          boxShadow: "none",
         }}
       >
         <Image
@@ -53,7 +52,8 @@ export default function Sidebar() {
               borderRadius: "8px",
               color: "white",
               textDecoration: "none",
-              backgroundColor: "rgba(255,255,255,0.05)",
+              backgroundColor: "rgba(255,255,255,0.10)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06), 0 6px 14px rgba(7, 19, 41, 0.16)",
             }}
           >
             {item.label}
