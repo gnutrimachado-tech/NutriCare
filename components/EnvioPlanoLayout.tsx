@@ -455,7 +455,7 @@ export default function EnvioPlanoLayout({
       })
       const data = await res.json()
       if (res.ok) {
-        alert(data.message || '✅ Plano enviado com sucesso!\n\nO paciente receberá por email:\n✓ PDF Plano Alimentar\n✓ PDF Lista de Compras\n✓ PDF Protocolos/Orientações\n✓ Seus anexos e imagens')
+        alert(data.message || '✅ Plano enviado com sucesso!')
         setMessage('')
         setAttachments([])
       } else {
@@ -740,10 +740,8 @@ export default function EnvioPlanoLayout({
           <strong>O paciente receberá via email:</strong>
           <ul style={{ margin: '8px 0 0 0', paddingLeft: 20 }}>
             <li>✓ PDF do Plano Alimentar</li>
-            <li>✓ PDF da Lista de Compras ({shoppingDays} dias)</li>
+            {includeShoppingList && <li>✓ PDF da Lista de Compras ({shoppingDays} dias)</li>}
             {includeProtocols && <li>✓ PDFs de Protocolos/Orientações</li>}
-            <li>✓ Seus anexos e imagens</li>
-            <li>✓ Sua mensagem personalizada</li>
           </ul>
         </div>
 
