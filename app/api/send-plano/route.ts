@@ -221,11 +221,13 @@ async function createLayoutDoc(): Promise<LayoutDoc> {
 
   const [scriptFontBytes, logoBytes] = await Promise.all([
     readPublicAsset("fonts/GreatVibes-Regular.ttf"),
-    readPublicAsset("layouts/logo-nutricare-ref.png", "logo-nutricare.png"),
+    readPublicAsset("logo-nutricare-ref.png", "layouts/logo-nutricare-ref.png", "logo-nutricare.png"),
   ]);
 
   const bgResult = await readPublicAssetWithFormat(
+    "fundo-layout.jpg",
     "layouts/fundo-layout.jpg",
+    "fundo-layout.png",
     "layouts/fundo-layout.png",
     "nutri-coracao.png"
   );
@@ -598,11 +600,13 @@ async function preloadAssets(): Promise<{ logo: Buffer | null; background: Buffe
 
   const [fontScript, logo] = await Promise.all([
     readPublicAsset("fonts/GreatVibes-Regular.ttf"),
-    readPublicAsset("layouts/logo-nutricare-ref.png", "logo-nutricare.png"),
+    readPublicAsset("logo-nutricare-ref.png", "layouts/logo-nutricare-ref.png", "logo-nutricare.png"),
   ]);
 
   const bgResult = await readPublicAssetWithFormat(
+    "fundo-layout.jpg",
     "layouts/fundo-layout.jpg",
+    "fundo-layout.png",
     "layouts/fundo-layout.png",
     "nutri-coracao.png"
   );
