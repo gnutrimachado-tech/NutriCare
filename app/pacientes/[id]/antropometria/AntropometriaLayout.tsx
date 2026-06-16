@@ -991,9 +991,7 @@ export default function AntropometriaLayout({
           </div>
 
           {/* VO2 MAX — Jack Daniels */}
-          <div style={{ flex: 1, display: 'flex' }}>
-            <VO2MaxJackDaniels sexoPaciente={sexoPaciente} pacienteId={pacienteId} />
-          </div>
+          <VO2MaxJackDaniels sexoPaciente={sexoPaciente} pacienteId={pacienteId} />
         </div>
       </div>
     </div>
@@ -1069,7 +1067,7 @@ function VO2MaxJackDaniels({
   const cls = vo2max !== null ? classifyVdot(vo2max) : null;
 
   return (
-    <div style={{ ...resultCardStyle, ...metricPairCardStyle, margin: 0, flex: 1 }}>
+    <div style={{ ...resultCardStyle, ...metricPairCardStyle, margin: 0 }}>
       <div style={resultHeaderStyle}>
         <div style={headerBlockStyle}>
           <div style={iconBubblePurple}>🏃</div>
