@@ -972,8 +972,6 @@ export default function AntropometriaLayout({
               </div>
             </div>
 
-            <div style={metricPairSpacerStyle} />
-
             <div style={vo2ResultRowStyle}>
               <div
                 style={{
@@ -1068,7 +1066,7 @@ function VO2MaxJackDaniels({
 
   return (
     <div style={{ ...resultCardStyle, ...metricPairCardStyle, margin: 0 }}>
-      <div style={resultHeaderStyle}>
+      <div style={{ ...resultHeaderStyle, alignItems: 'center' }}>
         <div style={headerBlockStyle}>
           <div style={iconBubblePurple}>🏃</div>
           <div>
@@ -1078,30 +1076,29 @@ function VO2MaxJackDaniels({
             </p>
           </div>
         </div>
-      </div>
-
-      <div style={vo2GridStyle}>
-        <div>
-          <label style={vo2LabelStyle}>Distância (metros)</label>
-          <input
-            type="text"
-            inputMode="decimal"
-            placeholder="Ex: 5000"
-            value={distancia}
-            onChange={(e) => setDistancia(normalizeDecimalInput(e.target.value))}
-            style={smallInputStyle}
-          />
-        </div>
-        <div>
-          <label style={vo2LabelStyle}>Tempo (minutos)</label>
-          <input
-            type="text"
-            inputMode="decimal"
-            placeholder="Ex: 25"
-            value={tempo}
-            onChange={(e) => setTempo(normalizeDecimalInput(e.target.value))}
-            style={smallInputStyle}
-          />
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexShrink: 0 }}>
+          <div>
+            <label style={vo2LabelStyle}>Distância (metros)</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder="Ex: 5000"
+              value={distancia}
+              onChange={(e) => setDistancia(normalizeDecimalInput(e.target.value))}
+              style={smallInputStyle}
+            />
+          </div>
+          <div>
+            <label style={vo2LabelStyle}>Tempo (minutos)</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder="Ex: 25"
+              value={tempo}
+              onChange={(e) => setTempo(normalizeDecimalInput(e.target.value))}
+              style={smallInputStyle}
+            />
+          </div>
         </div>
       </div>
 
