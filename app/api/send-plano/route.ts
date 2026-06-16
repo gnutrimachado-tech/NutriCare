@@ -1140,9 +1140,10 @@ export async function POST(request: Request) {
         message: `Plano enviado para ${paciente.email} com sucesso! Os PDFs seguem anexados para download.`,
       });
     } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
       console.error("Erro ao enviar email:", error);
       return NextResponse.json(
-        { error: "Falha ao enviar o email. Verifique SMTP_USER, SMTP_PASS e a instalação do nodemailer." },
+        { error: `Falha ao enviar o email: ${errMsg}` },
         { status: 500 }
       );
     }
