@@ -68,6 +68,33 @@ let cachedTransporter:
   | { key: string; transporter: { sendMail: (options: Record<string, unknown>) => Promise<unknown> } }
   | null = null;
 
+async function readPublicAssetWithFormat(
+  ...candidates: string[]
+): Promise<{ data: Buffer; isJpeg: boolean } | null> {
+  for (const relativePath of candidates) {
+    if (assetCache.has(relativePath)) {
+      const cached = assetCache.get(relativePath);
+      if (cached) return {
+        data: cached,
+        isJpeg: relativePath.endsWith(".jpg") || relativePath.endsWith(".jpeg"),
+      };
+      continue;
+    }
+    const absolutePath = path.join(process.cwd(), "public", relativePath);
+    try {
+      const buffer = await fs.readFile(absolutePath);
+      assetCache.set(relativePath, buffer);
+      return {
+        data: buffer,
+        isJpeg: relativePath.endsWith(".jpg") || relativePath.endsWith(".jpeg"),
+      };
+    } catch {
+      assetCache.set(relativePath, null);
+    }
+  }
+  return null;
+}
+
 function shortFoodName(fullName: string): string {
   if (!fullName) return fullName;
   const parts = fullName.split(",").map((p) => p.trim());
@@ -192,15 +219,24 @@ async function createLayoutDoc(): Promise<LayoutDoc> {
   const fontRegular = await pdf.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-  const [scriptFontBytes, logoBytes, backgroundBytes] = await Promise.all([
+  const [scriptFontBytes, logoBytes] = await Promise.all([
     readPublicAsset("fonts/GreatVibes-Regular.ttf"),
     readPublicAsset("layouts/logo-nutricare-ref.png", "logo-nutricare.png"),
-    readPublicAsset("layouts/fundo-layout.png", "nutri-coracao.png"),
   ]);
+
+  const bgResult = await readPublicAssetWithFormat(
+    "layouts/fundo-layout.jpg",
+    "layouts/fundo-layout.png",
+    "nutri-coracao.png"
+  );
 
   const fontScript = scriptFontBytes ? await pdf.embedFont(scriptFontBytes) : null;
   const logo = logoBytes ? await pdf.embedPng(logoBytes) : null;
-  const background = backgroundBytes ? await pdf.embedPng(backgroundBytes) : null;
+  const background = bgResult
+    ? bgResult.isJpeg
+      ? await pdf.embedJpg(bgResult.data)
+      : await pdf.embedPng(bgResult.data)
+    : null;
 
   return { pdf, fontRegular, fontBold, fontScript, logo, background };
 }
@@ -554,20 +590,29 @@ async function buildPlanoPdf(params: {
   return Buffer.from(await doc.pdf.save());
 }
 
-// ==================== FUNÇÃO OTIMIZADA: Pré-carregar assets uma vez ====================
 // Cache global para assets compartilhados entre chamadas
-let cachedAssets: { logo: Buffer | null; background: Buffer | null; fontScript: Buffer | null } | null = null;
+let cachedAssets: { logo: Buffer | null; background: Buffer | null; fontScript: Buffer | null; backgroundIsJpeg: boolean } | null = null;
 
-async function preloadAssets(): Promise<{ logo: Buffer | null; background: Buffer | null; fontScript: Buffer | null }> {
+async function preloadAssets(): Promise<{ logo: Buffer | null; background: Buffer | null; fontScript: Buffer | null; backgroundIsJpeg: boolean }> {
   if (cachedAssets) return cachedAssets;
-  
-  const [fontScript, logo, background] = await Promise.all([
+
+  const [fontScript, logo] = await Promise.all([
     readPublicAsset("fonts/GreatVibes-Regular.ttf"),
     readPublicAsset("layouts/logo-nutricare-ref.png", "logo-nutricare.png"),
-    readPublicAsset("layouts/fundo-layout.png", "nutri-coracao.png"),
   ]);
-  
-  cachedAssets = { fontScript, logo, background };
+
+  const bgResult = await readPublicAssetWithFormat(
+    "layouts/fundo-layout.jpg",
+    "layouts/fundo-layout.png",
+    "nutri-coracao.png"
+  );
+
+  cachedAssets = {
+    fontScript,
+    logo,
+    background: bgResult ? bgResult.data : null,
+    backgroundIsJpeg: bgResult ? bgResult.isJpeg : false,
+  };
   return cachedAssets;
 }
 
@@ -579,12 +624,15 @@ async function createLayoutDocOptimized(): Promise<LayoutDoc> {
   const fontRegular = await pdf.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-  // Usar assets pré-carregados
   const assets = await preloadAssets();
-  
+
   const fontScript = assets.fontScript ? await pdf.embedFont(assets.fontScript) : null;
   const logo = assets.logo ? await pdf.embedPng(assets.logo) : null;
-  const background = assets.background ? await pdf.embedPng(assets.background) : null;
+  const background = assets.background
+    ? assets.backgroundIsJpeg
+      ? await pdf.embedJpg(assets.background)
+      : await pdf.embedPng(assets.background)
+    : null;
 
   return { pdf, fontRegular, fontBold, fontScript, logo, background };
 }
@@ -905,6 +953,11 @@ async function getTransporter(config: {
     port: config.smtpPort,
     secure: config.smtpPort === 465,
     auth: { user: config.smtpUser, pass: config.smtpPass },
+    pool: true,
+    maxConnections: 3,
+    connectionTimeout: 15000,
+    socketTimeout: 30000,
+    greetingTimeout: 10000,
   });
 
   cachedTransporter = { key, transporter };
