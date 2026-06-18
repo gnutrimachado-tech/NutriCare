@@ -1121,8 +1121,38 @@ export async function POST(request: Request) {
     try {
       const resendApiKey = process.env.RESEND_API_KEY;
 
-      if (resendApiKey) {
-        // ── Resend API (HTTPS porta 443 — nunca bloqueada por roteadores/ISP) ──
+      const brevoApiKey = process.env.BREVO_API_KEY;
+
+      if (brevoApiKey) {
+        // ── Brevo API (HTTPS porta 443 — envia para qualquer destinatário sem domínio próprio) ──
+        const brevoFromEmail = process.env.BREVO_FROM_EMAIL || smtpUser || "";
+        const brevoFromName = process.env.BREVO_FROM_NAME || "NutriCare";
+        const body = {
+          sender: { name: brevoFromName, email: brevoFromEmail },
+          to: [{ email: paciente.email, name: paciente.nome || nomePaciente }],
+          subject: `Plano Alimentar — ${nomePaciente}`,
+          htmlContent: html,
+          attachment: mailAttachments.map((a) => ({
+            name: a.filename,
+            content: a.content.toString("base64"),
+          })),
+        };
+
+        const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+          method: "POST",
+          headers: {
+            "api-key": brevoApiKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ message: res.statusText }));
+          throw new Error((err as { message?: string }).message || `Brevo HTTP ${res.status}`);
+        }
+      } else if (resendApiKey) {
+        // ── Resend API (HTTPS porta 443 — requer domínio verificado para enviar a terceiros) ──
         const resendFrom = process.env.RESEND_FROM || "NutriCare <onboarding@resend.dev>";
         const body = {
           from: resendFrom,
@@ -1149,7 +1179,7 @@ export async function POST(request: Request) {
           throw new Error((err as { message?: string }).message || `Resend HTTP ${res.status}`);
         }
       } else {
-        // ── SMTP (nodemailer) — fallback quando RESEND_API_KEY não estiver definida ──
+        // ── SMTP (nodemailer) — fallback quando nenhuma API key estiver definida ──
         const transporter = await getTransporter({ smtpHost, smtpPort, smtpUser, smtpPass });
         await transporter.sendMail({
           from: `"NutriCare" <${smtpUser}>`,
