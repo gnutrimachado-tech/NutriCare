@@ -55,28 +55,6 @@ type BasePageOptions = {
   showMetrics?: boolean;
 };
 
-type MailAttachment = {
-  filename: string;
-  content: Buffer;
-  contentType: string;
-};
-
-type SmtpConfig = {
-  smtpHost: string;
-  smtpPort: number;
-  smtpUser: string;
-  smtpPass: string;
-};
-
-type SendMailOptions = {
-  from: string;
-  to: string;
-  subject: string;
-  html: string;
-  text: string;
-  attachments: MailAttachment[];
-};
-
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
 const PAGE_MARGIN_X = 28;
@@ -86,6 +64,9 @@ const FOOTER_LOGO_OPACITY = 0.15; // 85% de transparência
 const CRN_LABEL = process.env.NUTRICARE_CRN || "CRN:";
 
 const assetCache = new Map<string, Buffer | null>();
+let cachedTransporter:
+  | { key: string; transporter: { sendMail: (options: Record<string, unknown>) => Promise<unknown> } }
+  | null = null;
 
 async function readPublicAssetWithFormat(
   ...candidates: string[]
@@ -93,17 +74,13 @@ async function readPublicAssetWithFormat(
   for (const relativePath of candidates) {
     if (assetCache.has(relativePath)) {
       const cached = assetCache.get(relativePath);
-      if (cached) {
-        return {
-          data: cached,
-          isJpeg: relativePath.endsWith(".jpg") || relativePath.endsWith(".jpeg"),
-        };
-      }
+      if (cached) return {
+        data: cached,
+        isJpeg: relativePath.endsWith(".jpg") || relativePath.endsWith(".jpeg"),
+      };
       continue;
     }
-
     const absolutePath = path.join(process.cwd(), "public", relativePath);
-
     try {
       const buffer = await fs.readFile(absolutePath);
       assetCache.set(relativePath, buffer);
@@ -115,7 +92,6 @@ async function readPublicAssetWithFormat(
       assetCache.set(relativePath, null);
     }
   }
-
   return null;
 }
 
@@ -123,12 +99,10 @@ function shortFoodName(fullName: string): string {
   if (!fullName) return fullName;
   const parts = fullName.split(",").map((p) => p.trim());
   if (parts.length <= 1) return fullName;
-
   const generic = ["carne", "peixe", "leite", "queijo", "pão", "óleo", "farinha"];
   if (generic.includes(parts[0].toLowerCase()) && parts.length >= 3) {
     return parts[2].charAt(0).toUpperCase() + parts[2].slice(1);
   }
-
   return parts[0];
 }
 
@@ -186,17 +160,14 @@ function wrapText(text: string, maxWidth: number, font: PDFFont, size: number) {
 
   for (const paragraph of paragraphs) {
     const words = paragraph.split(/\s+/).filter(Boolean);
-
     if (words.length === 0) {
       lines.push("");
       continue;
     }
 
     let currentLine = "";
-
     for (const word of words) {
       const candidate = currentLine ? `${currentLine} ${word}` : word;
-
       if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
         currentLine = candidate;
       } else {
@@ -204,7 +175,6 @@ function wrapText(text: string, maxWidth: number, font: PDFFont, size: number) {
         currentLine = word;
       }
     }
-
     if (currentLine) lines.push(currentLine);
   }
 
@@ -219,7 +189,6 @@ function fitText(text: string, maxWidth: number, font: PDFFont, size: number) {
   while (current.length > 1 && font.widthOfTextAtSize(`${current}…`, size) > maxWidth) {
     current = current.slice(0, -1);
   }
-
   return `${current.trimEnd()}…`;
 }
 
@@ -232,7 +201,6 @@ async function readPublicAsset(...relativeCandidates: string[]) {
     }
 
     const absolutePath = path.join(process.cwd(), "public", relativePath);
-
     try {
       const buffer = await fs.readFile(absolutePath);
       assetCache.set(relativePath, buffer);
@@ -241,7 +209,6 @@ async function readPublicAsset(...relativeCandidates: string[]) {
       assetCache.set(relativePath, null);
     }
   }
-
   return null;
 }
 
@@ -310,7 +277,6 @@ function drawHeader(doc: LayoutDoc, page: PDFPage, options: BasePageOptions) {
 
   const infoX = PAGE_MARGIN_X + 102;
   const patientName = fitText(options.nomePaciente || "Paciente", 230, doc.fontBold, 16);
-
   page.drawText(patientName, {
     x: infoX,
     y: HEADER_TOP - 28,
@@ -336,7 +302,6 @@ function drawHeader(doc: LayoutDoc, page: PDFPage, options: BasePageOptions) {
 
   if (options.showMetrics) {
     const rightX = PAGE_WIDTH - PAGE_MARGIN_X - 120;
-
     const metrics = [
       `massa muscular: ${formatMetric(options.massaMuscular, "kg")}`,
       `massa adiposa: ${formatMetric(options.massaAdiposa, "kg")}`,
@@ -362,7 +327,6 @@ function drawHeader(doc: LayoutDoc, page: PDFPage, options: BasePageOptions) {
   });
 
   const titleWidth = doc.fontBold.widthOfTextAtSize(options.title, 17);
-
   page.drawText(options.title, {
     x: (PAGE_WIDTH - titleWidth) / 2,
     y: HEADER_TOP - 74,
@@ -411,7 +375,6 @@ function drawFooter(doc: LayoutDoc, page: PDFPage) {
   if (doc.logo) {
     const targetWidth = 42;
     const targetHeight = (doc.logo.height / doc.logo.width) * targetWidth;
-
     page.drawImage(doc.logo, {
       x: PAGE_WIDTH - PAGE_MARGIN_X - targetWidth,
       y: footerY - 2,
@@ -432,27 +395,17 @@ function addBasePage(doc: LayoutDoc, options: BasePageOptions) {
 function getMealLines(meal: EnvioMeal | undefined) {
   const mainLines = (meal?.foods || [])
     .filter((food) => food?.name)
-    .map((food) =>
-      `${food.name} — ${String(food.qty ?? "")} ${String(food.unit ?? "").trim()}`
-        .replace(/\s+/g, " ")
-        .trim()
-    );
+    .map((food) => `${food.name} — ${String(food.qty ?? "")} ${String(food.unit ?? "").trim()}`.replace(/\s+/g, " ").trim());
 
   const subLines: string[] = [];
-
   Object.entries(meal?.subs || {}).forEach(([foodId, subs]) => {
     const validSubs = (subs || []).filter((sub) => sub?.name);
     if (validSubs.length === 0) return;
 
     const mainFood = (meal?.foods || []).find((food) => food.id === foodId);
     if (mainFood?.name) subLines.push(`Para ${shortFoodName(mainFood.name)}:`);
-
     validSubs.forEach((sub) => {
-      subLines.push(
-        `${sub.name} — ${String(sub.qty ?? "")} ${String(sub.unit ?? "").trim()}`
-          .replace(/\s+/g, " ")
-          .trim()
-      );
+      subLines.push(`${sub.name} — ${String(sub.qty ?? "")} ${String(sub.unit ?? "").trim()}`.replace(/\s+/g, " ").trim());
     });
   });
 
@@ -478,7 +431,6 @@ function drawTextBlock(params: {
 
   for (const line of textLines) {
     const wrapped = wrapText(line, width, font, fontSize);
-
     for (const subLine of wrapped) {
       if (consumed + lineHeight > maxHeight) {
         page.drawText("…", {
@@ -490,15 +442,7 @@ function drawTextBlock(params: {
         });
         return;
       }
-
-      page.drawText(subLine || " ", {
-        x,
-        y: cursorY,
-        size: fontSize,
-        font,
-        color,
-      });
-
+      page.drawText(subLine || " ", { x, y: cursorY, size: fontSize, font, color });
       cursorY -= lineHeight;
       consumed += lineHeight;
     }
@@ -517,7 +461,6 @@ function drawMealBox(doc: LayoutDoc, page: PDFPage, x: number, y: number, width:
   });
 
   const headerY = y + height - 18;
-
   page.drawText(fitText(meal?.name || "nome da refeição", width - 86, doc.fontBold, 10), {
     x: x + 10,
     y: headerY,
@@ -652,12 +595,7 @@ async function buildPlanoPdf(params: {
 // Cache global para assets compartilhados entre chamadas
 let cachedAssets: { logo: Buffer | null; background: Buffer | null; fontScript: Buffer | null; backgroundIsJpeg: boolean } | null = null;
 
-async function preloadAssets(): Promise<{
-  logo: Buffer | null;
-  background: Buffer | null;
-  fontScript: Buffer | null;
-  backgroundIsJpeg: boolean;
-}> {
+async function preloadAssets(): Promise<{ logo: Buffer | null; background: Buffer | null; fontScript: Buffer | null; backgroundIsJpeg: boolean }> {
   if (cachedAssets) return cachedAssets;
 
   const [fontScript, logo] = await Promise.all([
@@ -679,7 +617,6 @@ async function preloadAssets(): Promise<{
     background: bgResult ? bgResult.data : null,
     backgroundIsJpeg: bgResult ? bgResult.isJpeg : false,
   };
-
   return cachedAssets;
 }
 
@@ -721,24 +658,25 @@ async function buildAllPdfsOptimized(params: {
   includeProtocols: boolean;
   protocols: Protocol[];
 }): Promise<{ planoPdf: Buffer; shoppingPdf: Buffer | null; protocolsPdf: Buffer | null }> {
+  // Pré-carregar assets UMA vez
   await preloadAssets();
-
+  
+  // Criar documentos para cada tipo de PDF
   const [planoDoc, shoppingDoc, protocolsDoc] = await Promise.all([
     createLayoutDocOptimized(),
     params.includeShoppingList ? createLayoutDocOptimized() : Promise.resolve(null),
     params.includeProtocols ? createLayoutDocOptimized() : Promise.resolve(null),
   ]);
 
+  // Gerar páginas do Plano Alimentar
   const chunks: EnvioMeal[][] = [];
   const meals = params.meals.length > 0 ? params.meals : [];
-
   for (let index = 0; index < Math.max(meals.length, 1); index += 6) {
     chunks.push(meals.slice(index, index + 6));
   }
 
   chunks.forEach((chunk) => {
     const page = planoDoc.pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-
     drawHeader(planoDoc, page, {
       title: "plano alimentar",
       nomePaciente: params.nomePaciente,
@@ -768,19 +706,17 @@ async function buildAllPdfsOptimized(params: {
         drawMealBox(planoDoc, page, x, y, boxWidth, boxHeight, meal);
       }
     }
-
     drawFooter(planoDoc, page);
   });
 
+  // Gerar páginas da Lista de Compras
   let shoppingPdf: Buffer | null = null;
-
   if (shoppingDoc && params.includeShoppingList) {
     const items = params.shoppingList.length > 0 ? params.shoppingList : [{ name: "Nenhum item disponível", displayQty: "—" }];
     const perPage = 24;
 
     for (let start = 0; start < items.length; start += perPage) {
       const page = shoppingDoc.pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-
       drawHeader(shoppingDoc, page, {
         title: "lista de compras",
         nomePaciente: params.nomePaciente,
@@ -790,23 +726,20 @@ async function buildAllPdfsOptimized(params: {
         alturaCm: params.alturaCm,
         showMetrics: false,
       });
-
       drawShoppingFrame(shoppingDoc, page, items.slice(start, start + perPage), params.shoppingDays);
       drawFooter(shoppingDoc, page);
     }
-
     shoppingPdf = Buffer.from(await shoppingDoc.pdf.save());
   }
 
+  // Gerar páginas de Orientações
   let protocolsPdf: Buffer | null = null;
-
   if (protocolsDoc && params.includeProtocols) {
     const protos = params.protocols.length > 0 ? params.protocols : [{ name: "Sem orientações", content: "" }];
     const perPage = 7;
 
     for (let start = 0; start < protos.length; start += perPage) {
       const page = protocolsDoc.pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-
       drawHeader(protocolsDoc, page, {
         title: "orientações",
         nomePaciente: params.nomePaciente,
@@ -828,10 +761,8 @@ async function buildAllPdfsOptimized(params: {
         drawProtocolBox(protocolsDoc, page, boxX, currentY, boxWidth, boxHeight, protocol);
         currentY -= boxHeight + gap;
       });
-
       drawFooter(protocolsDoc, page);
     }
-
     protocolsPdf = Buffer.from(await protocolsDoc.pdf.save());
   }
 
@@ -1011,83 +942,28 @@ async function buildProtocolsPdf(params: {
   return Buffer.from(await doc.pdf.save());
 }
 
-async function createVerifiedTransporter(config: SmtpConfig) {
-  const nodemailer = await import("nodemailer");
+async function getTransporter(config: {
+  smtpHost: string;
+  smtpPort: number;
+  smtpUser: string;
+  smtpPass: string;
+}) {
+  const key = `${config.smtpHost}:${config.smtpPort}:${config.smtpUser}`;
+  if (cachedTransporter?.key === key) return cachedTransporter.transporter;
 
+  const nodemailer = await import("nodemailer");
   const transporter = nodemailer.createTransport({
     host: config.smtpHost,
     port: config.smtpPort,
     secure: config.smtpPort === 465,
-    requireTLS: config.smtpPort === 587,
-    auth: {
-      user: config.smtpUser,
-      pass: config.smtpPass,
-    },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 20000,
-    tls: {
-      servername: config.smtpHost,
-      minVersion: "TLSv1.2",
-    },
+    auth: { user: config.smtpUser, pass: config.smtpPass },
+    connectionTimeout: 8000,
+    socketTimeout: 10000,
+    greetingTimeout: 8000,
   });
 
-  await transporter.verify();
+  cachedTransporter = { key, transporter };
   return transporter;
-}
-
-async function sendMailWithPortFallback(config: SmtpConfig, options: SendMailOptions) {
-  const portsToTry = Array.from(new Set([config.smtpPort, config.smtpPort === 465 ? 587 : 465]));
-  let lastError: unknown = null;
-
-  for (const port of portsToTry) {
-    try {
-      console.log(`[send-plano] tentando envio SMTP em ${config.smtpHost}:${port}`);
-
-      const transporter = await createVerifiedTransporter({
-        ...config,
-        smtpPort: port,
-      });
-
-      const info = await transporter.sendMail({
-        from: options.from,
-        to: options.to,
-        subject: options.subject,
-        html: options.html,
-        text: options.text,
-        attachments: options.attachments.map((item) => ({
-          filename: item.filename,
-          content: item.content,
-          contentType: item.contentType,
-        })),
-      });
-
-      console.log(`[send-plano] envio concluído em ${config.smtpHost}:${port}`, {
-        messageId: info.messageId,
-        accepted: info.accepted,
-        rejected: info.rejected,
-        response: info.response,
-      });
-
-      return info;
-    } catch (error: any) {
-      lastError = error;
-
-      console.error(`[send-plano] falha no SMTP ${config.smtpHost}:${port}`, {
-        message: error?.message,
-        code: error?.code,
-        command: error?.command,
-        errno: error?.errno,
-        syscall: error?.syscall,
-        response: error?.response,
-        responseCode: error?.responseCode,
-      });
-    }
-  }
-
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("Falha ao enviar email em todas as portas SMTP testadas.");
 }
 
 export async function POST(request: Request) {
@@ -1145,11 +1021,12 @@ export async function POST(request: Request) {
 
     const emailSummaryItems = [
       "PDF do plano alimentar com o novo layout",
-      ...(includeShoppingList ? [`PDF da lista de compras (${shoppingDays} dias)`] : []),
-      ...(includeProtocols ? ["PDF das orientações"] : []),
+      ...(includeShoppingList && shoppingList.length > 0 ? [`PDF da lista de compras (${shoppingDays} dias)`] : []),
+      ...(includeProtocols && protocols.length > 0 ? ["PDF das orientações"] : []),
       ...(uploadedFiles.length > 0 ? ["arquivos complementares anexados"] : []),
     ];
 
+    // Usar função otimizada que pré-carrega assets uma única vez
     const { planoPdf, shoppingPdf, protocolsPdf } = await buildAllPdfsOptimized({
       nomePaciente: paciente.nome || nomePaciente,
       dataNascimento,
@@ -1167,7 +1044,7 @@ export async function POST(request: Request) {
       protocols,
     });
 
-    const mailAttachments: MailAttachment[] = [
+    const mailAttachments: Array<{ filename: string; content: Buffer; contentType: string }> = [
       {
         filename: `${sanitizeFilename(nomePaciente || paciente.nome || "paciente")}-plano-alimentar.pdf`,
         content: planoPdf,
@@ -1225,7 +1102,7 @@ export async function POST(request: Request) {
 
     <div style="padding:24px 28px 12px;">
       <div style="font-size:14px;line-height:1.8;color:#334155;">
-        Os arquivos do plano alimentar seguem anexados em PDF para o paciente baixar diretamente pelo e-mail.
+        Os layouts do plano alimentar, da lista de compras e das orientações seguem anexados em PDF para o paciente baixar diretamente pelo e-mail.
       </div>
     </div>
 
@@ -1241,54 +1118,54 @@ export async function POST(request: Request) {
 </body>
 </html>`;
 
-    const text = [
-      `Olá, ${paciente.nome || nomePaciente}.`,
-      "",
-      "Segue em anexo o seu plano alimentar em PDF para download.",
-      shoppingPdf ? "A lista de compras também segue anexada em PDF." : "",
-      protocolsPdf ? "As orientações também seguem anexadas em PDF." : "",
-      uploadedFiles.length > 0 ? "Arquivos complementares também foram anexados." : "",
-      message ? "" : "",
-      message ? "Mensagem do nutricionista:" : "",
-      message ? message : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
-
     try {
-      await sendMailWithPortFallback(
-        {
-          smtpHost,
-          smtpPort,
-          smtpUser,
-          smtpPass,
-        },
-        {
+      const resendApiKey = process.env.RESEND_API_KEY;
+
+      if (resendApiKey) {
+        // ── Resend API (HTTPS porta 443 — nunca bloqueada por roteadores/ISP) ──
+        const resendFrom = process.env.RESEND_FROM || "NutriCare <onboarding@resend.dev>";
+        const body = {
+          from: resendFrom,
+          to: [paciente.email],
+          subject: `Plano Alimentar — ${nomePaciente}`,
+          html,
+          attachments: mailAttachments.map((a) => ({
+            filename: a.filename,
+            content: a.content.toString("base64"),
+          })),
+        };
+
+        const res = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${resendApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ message: res.statusText }));
+          throw new Error((err as { message?: string }).message || `Resend HTTP ${res.status}`);
+        }
+      } else {
+        // ── SMTP (nodemailer) — fallback quando RESEND_API_KEY não estiver definida ──
+        const transporter = await getTransporter({ smtpHost, smtpPort, smtpUser, smtpPass });
+        await transporter.sendMail({
           from: `"NutriCare" <${smtpUser}>`,
           to: paciente.email,
           subject: `Plano Alimentar — ${nomePaciente}`,
           html,
-          text,
           attachments: mailAttachments,
-        }
-      );
+        });
+      }
 
       return NextResponse.json({
-        message: `Plano enviado para ${paciente.email} com sucesso! Os PDFs do plano alimentar${shoppingPdf ? ", da lista de compras" : ""}${protocolsPdf ? " e das orientações" : ""} seguem anexados para download.`,
+        message: `Plano enviado para ${paciente.email} com sucesso! Os PDFs seguem anexados para download.`,
       });
-    } catch (error: any) {
-      const errMsg = error?.message || "erro desconhecido";
-
-      console.error("Erro final ao enviar email:", {
-        message: error?.message,
-        code: error?.code,
-        command: error?.command,
-        errno: error?.errno,
-        syscall: error?.syscall,
-        response: error?.response,
-        responseCode: error?.responseCode,
-      });
-
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error("Erro ao enviar email:", error);
       return NextResponse.json(
         { error: `Falha ao enviar o email: ${errMsg}` },
         { status: 500 }
