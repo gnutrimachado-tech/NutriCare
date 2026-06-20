@@ -751,37 +751,64 @@ async function buildPlanoPdf(params: {
     chunks.push(meals.slice(index, index + 6));
   }
 
-  chunks.forEach((chunk) => {
-    const page = addBasePage(doc, {
-      title: "plano alimentar",
-      nomePaciente: params.nomePaciente,
-      dataNascimento: params.dataNascimento,
-      sexoPaciente: params.sexoPaciente,
-      pesoKg: params.pesoKg,
-      alturaCm: params.alturaCm,
-      massaMuscular: params.massaMuscular,
-      massaAdiposa: params.massaAdiposa,
-      percGordura: params.percGordura,
-      showMetrics: true,
-    });
-
+  {
     const gridX = PAGE_MARGIN_X - 14;
-    const gridBottomY = CONTENT_BOTTOM;
     const colGap = 11;
     const rowGap = 14;
     const boxWidth = 276;
-    const boxHeight = 182;
+    const colWidth = (boxWidth - 26 - 14) / 2;
+    const MEAL_OVERHEAD = 66;
+    const MEAL_BOTTOM_PAD = 10;
+    const MEAL_LINE_H = 8 + 3.5;
+    const MIN_MEAL_H = 182;
 
-    for (let row = 0; row < 3; row++) {
-      for (let col = 0; col < 2; col++) {
-        const slotIndex = row * 2 + col;
-        const meal = chunk[slotIndex];
-        const x = gridX + col * (boxWidth + colGap);
-        const y = gridBottomY + (2 - row) * (boxHeight + rowGap);
-        drawMealBox(doc, page, x, y, boxWidth, boxHeight, meal);
-      }
+    const allMeals = chunks.flat();
+    const rows: Array<[EnvioMeal | undefined, EnvioMeal | undefined]> = [];
+    for (let i = 0; i < Math.max(allMeals.length, 2); i += 2) {
+      rows.push([allMeals[i], allMeals[i + 1]]);
     }
-  });
+
+    let mealPage: PDFPage | null = null;
+    let mealPageY = 0;
+
+    const addPage = () => {
+      mealPage = addBasePage(doc, {
+        title: "plano alimentar",
+        nomePaciente: params.nomePaciente,
+        dataNascimento: params.dataNascimento,
+        sexoPaciente: params.sexoPaciente,
+        pesoKg: params.pesoKg,
+        alturaCm: params.alturaCm,
+        massaMuscular: params.massaMuscular,
+        massaAdiposa: params.massaAdiposa,
+        percGordura: params.percGordura,
+        showMetrics: true,
+      });
+      mealPageY = Math.round(CONTENT_TOP);
+    };
+
+    addPage();
+
+    for (const [mealA, mealB] of rows) {
+      const calcH = (m: EnvioMeal | undefined) => {
+        const { mainLines, subLines } = getMealLinesStructured(m);
+        const mainCount = calcMealColLines(mainLines.length > 0 ? mainLines : ["—"], doc.fontBold, colWidth);
+        const subLineTexts = subLines.map(s => s.text);
+        const subCount = calcMealColLines(subLineTexts.length > 0 ? subLineTexts : ["—"], doc.fontBold, colWidth);
+        return Math.max(MIN_MEAL_H, MEAL_OVERHEAD + Math.max(mainCount, subCount) * MEAL_LINE_H + MEAL_BOTTOM_PAD);
+      };
+      const rowHeight = Math.max(calcH(mealA), calcH(mealB));
+
+      if (mealPage && mealPageY - rowHeight < CONTENT_BOTTOM + rowGap) {
+        addPage();
+      }
+
+      const y = mealPageY - rowHeight;
+      drawMealBox(doc, mealPage!, gridX, y, boxWidth, rowHeight, mealA);
+      drawMealBox(doc, mealPage!, gridX + boxWidth + colGap, y, boxWidth, rowHeight, mealB);
+      mealPageY -= rowHeight + rowGap;
+    }
+  }
 
   return Buffer.from(await doc.pdf.save());
 }
@@ -869,39 +896,67 @@ async function buildAllPdfsOptimized(params: {
     chunks.push(meals.slice(index, index + 6));
   }
 
-  chunks.forEach((chunk) => {
-    const page = planoDoc.pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-    drawHeader(planoDoc, page, {
-      title: "plano alimentar",
-      nomePaciente: params.nomePaciente,
-      dataNascimento: params.dataNascimento,
-      sexoPaciente: params.sexoPaciente,
-      pesoKg: params.pesoKg,
-      alturaCm: params.alturaCm,
-      massaMuscular: params.massaMuscular,
-      massaAdiposa: params.massaAdiposa,
-      percGordura: params.percGordura,
-      showMetrics: true,
-    });
-
+  {
     const gridX = PAGE_MARGIN_X - 14;
-    const gridBottomY = CONTENT_BOTTOM;
     const colGap = 11;
     const rowGap = 14;
     const boxWidth = 276;
-    const boxHeight = 182;
+    const colWidth = (boxWidth - 26 - 14) / 2; // matches drawMealBox inner colWidth
+    const MEAL_OVERHEAD = 66;
+    const MEAL_BOTTOM_PAD = 10;
+    const MEAL_LINE_H = 8 + 3.5;
+    const MIN_MEAL_H = 182;
 
-    for (let row = 0; row < 3; row++) {
-      for (let col = 0; col < 2; col++) {
-        const slotIndex = row * 2 + col;
-        const meal = chunk[slotIndex];
-        const x = gridX + col * (boxWidth + colGap);
-        const y = gridBottomY + (2 - row) * (boxHeight + rowGap);
-        drawMealBox(planoDoc, page, x, y, boxWidth, boxHeight, meal);
-      }
+    // Build list of all meals as rows of 2
+    const allMeals = chunks.flat();
+    const rows: Array<[EnvioMeal | undefined, EnvioMeal | undefined]> = [];
+    for (let i = 0; i < Math.max(allMeals.length, 2); i += 2) {
+      rows.push([allMeals[i], allMeals[i + 1]]);
     }
-    drawFooter(planoDoc, page);
-  });
+
+    let mealPage: PDFPage | null = null;
+    let mealPageY = 0;
+
+    const addMealPage = () => {
+      mealPage = planoDoc.pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+      drawHeader(planoDoc, mealPage, {
+        title: "plano alimentar",
+        nomePaciente: params.nomePaciente,
+        dataNascimento: params.dataNascimento,
+        sexoPaciente: params.sexoPaciente,
+        pesoKg: params.pesoKg,
+        alturaCm: params.alturaCm,
+        massaMuscular: params.massaMuscular,
+        massaAdiposa: params.massaAdiposa,
+        percGordura: params.percGordura,
+        showMetrics: true,
+      });
+      drawFooter(planoDoc, mealPage);
+      mealPageY = Math.round(CONTENT_TOP);
+    };
+
+    addMealPage();
+
+    for (const [mealA, mealB] of rows) {
+      const calcH = (m: EnvioMeal | undefined) => {
+        const { mainLines, subLines } = getMealLinesStructured(m);
+        const mainCount = calcMealColLines(mainLines.length > 0 ? mainLines : ["—"], planoDoc.fontBold, colWidth);
+        const subLineTexts = subLines.map(s => s.text);
+        const subCount = calcMealColLines(subLineTexts.length > 0 ? subLineTexts : ["—"], planoDoc.fontBold, colWidth);
+        return Math.max(MIN_MEAL_H, MEAL_OVERHEAD + Math.max(mainCount, subCount) * MEAL_LINE_H + MEAL_BOTTOM_PAD);
+      };
+      const rowHeight = Math.max(calcH(mealA), calcH(mealB));
+
+      if (mealPage && mealPageY - rowHeight < CONTENT_BOTTOM + rowGap) {
+        addMealPage();
+      }
+
+      const y = mealPageY - rowHeight;
+      drawMealBox(planoDoc, mealPage!, gridX, y, boxWidth, rowHeight, mealA);
+      drawMealBox(planoDoc, mealPage!, gridX + boxWidth + colGap, y, boxWidth, rowHeight, mealB);
+      mealPageY -= rowHeight + rowGap;
+    }
+  }
 
   // Gerar páginas da Lista de Compras
   let shoppingPdf: Buffer | null = null;
@@ -934,9 +989,11 @@ async function buildAllPdfsOptimized(params: {
     const protoBoxHeight = 82;
     const protoGap = 14;
 
-    for (let start = 0; start < protos.length; start += protoPerPage) {
-      const page = protocolsDoc.pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-      drawHeader(protocolsDoc, page, {
+    {
+      const protoBoxX = PAGE_MARGIN_X + 4;
+      const protoBoxWidth = PAGE_WIDTH - (PAGE_MARGIN_X + 4) * 2;
+      let protoPage = protocolsDoc.pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+      drawHeader(protocolsDoc, protoPage, {
         title: "orientações",
         nomePaciente: params.nomePaciente,
         dataNascimento: params.dataNascimento,
@@ -945,17 +1002,28 @@ async function buildAllPdfsOptimized(params: {
         alturaCm: params.alturaCm,
         showMetrics: false,
       });
+      drawFooter(protocolsDoc, protoPage);
+      let protoCurrentY = Math.round(CONTENT_TOP);
 
-      const slice = protos.slice(start, start + protoPerPage);
-      const protoBoxX = PAGE_MARGIN_X + 4;
-      const protoBoxWidth = PAGE_WIDTH - (PAGE_MARGIN_X + 4) * 2;
-      let currentY = Math.round(CONTENT_TOP) - protoBoxHeight;
-
-      slice.forEach((protocol) => {
-        drawProtocolBox(protocolsDoc, page, protoBoxX, currentY, protoBoxWidth, protoBoxHeight, protocol);
-        currentY -= protoBoxHeight + protoGap;
-      });
-      drawFooter(protocolsDoc, page);
+      for (const protocol of protos) {
+        const boxHeight = calcProtocolBoxHeight(protocol.content, protocolsDoc.fontRegular, protoBoxWidth);
+        if (protoCurrentY - boxHeight < CONTENT_BOTTOM + protoGap) {
+          protoPage = protocolsDoc.pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+          drawHeader(protocolsDoc, protoPage, {
+            title: "orientações",
+            nomePaciente: params.nomePaciente,
+            dataNascimento: params.dataNascimento,
+            sexoPaciente: params.sexoPaciente,
+            pesoKg: params.pesoKg,
+            alturaCm: params.alturaCm,
+            showMetrics: false,
+          });
+          drawFooter(protocolsDoc, protoPage);
+          protoCurrentY = Math.round(CONTENT_TOP);
+        }
+        drawProtocolBox(protocolsDoc, protoPage, protoBoxX, protoCurrentY - boxHeight, protoBoxWidth, boxHeight, protocol);
+        protoCurrentY -= boxHeight + protoGap;
+      }
     }
     protocolsPdf = Buffer.from(await protocolsDoc.pdf.save());
   }
@@ -1019,11 +1087,13 @@ function drawShoppingFrame(doc: LayoutDoc, page: PDFPage, items: ShoppingItem[],
     }
 
     const maxLabelWidth = boxWidth - 140;
-    const itemLabel = fitText(simpleName, maxLabelWidth, doc.fontBold, 11.5);
-    const dotCount = Math.max(4, Math.floor((boxWidth - 90 - doc.fontBold.widthOfTextAtSize(itemLabel, 11.5) - doc.fontBold.widthOfTextAtSize(qtyText, 11.5)) / doc.fontRegular.widthOfTextAtSize(".", 11.5)));
+    const nameLines = wrapText(simpleName, maxLabelWidth, doc.fontBold, 11.5);
+    const firstLine = nameLines[0] || simpleName;
+    const dotCount = Math.max(4, Math.floor((boxWidth - 90 - doc.fontBold.widthOfTextAtSize(firstLine, 11.5) - doc.fontBold.widthOfTextAtSize(qtyText, 11.5)) / doc.fontRegular.widthOfTextAtSize(".", 11.5)));
     const dots = ".".repeat(Math.min(dotCount, 40));
 
-    page.drawText(itemLabel, {
+    // Draw first line of name + dots + qty on same line
+    page.drawText(firstLine, {
       x: boxX + 24,
       y: cursorY,
       size: 11.5,
@@ -1032,7 +1102,7 @@ function drawShoppingFrame(doc: LayoutDoc, page: PDFPage, items: ShoppingItem[],
     });
 
     page.drawText(dots, {
-      x: boxX + 24 + doc.fontBold.widthOfTextAtSize(itemLabel, 11.5) + 4,
+      x: boxX + 24 + doc.fontBold.widthOfTextAtSize(firstLine, 11.5) + 4,
       y: cursorY,
       size: 11.5,
       font: doc.fontRegular,
@@ -1048,6 +1118,19 @@ function drawShoppingFrame(doc: LayoutDoc, page: PDFPage, items: ShoppingItem[],
     });
 
     cursorY -= lineHeight;
+
+    // Draw any additional name lines (wrapped overflow)
+    for (let ni = 1; ni < nameLines.length; ni++) {
+      if (cursorY < boxY + 20) break;
+      page.drawText(nameLines[ni], {
+        x: boxX + 24,
+        y: cursorY,
+        size: 11.5,
+        font: doc.fontBold,
+        color: rgb(0.08, 0.08, 0.08),
+      });
+      cursorY -= lineHeight;
+    }
   });
 }
 
@@ -1133,10 +1216,11 @@ async function buildProtocolsPdf(params: {
 }) {
   const doc = await createLayoutDoc();
   const protocols = params.protocols.length > 0 ? params.protocols : [{ name: "Sem orientações selecionadas", content: "" }];
-  const perPage = 6;
-
-  for (let start = 0; start < protocols.length; start += perPage) {
-    const page = addBasePage(doc, {
+  {
+    const boxX = PAGE_MARGIN_X + 4;
+    const boxWidth = PAGE_WIDTH - (PAGE_MARGIN_X + 4) * 2;
+    const gap = 14;
+    let page = addBasePage(doc, {
       title: "orientações",
       nomePaciente: params.nomePaciente,
       dataNascimento: params.dataNascimento,
@@ -1145,18 +1229,25 @@ async function buildProtocolsPdf(params: {
       alturaCm: params.alturaCm,
       showMetrics: false,
     });
+    let currentY = Math.round(CONTENT_TOP);
 
-    const slice = protocols.slice(start, start + perPage);
-    const boxX = PAGE_MARGIN_X + 4;
-    const boxWidth = PAGE_WIDTH - (PAGE_MARGIN_X + 4) * 2;
-    const boxHeight = 82;
-    const gap = 14;
-    let currentY = Math.round(CONTENT_TOP) - boxHeight;
-
-    slice.forEach((protocol) => {
-      drawProtocolBox(doc, page, boxX, currentY, boxWidth, boxHeight, protocol);
+    for (const protocol of protocols) {
+      const boxHeight = calcProtocolBoxHeight(protocol.content, doc.fontRegular, boxWidth);
+      if (currentY - boxHeight < CONTENT_BOTTOM + gap) {
+        page = addBasePage(doc, {
+          title: "orientações",
+          nomePaciente: params.nomePaciente,
+          dataNascimento: params.dataNascimento,
+          sexoPaciente: params.sexoPaciente,
+          pesoKg: params.pesoKg,
+          alturaCm: params.alturaCm,
+          showMetrics: false,
+        });
+        currentY = Math.round(CONTENT_TOP);
+      }
+      drawProtocolBox(doc, page, boxX, currentY - boxHeight, boxWidth, boxHeight, protocol);
       currentY -= boxHeight + gap;
-    });
+    }
   }
 
   return Buffer.from(await doc.pdf.save());
