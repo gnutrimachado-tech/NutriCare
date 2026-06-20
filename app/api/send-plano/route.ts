@@ -1304,13 +1304,6 @@ export async function POST(request: Request) {
         </div>`
       : "";
 
-    const emailSummaryItems = [
-      "PDF do plano alimentar com o novo layout",
-      ...(includeShoppingList && shoppingList.length > 0 ? [`PDF da lista de compras (${shoppingDays} dias)`] : []),
-      ...(includeProtocols && protocols.length > 0 ? ["PDF das orientações"] : []),
-      ...(uploadedFiles.length > 0 ? ["arquivos complementares anexados"] : []),
-    ];
-
     const html = `
 <!DOCTYPE html>
 <html>
