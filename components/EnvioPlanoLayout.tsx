@@ -115,7 +115,7 @@ function PrintableLayout({
           alignItems: 'flex-start',
           borderBottom: '2px solid #0f172a',
           paddingBottom: 12,
-          marginBottom: 16,
+          marginBottom: '5mm',
           position: 'relative',
           zIndex: 1,
         }}
@@ -125,13 +125,13 @@ function PrintableLayout({
           <img src="/logo-nutricare.png" alt="NutriCare" style={{ width: 120, height: 120, objectFit: 'contain' }} />
           <div>
             <div style={{ fontSize: 20, fontWeight: 700 }}>{nomePaciente}</div>
-            <div style={{ fontSize: 11, color: '#555' }}>
+            <div style={{ fontSize: 13, color: '#000', fontWeight: 700 }}>
               {dataNascimento && `Nascimento: ${dataNascimento.split('-').reverse().join('/')}`}
               {' | '}Peso: {pesoKg} kg | Altura: {alturaCm} cm | Sexo: {sexoPaciente}
             </div>
           </div>
         </div>
-        <div style={{ textAlign: 'right', fontSize: 11, color: '#555' }}>
+        <div style={{ textAlign: 'right', fontSize: 13, color: '#000', fontWeight: 700 }}>
           <div>Massa muscular: {massaMuscular.toFixed(1)} kg</div>
           <div>Massa adiposa: {massaAdiposa.toFixed(1)} kg</div>
           <div>% de gordura: {percGordura.toFixed(1)}%</div>
@@ -146,15 +146,16 @@ function PrintableLayout({
       {/* Content */}
       <div style={{ position: 'relative', zIndex: 1 }}>
         {type === 'plano' ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, paddingBottom: '1cm' }}>
             {meals.map((meal, idx) => (
               <div
                 key={meal.id}
                 style={{
                   border: '1px solid #d1d5db',
                   borderRadius: 10,
-                  padding: 14,
+                  padding: '14px 18px',
                   minHeight: 180,
+                  background: 'rgba(255,255,255,0.55)',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, borderBottom: '1px solid #e5e7eb', paddingBottom: 8 }}>
@@ -185,7 +186,7 @@ function PrintableLayout({
                               </div>
                             )}
                             {validSubs.map(s => (
-                              <div key={s.id} style={{ marginBottom: 3, lineHeight: 1.4 }}>
+                              <div key={s.id} style={{ marginBottom: 3, lineHeight: 1.4, fontWeight: 700, color: '#000' }}>
                                 {s.name} — <strong>{s.qty}{s.unit}</strong>
                               </div>
                             ))}
@@ -200,9 +201,9 @@ function PrintableLayout({
           </div>
         ) : type === 'compras' ? (
           /* Lista de Compras layout */
-          <div>
+          <div style={{ paddingBottom: '1cm' }}>
             <div style={{ fontSize: 12, color: '#475569', marginBottom: 12 }}>
-              Quantidades totais para <strong>{shoppingDays || 30} dias</strong>.
+              Quantidades totais para <strong>{shoppingDays || 30} dias</strong> - quantidades do alimento cru ou em natura
             </div>
             {shoppingList && shoppingList.length > 0 ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -218,6 +219,7 @@ function PrintableLayout({
                       justifyContent: 'space-between',
                       alignItems: 'center',
                       gap: 8,
+                      background: 'rgba(255,255,255,0.55)',
                     }}
                   >
                     <span>{item.name}</span>
@@ -231,7 +233,7 @@ function PrintableLayout({
           </div>
         ) : (
           /* Orientações layout */
-          <div style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: 16 }}>
+          <div style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: 16, paddingBottom: '1cm', background: 'rgba(255,255,255,0.55)' }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 10 }}>
               {protocol?.name || 'Protocolo'}
             </div>
