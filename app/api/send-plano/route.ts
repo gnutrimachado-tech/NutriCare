@@ -1300,13 +1300,13 @@ export async function POST(request: Request) {
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
-<body style="margin:0;padding:0;background:#ffffff;font-family:'Segoe UI',Arial,sans-serif;">
-  <div style="max-width:680px;margin:0 auto;">
-    <div style="padding:24px 28px;background:linear-gradient(180deg, #3f6faa 0%, #265d99 45%, #183865 100%);color:#ffffff;border-radius:12px;">
+<body style="margin:0;padding:24px;background:#eef3f8;font-family:'Segoe UI',Arial,sans-serif;">
+  <div style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #dbe3ec;">
+    <div style="padding:24px 28px;background:linear-gradient(180deg, #3f6faa 0%, #265d99 45%, #183865 100%);color:#ffffff;">
       <div style="font-size:18px;font-weight:600;">Plano alimentar enviado para download</div>
       <div style="font-size:13px;line-height:1.7;margin-top:6px;color:#dbe8f7;">Paciente: ${escapeHtml(paciente.nome || nomePaciente)}</div>
     </div>
-    ${message ? `<div style="padding:20px 4px 0;font-size:13px;line-height:1.8;color:#334155;">${escapeHtml(message).replace(/\n/g, "<br>")}</div>` : ""}
+    ${message ? `<div style="padding:20px 28px 24px;font-size:13px;line-height:1.8;color:#334155;">${escapeHtml(message).replace(/\n/g, "<br>")}</div>` : ""}
   </div>
 </body>
 </html>`;
