@@ -57,10 +57,16 @@ type BasePageOptions = {
 
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
-const PAGE_MARGIN_X = 28;
-const HEADER_TOP = PAGE_HEIGHT - 24;
-const BACKGROUND_OPACITY = 0.15; // 85% de transparência
-const FOOTER_LOGO_OPACITY = 0.15; // 85% de transparência
+const PAGE_MARGIN_X = 30;
+const HEADER_TOP = PAGE_HEIGHT - 20;
+const HEADER_LINE_Y = HEADER_TOP - 78;   // linha horizontal separadora
+const TITLE_Y = HEADER_LINE_Y - 62;      // título ~2cm abaixo da linha
+const CONTENT_TOP = TITLE_Y - 26;        // topo da área de conteúdo
+const FOOTER_TOP = 82;                   // rodapé começa aqui
+const BACKGROUND_OPACITY = 0.15;
+const FOOTER_LOGO_OPACITY = 0.15;
+const BOX_RADIUS = 8;
+const BOX_FILL_OPACITY = 0.88;
 const CRN_LABEL = process.env.NUTRICARE_CRN || "CRN:";
 
 const assetCache = new Map<string, Buffer | null>();
@@ -192,6 +198,181 @@ function fitText(text: string, maxWidth: number, font: PDFFont, size: number) {
   return `${current.trimEnd()}…`;
 }
 
+// ── Rounded rectangle helper ──────────────────────────────────────────────────
+function drawRoundedRect(
+  page: PDFPage,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+  options: {
+    fillColor?: ReturnType<typeof rgb>;
+    fillOpacity?: number;
+    borderColor?: ReturnType<typeof rgb>;
+    borderWidth?: number;
+  } = {}
+) {
+  const r = Math.min(radius, width / 2, height / 2);
+  const w = width;
+  const h = height;
+  // SVG path (y-down) translated by pdf-lib to PDF space (y-up)
+  const path = `M ${r},0 L ${w - r},0 Q ${w},0 ${w},${r} L ${w},${h - r} Q ${w},${h} ${w - r},${h} L ${r},${h} Q 0,${h} 0,${h - r} L 0,${r} Q 0,0 ${r},0 Z`;
+  page.drawSvgPath(path, {
+    x,
+    y: y + height,
+    color: options.fillColor,
+    opacity: options.fillOpacity,
+    borderColor: options.borderColor,
+    borderWidth: options.borderWidth,
+  });
+}
+
+// ── Food name helpers ──────────────────────────────────────────────────────────
+const PREP_WORDS_SET = new Set([
+  "cozido","cozida","cozidos","cozidas",
+  "grelhado","grelhada","grelhados","grelhadas",
+  "assado","assada","assados","assadas",
+  "cru","crua","crus","cruas",
+  "congelado","congelada",
+  "frito","frita",
+  "envasado","envasada",
+  "refogado","refogada",
+  "moído","moida",
+]);
+
+const RAW_WEIGHT_FACTORS: { keywords: string[]; factor: number }[] = [
+  { keywords: ["arroz"], factor: 0.38 },
+  { keywords: ["feijão","feijao"], factor: 0.42 },
+  { keywords: ["lentilha"], factor: 0.4 },
+  { keywords: ["ervilha"], factor: 0.4 },
+  { keywords: ["macarrão","macarrao","espaguete"], factor: 0.35 },
+  { keywords: ["aveia"], factor: 0.4 },
+  { keywords: ["quinoa"], factor: 0.35 },
+  { keywords: ["grão-de-bico","grao-de-bico"], factor: 0.4 },
+];
+
+function getRawWeightFactor(foodName: string): number {
+  const lower = foodName.toLowerCase();
+  const isCooked = lower.includes("cozido") || lower.includes("cozida");
+  if (!isCooked) return 1.0;
+  for (const item of RAW_WEIGHT_FACTORS) {
+    if (item.keywords.some(k => lower.includes(k))) return item.factor;
+  }
+  return 1.0;
+}
+
+function simplifyFoodName(fullName: string): string {
+  if (!fullName) return fullName;
+  const parts = fullName.split(",").map(p => p.trim());
+  if (parts.length <= 1) return fullName;
+
+  const main = parts[0];
+  const variety = parts.length > 1 ? parts[1] : "";
+  const sub = parts.length > 2 ? parts[2] : "";
+
+  const isPrepWord = (s: string) => {
+    const l = s.toLowerCase();
+    return Array.from(PREP_WORDS_SET).some(w => l === w) || l.includes("sem ") || l.includes("com gordura");
+  };
+
+  const mainLower = main.toLowerCase();
+
+  if (mainLower === "carne" && variety.toLowerCase() === "bovina" && sub && !isPrepWord(sub)) {
+    const cleanSub = sub.split(",")[0].trim();
+    if (!isPrepWord(cleanSub)) {
+      return cleanSub.charAt(0).toUpperCase() + cleanSub.slice(1).toLowerCase() + " bovino";
+    }
+    return main + " bovina";
+  }
+
+  if (mainLower === "frango" && variety && !isPrepWord(variety)) {
+    const varLower = variety.toLowerCase();
+    if (varLower === "peito") return "Peito de frango";
+    if (varLower === "coxa") return "Coxa de frango";
+    if (varLower === "sobrecoxa") return "Sobrecoxa de frango";
+    return variety.charAt(0).toUpperCase() + variety.slice(1).toLowerCase() + " de frango";
+  }
+
+  if (["arroz","feijão","feijao","lentilha","ervilha","aveia","quinoa","macarrão","macarrao"].some(k => mainLower.includes(k))) {
+    const varLower = variety.toLowerCase();
+    if (/^tipo \d/.test(varLower) || isPrepWord(variety)) return main;
+    return main + " " + variety.toLowerCase();
+  }
+
+  if (!isPrepWord(variety)) {
+    const varLower = variety.toLowerCase();
+    if (/^tipo \d/.test(varLower)) return main;
+    if (["suco","concentrado","envasado"].includes(varLower)) {
+      return main + " (suco)";
+    }
+    return main + " " + variety.toLowerCase();
+  }
+
+  return main;
+}
+
+// ── Structured meal lines (for colored Para X: rendering) ──────────────────────
+type SubLine = { isPara: boolean; text: string };
+
+function getMealLinesStructured(meal: EnvioMeal | undefined): { mainLines: string[]; subLines: SubLine[] } {
+  const mainLines = (meal?.foods || [])
+    .filter(food => food?.name)
+    .map(food => `${food.name} — ${String(food.qty ?? "")} ${String(food.unit ?? "").trim()}`.replace(/\s+/g, " ").trim());
+
+  const subLines: SubLine[] = [];
+  Object.entries(meal?.subs || {}).forEach(([foodId, subs]) => {
+    const validSubs = (subs || []).filter(sub => sub?.name);
+    if (validSubs.length === 0) return;
+    const mainFood = (meal?.foods || []).find(food => food.id === foodId);
+    if (mainFood?.name) {
+      subLines.push({ isPara: true, text: `Para ${shortFoodName(mainFood.name)}:` });
+    }
+    validSubs.forEach(sub => {
+      subLines.push({
+        isPara: false,
+        text: `${sub.name} — ${String(sub.qty ?? "")} ${String(sub.unit ?? "").trim()}`.replace(/\s+/g, " ").trim(),
+      });
+    });
+  });
+
+  return { mainLines, subLines };
+}
+
+function drawSubsBlock(params: {
+  page: PDFPage;
+  doc: LayoutDoc;
+  subLines: SubLine[];
+  x: number;
+  y: number;
+  width: number;
+  maxHeight: number;
+  fontSize: number;
+  lineGap: number;
+}) {
+  const { page, doc, subLines, x, y, width, maxHeight, fontSize, lineGap } = params;
+  let cursorY = y;
+  let consumed = 0;
+  const lineHeight = fontSize + lineGap;
+
+  if (subLines.length === 0) {
+    page.drawText("—", { x, y: cursorY, size: fontSize, font: doc.fontBold, color: rgb(0.08, 0.08, 0.08) });
+    return;
+  }
+
+  for (const subLine of subLines) {
+    const font = subLine.isPara ? doc.fontBold : doc.fontRegular;
+    const color = subLine.isPara ? rgb(0.08, 0.18, 0.55) : rgb(0.08, 0.08, 0.08);
+    const wrapped = wrapText(subLine.text, width, font, fontSize);
+    for (const line of wrapped) {
+      if (consumed + lineHeight > maxHeight) return;
+      page.drawText(line || " ", { x, y: cursorY, size: fontSize, font, color });
+      cursorY -= lineHeight;
+      consumed += lineHeight;
+    }
+  }
+}
+
 async function readPublicAsset(...relativeCandidates: string[]) {
   for (const relativePath of relativeCandidates) {
     if (assetCache.has(relativePath)) {
@@ -256,33 +437,36 @@ function drawCoverImage(page: PDFPage, image: PDFImage, opacity: number) {
 function drawHeader(doc: LayoutDoc, page: PDFPage, options: BasePageOptions) {
   if (doc.background) drawCoverImage(page, doc.background, BACKGROUND_OPACITY);
 
+  // Logo: fundo acima da linha horizontal
   if (doc.logo) {
-    const targetWidth = 84;
-    const targetHeight = (doc.logo.height / doc.logo.width) * targetWidth;
+    const maxLogoHeight = HEADER_TOP - HEADER_LINE_Y - 8;
+    const aspectRatio = doc.logo.height / doc.logo.width;
+    const targetWidth = Math.min(68, maxLogoHeight / aspectRatio);
+    const targetHeight = targetWidth * aspectRatio;
     page.drawImage(doc.logo, {
       x: PAGE_MARGIN_X,
-      y: HEADER_TOP - targetHeight - 4,
+      y: HEADER_LINE_Y + 6,
       width: targetWidth,
       height: targetHeight,
     });
   } else {
     page.drawText("NutriCare", {
       x: PAGE_MARGIN_X,
-      y: HEADER_TOP - 18,
-      size: 14,
+      y: HEADER_TOP - 22,
+      size: 15,
       font: doc.fontBold,
       color: rgb(0.13, 0.2, 0.24),
     });
   }
 
-  const infoX = PAGE_MARGIN_X + 102;
-  const patientName = fitText(options.nomePaciente || "Paciente", 230, doc.fontBold, 16);
+  const infoX = PAGE_MARGIN_X + 76;
+  const patientName = fitText(options.nomePaciente || "Paciente", 240, doc.fontBold, 15);
   page.drawText(patientName, {
     x: infoX,
     y: HEADER_TOP - 28,
-    size: 16,
+    size: 15,
     font: doc.fontBold,
-    color: rgb(0.1, 0.1, 0.1),
+    color: rgb(0.05, 0.05, 0.05),
   });
 
   const patientInfo = [
@@ -292,47 +476,47 @@ function drawHeader(doc: LayoutDoc, page: PDFPage, options: BasePageOptions) {
     `sexo: ${String(options.sexoPaciente || "—").toLowerCase()}`,
   ].join("   |   ");
 
-  page.drawText(fitText(patientInfo, 265, doc.fontRegular, 7.5), {
+  page.drawText(fitText(patientInfo, 262, doc.fontRegular, 9), {
     x: infoX,
-    y: HEADER_TOP - 41,
-    size: 7.5,
+    y: HEADER_TOP - 46,
+    size: 9,
     font: doc.fontRegular,
-    color: rgb(0.38, 0.38, 0.38),
+    color: rgb(0.3, 0.3, 0.3),
   });
 
   if (options.showMetrics) {
-    const rightX = PAGE_WIDTH - PAGE_MARGIN_X - 120;
+    const rightX = PAGE_WIDTH - PAGE_MARGIN_X - 134;
     const metrics = [
       `massa muscular: ${formatMetric(options.massaMuscular, "kg")}`,
       `massa adiposa: ${formatMetric(options.massaAdiposa, "kg")}`,
       `% de gordura: ${formatMetric(options.percGordura, "%")}`,
     ];
-
     metrics.forEach((line, index) => {
-      page.drawText(fitText(line, 120, doc.fontRegular, 7.2), {
+      page.drawText(fitText(line, 132, doc.fontRegular, 9), {
         x: rightX,
-        y: HEADER_TOP - 18 - index * 10,
-        size: 7.2,
+        y: HEADER_TOP - 22 - index * 14,
+        size: 9,
         font: doc.fontRegular,
-        color: rgb(0.24, 0.24, 0.24),
+        color: rgb(0.2, 0.2, 0.2),
       });
     });
   }
 
   page.drawLine({
-    start: { x: PAGE_MARGIN_X, y: HEADER_TOP - 52 },
-    end: { x: PAGE_WIDTH - PAGE_MARGIN_X, y: HEADER_TOP - 52 },
+    start: { x: PAGE_MARGIN_X, y: HEADER_LINE_Y },
+    end: { x: PAGE_WIDTH - PAGE_MARGIN_X, y: HEADER_LINE_Y },
     thickness: 1,
     color: rgb(0.15, 0.15, 0.15),
   });
 
-  const titleWidth = doc.fontBold.widthOfTextAtSize(options.title, 17);
-  page.drawText(options.title, {
+  const titleText = options.title.toUpperCase();
+  const titleWidth = doc.fontBold.widthOfTextAtSize(titleText, 20);
+  page.drawText(titleText, {
     x: (PAGE_WIDTH - titleWidth) / 2,
-    y: HEADER_TOP - 74,
-    size: 17,
+    y: TITLE_Y,
+    size: 20,
     font: doc.fontBold,
-    color: rgb(0.08, 0.08, 0.08),
+    color: rgb(0.05, 0.05, 0.05),
   });
 }
 
@@ -450,91 +634,87 @@ function drawTextBlock(params: {
 }
 
 function drawMealBox(doc: LayoutDoc, page: PDFPage, x: number, y: number, width: number, height: number, meal?: EnvioMeal) {
-  page.drawRectangle({
-    x,
-    y,
-    width,
-    height,
+  drawRoundedRect(page, x, y, width, height, BOX_RADIUS, {
+    fillColor: rgb(1, 1, 1),
+    fillOpacity: BOX_FILL_OPACITY,
     borderColor: rgb(0.15, 0.15, 0.15),
     borderWidth: 1,
-    color: rgb(1, 1, 1),
   });
 
-  const headerY = y + height - 18;
-  page.drawText(fitText(meal?.name || "nome da refeição", width - 86, doc.fontBold, 10), {
-    x: x + 10,
+  const headerY = y + height - 22;
+  page.drawText(fitText(meal?.name || "nome da refeição", width - 92, doc.fontBold, 12), {
+    x: x + 13,
     y: headerY,
-    size: 10,
+    size: 12,
     font: doc.fontBold,
     color: rgb(0.05, 0.05, 0.05),
   });
 
-  page.drawText(fitText(meal?.time || "horário", 48, doc.fontBold, 7.5), {
-    x: x + width - 54,
-    y: headerY + 1,
-    size: 7.5,
+  page.drawText(fitText(meal?.time || "horário", 58, doc.fontBold, 9.5), {
+    x: x + width - 66,
+    y: headerY + 0.5,
+    size: 9.5,
     font: doc.fontBold,
     color: rgb(0.05, 0.05, 0.05),
   });
 
   page.drawLine({
-    start: { x: x + 10, y: y + height - 24 },
-    end: { x: x + width - 10, y: y + height - 24 },
-    thickness: 0.9,
-    color: rgb(0.15, 0.15, 0.15),
+    start: { x: x + 13, y: y + height - 30 },
+    end: { x: x + width - 13, y: y + height - 30 },
+    thickness: 0.8,
+    color: rgb(0.2, 0.2, 0.2),
   });
 
-  const innerTop = y + height - 34;
-  const colGap = 12;
-  const innerWidth = width - 20;
+  const innerTop = y + height - 43;
+  const colGap = 14;
+  const innerWidth = width - 26;
   const colWidth = (innerWidth - colGap) / 2;
-  const leftX = x + 10;
+  const leftX = x + 13;
   const rightX = leftX + colWidth + colGap;
 
   page.drawText("principais", {
     x: leftX,
     y: innerTop,
-    size: 7.2,
-    font: doc.fontRegular,
+    size: 8.5,
+    font: doc.fontBold,
     color: rgb(0.09, 0.58, 0.21),
   });
 
   page.drawText("substituições", {
     x: rightX,
     y: innerTop,
-    size: 7.2,
-    font: doc.fontRegular,
+    size: 8.5,
+    font: doc.fontBold,
     color: rgb(0.14, 0.39, 0.84),
   });
 
-  const { mainLines, subLines } = getMealLines(meal);
-  const contentY = innerTop - 11;
-  const maxContentHeight = height - 54;
+  const { mainLines, subLines } = getMealLinesStructured(meal);
+  const contentY = innerTop - 13;
+  const maxContentHeight = height - 66;
 
   drawTextBlock({
     page,
-    font: doc.fontRegular,
+    font: doc.fontBold,
     textLines: mainLines.length > 0 ? mainLines : ["—"],
     x: leftX,
     y: contentY,
     width: colWidth,
     maxHeight: maxContentHeight,
-    fontSize: 6.8,
-    lineGap: 2.4,
-    color: rgb(0.14, 0.14, 0.14),
+    fontSize: 8,
+    lineGap: 3.5,
+    color: rgb(0.08, 0.08, 0.08),
   });
 
-  drawTextBlock({
+  drawSubsBlock({
     page,
-    font: doc.fontRegular,
-    textLines: subLines.length > 0 ? subLines : ["—"],
+    doc,
+    subLines,
     x: rightX,
     y: contentY,
     width: colWidth,
     maxHeight: maxContentHeight,
-    fontSize: 6.8,
-    lineGap: 2.4,
-    color: rgb(0.14, 0.14, 0.14),
+    fontSize: 8,
+    lineGap: 3.5,
   });
 }
 
@@ -571,19 +751,19 @@ async function buildPlanoPdf(params: {
       showMetrics: true,
     });
 
-    const gridX = PAGE_MARGIN_X + 10;
-    const gridY = 154;
-    const colGap = 10;
-    const rowGap = 12;
-    const boxWidth = 248;
-    const boxHeight = 145;
+    const gridX = PAGE_MARGIN_X;
+    const gridBottomY = FOOTER_TOP;
+    const colGap = 11;
+    const rowGap = 14;
+    const boxWidth = 262;
+    const boxHeight = 182;
 
     for (let row = 0; row < 3; row++) {
       for (let col = 0; col < 2; col++) {
         const slotIndex = row * 2 + col;
         const meal = chunk[slotIndex];
         const x = gridX + col * (boxWidth + colGap);
-        const y = gridY + (2 - row) * (boxHeight + rowGap);
+        const y = gridBottomY + (2 - row) * (boxHeight + rowGap);
         drawMealBox(doc, page, x, y, boxWidth, boxHeight, meal);
       }
     }
@@ -690,19 +870,19 @@ async function buildAllPdfsOptimized(params: {
       showMetrics: true,
     });
 
-    const gridX = PAGE_MARGIN_X + 10;
-    const gridY = 154;
-    const colGap = 10;
-    const rowGap = 12;
-    const boxWidth = 248;
-    const boxHeight = 145;
+    const gridX = PAGE_MARGIN_X;
+    const gridBottomY = FOOTER_TOP;
+    const colGap = 11;
+    const rowGap = 14;
+    const boxWidth = 262;
+    const boxHeight = 182;
 
     for (let row = 0; row < 3; row++) {
       for (let col = 0; col < 2; col++) {
         const slotIndex = row * 2 + col;
         const meal = chunk[slotIndex];
         const x = gridX + col * (boxWidth + colGap);
-        const y = gridY + (2 - row) * (boxHeight + rowGap);
+        const y = gridBottomY + (2 - row) * (boxHeight + rowGap);
         drawMealBox(planoDoc, page, x, y, boxWidth, boxHeight, meal);
       }
     }
@@ -713,9 +893,9 @@ async function buildAllPdfsOptimized(params: {
   let shoppingPdf: Buffer | null = null;
   if (shoppingDoc && params.includeShoppingList) {
     const items = params.shoppingList.length > 0 ? params.shoppingList : [{ name: "Nenhum item disponível", displayQty: "—" }];
-    const perPage = 24;
+    const shoppingPerPage = Math.floor((CONTENT_TOP - FOOTER_TOP - 60) / 19);
 
-    for (let start = 0; start < items.length; start += perPage) {
+    for (let start = 0; start < items.length; start += shoppingPerPage) {
       const page = shoppingDoc.pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
       drawHeader(shoppingDoc, page, {
         title: "lista de compras",
@@ -726,7 +906,7 @@ async function buildAllPdfsOptimized(params: {
         alturaCm: params.alturaCm,
         showMetrics: false,
       });
-      drawShoppingFrame(shoppingDoc, page, items.slice(start, start + perPage), params.shoppingDays);
+      drawShoppingFrame(shoppingDoc, page, items.slice(start, start + shoppingPerPage), params.shoppingDays);
       drawFooter(shoppingDoc, page);
     }
     shoppingPdf = Buffer.from(await shoppingDoc.pdf.save());
@@ -736,9 +916,11 @@ async function buildAllPdfsOptimized(params: {
   let protocolsPdf: Buffer | null = null;
   if (protocolsDoc && params.includeProtocols) {
     const protos = params.protocols.length > 0 ? params.protocols : [{ name: "Sem orientações", content: "" }];
-    const perPage = 7;
+    const protoPerPage = 6;
+    const protoBoxHeight = 82;
+    const protoGap = 14;
 
-    for (let start = 0; start < protos.length; start += perPage) {
+    for (let start = 0; start < protos.length; start += protoPerPage) {
       const page = protocolsDoc.pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
       drawHeader(protocolsDoc, page, {
         title: "orientações",
@@ -750,16 +932,14 @@ async function buildAllPdfsOptimized(params: {
         showMetrics: false,
       });
 
-      const slice = protos.slice(start, start + perPage);
-      const boxX = PAGE_MARGIN_X + 10;
-      const boxWidth = PAGE_WIDTH - (PAGE_MARGIN_X + 10) * 2;
-      const boxHeight = 58;
-      const gap = 12;
-      let currentY = 160 + (perPage - 1) * (boxHeight + gap);
+      const slice = protos.slice(start, start + protoPerPage);
+      const protoBoxX = PAGE_MARGIN_X + 4;
+      const protoBoxWidth = PAGE_WIDTH - (PAGE_MARGIN_X + 4) * 2;
+      let currentY = Math.round(CONTENT_TOP) - protoBoxHeight;
 
       slice.forEach((protocol) => {
-        drawProtocolBox(protocolsDoc, page, boxX, currentY, boxWidth, boxHeight, protocol);
-        currentY -= boxHeight + gap;
+        drawProtocolBox(protocolsDoc, page, protoBoxX, currentY, protoBoxWidth, protoBoxHeight, protocol);
+        currentY -= protoBoxHeight + protoGap;
       });
       drawFooter(protocolsDoc, page);
     }
@@ -774,57 +954,86 @@ async function buildAllPdfsOptimized(params: {
 }
 
 function drawShoppingFrame(doc: LayoutDoc, page: PDFPage, items: ShoppingItem[], shoppingDays: number) {
-  const boxX = PAGE_MARGIN_X + 12;
-  const boxY = 150;
-  const boxWidth = PAGE_WIDTH - (PAGE_MARGIN_X + 12) * 2;
-  const boxHeight = 476;
+  const boxX = PAGE_MARGIN_X + 4;
+  const boxY = FOOTER_TOP + 4;
+  const boxWidth = PAGE_WIDTH - (PAGE_MARGIN_X + 4) * 2;
+  const boxHeight = CONTENT_TOP - boxY - 4;
 
-  page.drawRectangle({
-    x: boxX,
-    y: boxY,
-    width: boxWidth,
-    height: boxHeight,
+  drawRoundedRect(page, boxX, boxY, boxWidth, boxHeight, BOX_RADIUS, {
+    fillColor: rgb(1, 1, 1),
+    fillOpacity: BOX_FILL_OPACITY,
     borderColor: rgb(0.16, 0.16, 0.16),
     borderWidth: 1,
-    color: rgb(1, 1, 1),
   });
 
   page.drawText(`quantidades totais para ${shoppingDays} dias`, {
-    x: boxX + 16,
-    y: boxY + boxHeight - 22,
-    size: 8.5,
-    font: doc.fontRegular,
-    color: rgb(0.35, 0.35, 0.35),
+    x: boxX + 18,
+    y: boxY + boxHeight - 26,
+    size: 11,
+    font: doc.fontBold,
+    color: rgb(0.2, 0.2, 0.2),
   });
 
-  let cursorY = boxY + boxHeight - 48;
-  const lineHeight = 17;
+  let cursorY = boxY + boxHeight - 54;
+  const lineHeight = 19;
 
-  items.forEach((item, index) => {
-    if (cursorY < boxY + 18) return;
+  items.forEach((item) => {
+    if (cursorY < boxY + 20) return;
 
     page.drawCircle({
-      x: boxX + 13,
-      y: cursorY + 4,
-      size: 3,
+      x: boxX + 16,
+      y: cursorY + 5,
+      size: 3.5,
       color: rgb(0.17, 0.63, 0.28),
     });
 
-    const itemLabel = fitText(item.name, 220, doc.fontRegular, 11);
-    const qtyText = fitText(item.displayQty || `${item.qty ?? ""} ${item.unit ?? ""}`.trim(), 120, doc.fontRegular, 11);
-    const dots = ".".repeat(Math.max(6, 34 - itemLabel.length - qtyText.length));
-    const line = `${itemLabel}${dots}${qtyText}`;
+    // Simplified name + raw weight conversion
+    const simpleName = simplifyFoodName(item.name);
+    const rawFactor = getRawWeightFactor(item.name);
+    let qtyText: string;
+    if (rawFactor < 1.0 && typeof item.qty === "number" && item.qty > 0) {
+      const rawQty = Math.round(item.qty * rawFactor);
+      if ((item.unit === "g" || !item.unit) && rawQty > 900) {
+        const kg = Math.floor(rawQty / 1000);
+        const gRest = rawQty % 1000;
+        qtyText = gRest > 0 ? `${kg}kg e ${gRest}g` : `${kg}kg`;
+      } else {
+        qtyText = `${rawQty} ${item.unit || "g"}`;
+      }
+    } else {
+      qtyText = item.displayQty || `${item.qty ?? ""} ${item.unit ?? ""}`.trim();
+    }
 
-    page.drawText(line, {
-      x: boxX + 20,
+    const maxLabelWidth = boxWidth - 140;
+    const itemLabel = fitText(simpleName, maxLabelWidth, doc.fontBold, 11.5);
+    const dotCount = Math.max(4, Math.floor((boxWidth - 90 - doc.fontBold.widthOfTextAtSize(itemLabel, 11.5) - doc.fontBold.widthOfTextAtSize(qtyText, 11.5)) / doc.fontRegular.widthOfTextAtSize(".", 11.5)));
+    const dots = ".".repeat(Math.min(dotCount, 40));
+
+    page.drawText(itemLabel, {
+      x: boxX + 24,
       y: cursorY,
-      size: 11,
+      size: 11.5,
+      font: doc.fontBold,
+      color: rgb(0.08, 0.08, 0.08),
+    });
+
+    page.drawText(dots, {
+      x: boxX + 24 + doc.fontBold.widthOfTextAtSize(itemLabel, 11.5) + 4,
+      y: cursorY,
+      size: 11.5,
       font: doc.fontRegular,
-      color: rgb(0.1, 0.1, 0.1),
+      color: rgb(0.4, 0.4, 0.4),
+    });
+
+    page.drawText(qtyText, {
+      x: boxX + boxWidth - 18 - doc.fontBold.widthOfTextAtSize(qtyText, 11.5),
+      y: cursorY,
+      size: 11.5,
+      font: doc.fontBold,
+      color: rgb(0.08, 0.08, 0.08),
     });
 
     cursorY -= lineHeight;
-    if (index === items.length - 1 && items.length === 0) cursorY -= 0;
   });
 }
 
@@ -859,47 +1068,44 @@ async function buildShoppingListPdf(params: {
 }
 
 function drawProtocolBox(doc: LayoutDoc, page: PDFPage, x: number, y: number, width: number, height: number, protocol?: Protocol) {
-  page.drawRectangle({
-    x,
-    y,
-    width,
-    height,
+  drawRoundedRect(page, x, y, width, height, BOX_RADIUS, {
+    fillColor: rgb(1, 1, 1),
+    fillOpacity: BOX_FILL_OPACITY,
     borderColor: rgb(0.16, 0.16, 0.16),
     borderWidth: 1,
-    color: rgb(1, 1, 1),
   });
 
-  page.drawText(fitText(protocol?.name || "nome da orientação", width - 16, doc.fontRegular, 7.8), {
-    x: x + 8,
-    y: y + height - 12,
-    size: 7.8,
-    font: doc.fontRegular,
-    color: rgb(0.16, 0.16, 0.16),
+  const nameText = fitText(protocol?.name || "orientação", width - 20, doc.fontBold, 10.5);
+  page.drawText(nameText, {
+    x: x + 10,
+    y: y + height - 18,
+    size: 10.5,
+    font: doc.fontBold,
+    color: rgb(0.08, 0.08, 0.08),
   });
 
-  page.drawText("orientação................................", {
-    x: x + 8,
-    y: y + height - 24,
-    size: 7,
-    font: doc.fontRegular,
-    color: rgb(0.28, 0.28, 0.28),
+  page.drawLine({
+    start: { x: x + 10, y: y + height - 25 },
+    end: { x: x + width - 10, y: y + height - 25 },
+    thickness: 0.7,
+    color: rgb(0.2, 0.2, 0.2),
   });
 
   const contentLines = protocol?.content
-    ? wrapText(protocol.content, width - 16, doc.fontRegular, 8)
+    ? wrapText(protocol.content, width - 20, doc.fontRegular, 9)
     : [];
 
   drawTextBlock({
     page,
     font: doc.fontRegular,
     textLines: contentLines,
-    x: x + 8,
+    x: x + 10,
     y: y + height - 38,
-    width: width - 16,
+    width: width - 20,
     maxHeight: height - 46,
-    fontSize: 8,
-    lineGap: 3,
-    color: rgb(0.16, 0.16, 0.16),
+    fontSize: 9,
+    lineGap: 3.5,
+    color: rgb(0.12, 0.12, 0.12),
   });
 }
 
@@ -913,7 +1119,7 @@ async function buildProtocolsPdf(params: {
 }) {
   const doc = await createLayoutDoc();
   const protocols = params.protocols.length > 0 ? params.protocols : [{ name: "Sem orientações selecionadas", content: "" }];
-  const perPage = 7;
+  const perPage = 6;
 
   for (let start = 0; start < protocols.length; start += perPage) {
     const page = addBasePage(doc, {
@@ -927,11 +1133,11 @@ async function buildProtocolsPdf(params: {
     });
 
     const slice = protocols.slice(start, start + perPage);
-    const boxX = PAGE_MARGIN_X + 10;
-    const boxWidth = PAGE_WIDTH - (PAGE_MARGIN_X + 10) * 2;
-    const boxHeight = 58;
-    const gap = 12;
-    let currentY = 160 + (perPage - 1) * (boxHeight + gap);
+    const boxX = PAGE_MARGIN_X + 4;
+    const boxWidth = PAGE_WIDTH - (PAGE_MARGIN_X + 4) * 2;
+    const boxHeight = 82;
+    const gap = 14;
+    let currentY = Math.round(CONTENT_TOP) - boxHeight;
 
     slice.forEach((protocol) => {
       drawProtocolBox(doc, page, boxX, currentY, boxWidth, boxHeight, protocol);
