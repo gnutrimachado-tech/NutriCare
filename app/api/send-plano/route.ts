@@ -1298,7 +1298,7 @@ export async function POST(request: Request) {
 
     const messageHtml = message
       ? `
-        <div style="margin:18px 28px 0;font-size:13px;line-height:1.8;color:#334155;">${escapeHtml(message).replace(/\n/g, "<br>")}</div>`
+        <div style="padding:18px 28px 0;font-size:13px;line-height:1.8;color:#334155;">${escapeHtml(message).replace(/\n/g, "<br>")}</div>`
       : "";
 
     const html = `
