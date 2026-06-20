@@ -60,13 +60,14 @@ const PAGE_HEIGHT = 841.89;
 const PAGE_MARGIN_X = 30;
 const HEADER_TOP = PAGE_HEIGHT - 20;
 const HEADER_LINE_Y = HEADER_TOP - 78;   // linha horizontal separadora
-const TITLE_Y = HEADER_LINE_Y - 62;      // título ~2cm abaixo da linha
+const TITLE_Y = HEADER_LINE_Y - 22;      // título ~0.5cm abaixo da linha
 const CONTENT_TOP = TITLE_Y - 26;        // topo da área de conteúdo
 const FOOTER_TOP = 82;                   // rodapé começa aqui
+const CONTENT_BOTTOM = FOOTER_TOP + 28;  // limite inferior de conteúdo (1cm acima do rodapé)
 const BACKGROUND_OPACITY = 0.15;
 const FOOTER_LOGO_OPACITY = 0.15;
 const BOX_RADIUS = 8;
-const BOX_FILL_OPACITY = 0.88;
+const BOX_FILL_OPACITY = 0.40;
 const CRN_LABEL = process.env.NUTRICARE_CRN || "CRN:";
 
 const assetCache = new Map<string, Buffer | null>();
@@ -361,8 +362,8 @@ function drawSubsBlock(params: {
   }
 
   for (const subLine of subLines) {
-    const font = subLine.isPara ? doc.fontBold : doc.fontRegular;
-    const color = subLine.isPara ? rgb(0.08, 0.18, 0.55) : rgb(0.08, 0.08, 0.08);
+    const font = doc.fontBold;
+    const color = subLine.isPara ? rgb(0.08, 0.18, 0.55) : rgb(0.05, 0.05, 0.05);
     const wrapped = wrapText(subLine.text, width, font, fontSize);
     for (const line of wrapped) {
       if (consumed + lineHeight > maxHeight) return;
@@ -469,19 +470,21 @@ function drawHeader(doc: LayoutDoc, page: PDFPage, options: BasePageOptions) {
     color: rgb(0.05, 0.05, 0.05),
   });
 
-  const patientInfo = [
-    `nascimento: ${formatDate(options.dataNascimento || "")}`,
-    `peso: ${Number(options.pesoKg || 0).toFixed(1).replace(".", ",")}kg`,
-    `altura: ${Math.round(Number(options.alturaCm || 0)) || 0}cm`,
-    `sexo: ${String(options.sexoPaciente || "—").toLowerCase()}`,
-  ].join("   |   ");
+  const patientInfoParts = [
+    options.dataNascimento ? `nascimento: ${formatDate(options.dataNascimento)}` : null,
+    options.pesoKg ? `peso: ${Number(options.pesoKg || 0).toFixed(1).replace(".", ",")}kg` : null,
+    options.alturaCm ? `altura: ${Math.round(Number(options.alturaCm || 0)) || 0}cm` : null,
+    options.sexoPaciente ? `sexo: ${String(options.sexoPaciente).toLowerCase()}` : null,
+  ].filter(Boolean);
+  const patientInfo = patientInfoParts.join(" | ");
+  const infoMaxWidth = options.showMetrics ? 315 : 440;
 
-  page.drawText(fitText(patientInfo, 262, doc.fontRegular, 9), {
+  page.drawText(fitText(patientInfo, infoMaxWidth, doc.fontBold, 10), {
     x: infoX,
     y: HEADER_TOP - 46,
-    size: 9,
-    font: doc.fontRegular,
-    color: rgb(0.3, 0.3, 0.3),
+    size: 10,
+    font: doc.fontBold,
+    color: rgb(0.05, 0.05, 0.05),
   });
 
   if (options.showMetrics) {
@@ -492,12 +495,12 @@ function drawHeader(doc: LayoutDoc, page: PDFPage, options: BasePageOptions) {
       `% de gordura: ${formatMetric(options.percGordura, "%")}`,
     ];
     metrics.forEach((line, index) => {
-      page.drawText(fitText(line, 132, doc.fontRegular, 9), {
+      page.drawText(fitText(line, 132, doc.fontBold, 10), {
         x: rightX,
         y: HEADER_TOP - 22 - index * 14,
-        size: 9,
-        font: doc.fontRegular,
-        color: rgb(0.2, 0.2, 0.2),
+        size: 10,
+        font: doc.fontBold,
+        color: rgb(0.05, 0.05, 0.05),
       });
     });
   }
@@ -751,11 +754,11 @@ async function buildPlanoPdf(params: {
       showMetrics: true,
     });
 
-    const gridX = PAGE_MARGIN_X;
-    const gridBottomY = FOOTER_TOP;
+    const gridX = PAGE_MARGIN_X - 14;
+    const gridBottomY = CONTENT_BOTTOM;
     const colGap = 11;
     const rowGap = 14;
-    const boxWidth = 262;
+    const boxWidth = 276;
     const boxHeight = 182;
 
     for (let row = 0; row < 3; row++) {
@@ -870,11 +873,11 @@ async function buildAllPdfsOptimized(params: {
       showMetrics: true,
     });
 
-    const gridX = PAGE_MARGIN_X;
-    const gridBottomY = FOOTER_TOP;
+    const gridX = PAGE_MARGIN_X - 14;
+    const gridBottomY = CONTENT_BOTTOM;
     const colGap = 11;
     const rowGap = 14;
-    const boxWidth = 262;
+    const boxWidth = 276;
     const boxHeight = 182;
 
     for (let row = 0; row < 3; row++) {
@@ -893,7 +896,7 @@ async function buildAllPdfsOptimized(params: {
   let shoppingPdf: Buffer | null = null;
   if (shoppingDoc && params.includeShoppingList) {
     const items = params.shoppingList.length > 0 ? params.shoppingList : [{ name: "Nenhum item disponível", displayQty: "—" }];
-    const shoppingPerPage = Math.floor((CONTENT_TOP - FOOTER_TOP - 60) / 19);
+    const shoppingPerPage = Math.floor((CONTENT_TOP - CONTENT_BOTTOM - 54) / 19);
 
     for (let start = 0; start < items.length; start += shoppingPerPage) {
       const page = shoppingDoc.pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
@@ -955,7 +958,7 @@ async function buildAllPdfsOptimized(params: {
 
 function drawShoppingFrame(doc: LayoutDoc, page: PDFPage, items: ShoppingItem[], shoppingDays: number) {
   const boxX = PAGE_MARGIN_X + 4;
-  const boxY = FOOTER_TOP + 4;
+  const boxY = CONTENT_BOTTOM;
   const boxWidth = PAGE_WIDTH - (PAGE_MARGIN_X + 4) * 2;
   const boxHeight = CONTENT_TOP - boxY - 4;
 
@@ -966,15 +969,15 @@ function drawShoppingFrame(doc: LayoutDoc, page: PDFPage, items: ShoppingItem[],
     borderWidth: 1,
   });
 
-  page.drawText(`quantidades totais para ${shoppingDays} dias`, {
+  page.drawText(`quantidades totais para ${shoppingDays} dias - quantidades do alimento cru ou em natura`, {
     x: boxX + 18,
     y: boxY + boxHeight - 26,
-    size: 11,
+    size: 10,
     font: doc.fontBold,
     color: rgb(0.2, 0.2, 0.2),
   });
 
-  let cursorY = boxY + boxHeight - 54;
+  let cursorY = boxY + boxHeight - 48;
   const lineHeight = 19;
 
   items.forEach((item) => {
