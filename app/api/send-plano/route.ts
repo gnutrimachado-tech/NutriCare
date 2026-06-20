@@ -1240,7 +1240,7 @@ export async function POST(request: Request) {
     const uploadedFiles = allAttachmentEntries.filter((entry): entry is File => entry instanceof File && entry.size > 0);
 
     const emailSummaryItems = [
-      "PDF do plano alimentar com o novo layout",
+      "PDF do plano alimentar",
       ...(includeShoppingList && shoppingList.length > 0 ? [`PDF da lista de compras (${shoppingDays} dias)`] : []),
       ...(includeProtocols && protocols.length > 0 ? ["PDF das orientações"] : []),
       ...(uploadedFiles.length > 0 ? ["arquivos complementares anexados"] : []),
@@ -1299,7 +1299,6 @@ export async function POST(request: Request) {
     const messageHtml = message
       ? `
         <div style="margin:18px 28px 0;padding:16px 18px;border:1px solid #d7e3ef;border-radius:12px;background:#f8fbff;">
-          <div style="font-size:15px;font-weight:700;color:#14324a;margin-bottom:8px;">Mensagem do nutricionista</div>
           <div style="font-size:13px;line-height:1.7;color:#334155;">${escapeHtml(message).replace(/\n/g, "<br>")}</div>
         </div>`
       : "";
@@ -1311,20 +1310,12 @@ export async function POST(request: Request) {
 <body style="margin:0;padding:24px;background:#eef3f8;font-family:'Segoe UI',Arial,sans-serif;">
   <div style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #dbe3ec;">
     <div style="padding:24px 28px;background:linear-gradient(180deg, #3f6faa 0%, #265d99 45%, #183865 100%);color:#ffffff;">
-      <div style="font-size:22px;font-weight:700;">NutriCare</div>
       <div style="font-size:18px;font-weight:600;margin-top:8px;">Plano alimentar enviado para download</div>
-      <div style="font-size:12px;line-height:1.7;margin-top:10px;color:#dbe8f7;">
-        Paciente: ${escapeHtml(paciente.nome || nomePaciente)}<br>
-        ${dataNascimento ? `Nascimento: ${formatDate(dataNascimento)}<br>` : ""}
-        Peso: ${Number(pesoKg || 0).toFixed(1).replace(".", ",")} kg &nbsp;|&nbsp; Altura: ${Math.round(alturaCm || 0)} cm &nbsp;|&nbsp; Sexo: ${escapeHtml(sexoPaciente || "—")}
+      <div style="font-size:13px;line-height:1.7;margin-top:8px;color:#dbe8f7;">
+        Paciente: ${escapeHtml(paciente.nome || nomePaciente)}
       </div>
     </div>
 
-    <div style="padding:24px 28px 12px;">
-      <div style="font-size:14px;line-height:1.8;color:#334155;">
-        Os layouts do plano alimentar, da lista de compras e das orientações seguem anexados em PDF para o paciente baixar diretamente pelo e-mail.
-      </div>
-    </div>
 
     ${messageHtml}
 
