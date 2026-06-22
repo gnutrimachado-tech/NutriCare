@@ -5,8 +5,9 @@ export const dynamic = "force-dynamic";
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const body = await req.json();
     const { horario, tipo, status, observacoes, data_agendamento } = body;
@@ -24,7 +25,7 @@ export async function PUT(
     }
 
     const updated = await prisma.agendamentos.update({
-      where: { id: params.id },
+      where: { id },
       data: updateData,
       include: {
         pacientes: { select: { id: true, nome: true, email: true } },
@@ -35,12 +36,13 @@ export async function PUT(
       id: updated.id,
       paciente_id: updated.paciente_id,
       paciente_nome: updated.pacientes.nome,
-      paciente_email: updated.pacientes.email,
-      data_agendamento: updated.data_agendamento,
-      horario: updated.horario,
-      tipo: updated.tipo,
-      status: updated.status,
-      email_enviado: updated.email_enviado,
+      paciente_email: updated.pacientes.email ?? "",
+      data_agendamento: updated.data_agendamento.toISOString(),
+      horario: updated.horario.toISOString(),
+      tipo: updated.tipo ?? "Consulta inicial",
+      status: updated.status ?? "Pendente",
+      observacoes: updated.observacoes ?? "",
+      email_enviado: updated.email_enviado ?? false,
     });
   } catch (err) {
     console.error(err);
@@ -50,10 +52,11 @@ export async function PUT(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
-    await prisma.agendamentos.delete({ where: { id: params.id } });
+    await prisma.agendamentos.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error(err);
