@@ -199,6 +199,18 @@ function fitText(text: string, maxWidth: number, font: PDFFont, size: number) {
   return `${current.trimEnd()}…`;
 }
 
+
+// ── Count visual wrapped lines for a list of text strings at meal font size ──
+function calcMealColLines(lines: string[], font: PDFFont, colWidth: number): number {
+  const MEAL_FONT_SIZE = 8;
+  let total = 0;
+  for (const line of lines) {
+    const wrapped = wrapText(String(line || ""), colWidth, font, MEAL_FONT_SIZE);
+    total += Math.max(1, wrapped.length);
+  }
+  return total;
+}
+
 // ── Rounded rectangle helper ──────────────────────────────────────────────────
 function drawRoundedRect(
   page: PDFPage,
