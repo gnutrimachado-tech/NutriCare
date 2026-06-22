@@ -1176,6 +1176,18 @@ async function buildShoppingListPdf(params: {
   return Buffer.from(await doc.pdf.save());
 }
 
+
+// ── Calculate dynamic height for a protocol box based on content ──────────────
+function calcProtocolBoxHeight(content: string | undefined | null, font: PDFFont, boxWidth: number): number {
+  const PROTO_OVERHEAD = 48;    // header name + divider + spacing + bottom pad
+  const PROTO_LINE_H = 9 + 3.5; // font size + line gap (matches drawProtocolBox)
+  const PROTO_MIN_H = 82;       // minimum height (former fixed value)
+  const contentWidth = boxWidth - 20;
+  if (!content || content.trim() === "") return PROTO_MIN_H;
+  const lines = wrapText(content, contentWidth, font, 9);
+  return Math.max(PROTO_MIN_H, Math.ceil(PROTO_OVERHEAD + Math.max(1, lines.length) * PROTO_LINE_H));
+}
+
 function drawProtocolBox(doc: LayoutDoc, page: PDFPage, x: number, y: number, width: number, height: number, protocol?: Protocol) {
   drawRoundedRect(page, x, y, width, height, BOX_RADIUS, {
     fillColor: rgb(1, 1, 1),
