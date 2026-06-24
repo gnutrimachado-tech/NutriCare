@@ -60,8 +60,8 @@ const PAGE_HEIGHT = 841.89;
 const PAGE_MARGIN_X = 30;
 const HEADER_TOP = PAGE_HEIGHT - 20;
 const HEADER_LINE_Y = HEADER_TOP - 78;   // linha horizontal separadora
-const TITLE_Y = HEADER_LINE_Y - 16;      // 0,5mm abaixo da linha (cap-height ~14pt + 1,4pt gap)
-const CONTENT_TOP = TITLE_Y - 1.5;       // 0,5mm abaixo do escrito do título
+const TITLE_Y = HEADER_LINE_Y - 28.35;   // 1cm abaixo da linha separadora
+const CONTENT_TOP = TITLE_Y - 28.35;     // 1cm abaixo do escrito do título
 const FOOTER_TOP = 82;                   // rodapé começa aqui
 const CONTENT_BOTTOM = 78;              // 0,5mm acima do baseline do texto "Nutricionista" (y≈76)
 // Constantes da lista de compras
