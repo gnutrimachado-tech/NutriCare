@@ -295,6 +295,7 @@ export default function EnvioPlanoLayout({
   const [newProtocolContent, setNewProtocolContent] = useState('')
   const [expandedMeals, setExpandedMeals] = useState<Record<string, boolean>>({})
   const [message, setMessage] = useState('')
+  const [messageEditing, setMessageEditing] = useState(false)
   const [attachments, setAttachments] = useState<File[]>([])
   const [selectedProtocolIds, setSelectedProtocolIds] = useState<Set<string>>(new Set())
   const [shoppingDays, setShoppingDays] = useState(30)
@@ -302,6 +303,14 @@ export default function EnvioPlanoLayout({
   const [includeProtocols, setIncludeProtocols] = useState(true)
   const [sending, setSending] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Load default message from localStorage
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem('default_message_nutri')
+      if (saved) setMessage(saved)
+    } catch { /* ignore */ }
+  }, [])
 
   // Load meals from localStorage
   useEffect(() => {
@@ -315,21 +324,21 @@ export default function EnvioPlanoLayout({
     }
   }, [pacienteId])
 
-  // Load protocols from localStorage
+  // Load protocols from localStorage (global — same for all patients of this nutri)
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem(`protocols_${pacienteId}`)
+      const raw = window.localStorage.getItem('protocols_global')
       if (raw) setProtocols(JSON.parse(raw))
     } catch {
       // ignore
     }
-  }, [pacienteId])
+  }, [])
 
   // Save protocols when changed
   const saveProtocols = useCallback((p: Protocol[]) => {
     setProtocols(p)
-    window.localStorage.setItem(`protocols_${pacienteId}`, JSON.stringify(p))
-  }, [pacienteId])
+    window.localStorage.setItem('protocols_global', JSON.stringify(p))
+  }, [])
 
   const toggleMealExpand = (id: string) => {
     setExpandedMeals(prev => ({ ...prev, [id]: !prev[id] }))
@@ -661,9 +670,9 @@ export default function EnvioPlanoLayout({
             value={newProtocolContent}
             onChange={e => setNewProtocolContent(e.target.value)}
             style={{ ...inputStyle, minHeight: 80, resize: 'vertical', marginBottom: 4 }}
-            maxLength={500}
+            maxLength={300}
           />
-          <div style={{ textAlign: 'right', fontSize: 11, color: '#94a3b8', marginBottom: 8 }}>{newProtocolContent.length}/500</div>
+          <div style={{ textAlign: 'right', fontSize: 11, color: '#94a3b8', marginBottom: 8 }}>{newProtocolContent.length}/300</div>
           <button onClick={addProtocol} style={{ ...smallBtnStyle, background: '#0f172a', color: '#fff', width: '100%' }}>
             + Adicionar protocolo
           </button>
@@ -672,15 +681,41 @@ export default function EnvioPlanoLayout({
 
       {/* Message Section */}
       <div style={sectionCardStyle}>
-        <h3 style={{ margin: '0 0 12px 0', fontSize: 18, fontWeight: 700, color: '#0f172a' }}>💬 Mensagem para o Paciente</h3>
-        <textarea
-          placeholder="Escreva uma mensagem personalizada que o paciente receberá no email..."
-          value={message}
-          onChange={e => setMessage(e.target.value)}
-          style={{ ...inputStyle, minHeight: 100, resize: 'vertical' }}
-          maxLength={500}
-        />
-        <div style={{ textAlign: 'right', fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{message.length}/500</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>💬 Mensagem para o Paciente</h3>
+          {!messageEditing ? (
+            <button
+              onClick={() => setMessageEditing(true)}
+              title="Editar mensagem padrão"
+              style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', fontSize: 15, color: '#475569' }}
+            >✏️</button>
+          ) : (
+            <button
+              onClick={() => { window.localStorage.setItem('default_message_nutri', message); setMessageEditing(false); }}
+              title="Salvar como mensagem padrão"
+              style={{ background: '#16a34a', border: 'none', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontSize: 15, color: '#fff', fontWeight: 700 }}
+            >✓ Salvar padrão</button>
+          )}
+        </div>
+        {messageEditing ? (
+          <>
+            <textarea
+              placeholder="Escreva uma mensagem personalizada que o paciente receberá no email..."
+              value={message}
+              onChange={e => setMessage(e.target.value)}
+              style={{ ...inputStyle, minHeight: 100, resize: 'vertical' }}
+              maxLength={300}
+            />
+            <div style={{ textAlign: 'right', fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{message.length}/300</div>
+          </>
+        ) : (
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: message ? '#334155' : '#94a3b8', minHeight: 60, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+            {message || 'Nenhuma mensagem padrão definida. Clique em ✏️ para editar.'}
+          </div>
+        )}
+        {!messageEditing && (
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>Esta mensagem é enviada para todos os pacientes. Clique em ✏️ para alterar.</div>
+        )}
       </div>
 
       {/* Attachments Section */}
