@@ -612,7 +612,9 @@ export default function EnvioPlanoLayout({
                   value={editingProtocol.content}
                   onChange={e => setEditingProtocol({ ...editingProtocol, content: e.target.value })}
                   style={{ ...inputStyle, minHeight: 100, resize: 'vertical' }}
+                  maxLength={500}
                 />
+                <div style={{ textAlign: 'right', fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{(editingProtocol.content || '').length}/500</div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   <button onClick={updateProtocol} style={{ ...smallBtnStyle, background: '#16a34a', color: '#fff' }}>✓ Salvar</button>
                   <button onClick={() => setEditingProtocol(null)} style={smallBtnStyle}>✕ Cancelar</button>
@@ -658,8 +660,10 @@ export default function EnvioPlanoLayout({
             placeholder="Conteúdo / orientações..."
             value={newProtocolContent}
             onChange={e => setNewProtocolContent(e.target.value)}
-            style={{ ...inputStyle, minHeight: 80, resize: 'vertical', marginBottom: 8 }}
+            style={{ ...inputStyle, minHeight: 80, resize: 'vertical', marginBottom: 4 }}
+            maxLength={500}
           />
+          <div style={{ textAlign: 'right', fontSize: 11, color: '#94a3b8', marginBottom: 8 }}>{newProtocolContent.length}/500</div>
           <button onClick={addProtocol} style={{ ...smallBtnStyle, background: '#0f172a', color: '#fff', width: '100%' }}>
             + Adicionar protocolo
           </button>
