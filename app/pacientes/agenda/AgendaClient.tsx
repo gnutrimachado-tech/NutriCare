@@ -192,6 +192,47 @@ export default function AgendaClient({ pacientes, agendamentosIniciais }: Props)
     }
   };
 
+  const handleCriarEEnviar = async () => {
+    if (!formPaciente || !formHorario) {
+      toast("Selecione o paciente e o horário.", "erro"); return;
+    }
+    if (!pacienteFiltrado?.email) {
+      toast("Paciente sem e-mail cadastrado.", "erro"); return;
+    }
+    setEnviando("novo");
+    try {
+      const res = await fetch("/api/agendamentos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paciente_id: formPaciente,
+          data_agendamento: isoDateStr(selectedDate),
+          horario: formHorario,
+          tipo: formTipo,
+          observacoes: formObs,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      const novo = await res.json();
+      setAgendamentos(prev => [...prev, novo]);
+      setFormPaciente(""); setFormHorario(""); setFormObs("");
+      setBuscaPaciente(""); setPacienteFiltrado(null);
+
+      const envRes = await fetch("/api/agendamentos/enviar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agendamento_id: novo.id }),
+      });
+      if (!res.ok) throw new Error((await envRes.json()).error);
+      setAgendamentos(prev => prev.map(a => a.id === novo.id ? { ...a, email_enviado: true } : a));
+      toast("Agendamento criado e e-mail de confirmação enviado!");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Erro ao criar/enviar", "erro");
+    } finally {
+      setEnviando(null);
+    }
+  };
+
   const handleEnviarEmail = async (ag: Agendamento) => {
     if (!ag.paciente_email) { toast("Paciente sem e-mail cadastrado.", "erro"); return; }
     setEnviando(ag.id);
@@ -465,6 +506,16 @@ export default function AgendaClient({ pacientes, agendamentosIniciais }: Props)
                 )}
               </div>
 
+              {/* Email do paciente (readonly) */}
+              {pacienteFiltrado?.email && (
+                <div style={s.field}>
+                  <label style={s.label}>E-mail do paciente</label>
+                  <div style={{ ...s.input, background: "#f8fafc", color: "#64748b", display: "flex", alignItems: "center", gap: 6 }}>
+                    📧 {pacienteFiltrado.email}
+                  </div>
+                </div>
+              )}
+
               {/* Tipo */}
               <div style={s.field}>
                 <label style={s.label}>Tipo de consulta</label>
@@ -498,9 +549,16 @@ export default function AgendaClient({ pacientes, agendamentosIniciais }: Props)
               </div>
 
               <button onClick={handleCriar} style={{
-                ...s.btn, ...s.btnPrimary, width: "100%", padding: "12px 0", fontSize: 14,
+                ...s.btn, ...s.btnPrimary, width: "100%", padding: "12px 0", fontSize: 14, marginBottom: 8,
               }}>
                 📅 Cadastrar agendamento
+              </button>
+              <button onClick={handleCriarEEnviar} disabled={enviando === "novo"} style={{
+                ...s.btn, width: "100%", padding: "12px 0", fontSize: 14,
+                background: "#16a34a", color: "#fff", border: "none", cursor: "pointer",
+                opacity: enviando === "novo" ? 0.6 : 1,
+              }}>
+                {enviando === "novo" ? "Enviando..." : "📧 Cadastrar e enviar confirmação"}
               </button>
             </div>
           </div>
