@@ -60,10 +60,14 @@ const PAGE_HEIGHT = 841.89;
 const PAGE_MARGIN_X = 30;
 const HEADER_TOP = PAGE_HEIGHT - 20;
 const HEADER_LINE_Y = HEADER_TOP - 78;   // linha horizontal separadora
-const TITLE_Y = HEADER_LINE_Y - 22;      // título ~0.5cm abaixo da linha
-const CONTENT_TOP = TITLE_Y - 26;        // topo da área de conteúdo
+const TITLE_Y = HEADER_LINE_Y - 16;      // 0,5mm abaixo da linha (cap-height ~14pt + 1,4pt gap)
+const CONTENT_TOP = TITLE_Y - 1.5;       // 0,5mm abaixo do escrito do título
 const FOOTER_TOP = 82;                   // rodapé começa aqui
-const CONTENT_BOTTOM = FOOTER_TOP + 28;  // limite inferior de conteúdo (1cm acima do rodapé)
+const CONTENT_BOTTOM = 78;              // 0,5mm acima do baseline do texto "Nutricionista" (y≈76)
+// Constantes da lista de compras
+const SHOP_HEADER_H = 48;              // espaço do cabeçalho dentro do quadrado
+const SHOP_LINE_H = 19;               // altura de cada linha de item
+const SHOP_BOTTOM_PAD = 20;           // padding inferior do quadrado
 const BACKGROUND_OPACITY = 0.15;
 const FOOTER_LOGO_OPACITY = 0.15;
 const BOX_RADIUS = 8;
@@ -772,7 +776,7 @@ async function buildPlanoPdf(params: {
     const MEAL_OVERHEAD = 66;
     const MEAL_BOTTOM_PAD = 10;
     const MEAL_LINE_H = 8 + 3.5;
-    const MIN_MEAL_H = 182;
+    const MIN_MEAL_H = 154;  // reduzido 1cm (28pt) conforme solicitado
 
     const allMeals = chunks.flat();
     const rows: Array<[EnvioMeal | undefined, EnvioMeal | undefined]> = [];
@@ -917,7 +921,7 @@ async function buildAllPdfsOptimized(params: {
     const MEAL_OVERHEAD = 66;
     const MEAL_BOTTOM_PAD = 10;
     const MEAL_LINE_H = 8 + 3.5;
-    const MIN_MEAL_H = 182;
+    const MIN_MEAL_H = 154;  // reduzido 1cm (28pt) conforme solicitado
 
     // Build list of all meals as rows of 2
     const allMeals = chunks.flat();
@@ -974,7 +978,9 @@ async function buildAllPdfsOptimized(params: {
   let shoppingPdf: Buffer | null = null;
   if (shoppingDoc && params.includeShoppingList) {
     const items = params.shoppingList.length > 0 ? params.shoppingList : [{ name: "Nenhum item disponível", displayQty: "—" }];
-    const shoppingPerPage = Math.floor((CONTENT_TOP - CONTENT_BOTTOM - 54) / 19);
+    // Items por página baseado na altura dinâmica do quadrado
+    const maxBoxH = CONTENT_TOP - CONTENT_BOTTOM - 4;
+    const shoppingPerPage = Math.max(1, Math.floor((maxBoxH - SHOP_HEADER_H - SHOP_BOTTOM_PAD) / SHOP_LINE_H));
 
     for (let start = 0; start < items.length; start += shoppingPerPage) {
       const page = shoppingDoc.pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
@@ -1018,7 +1024,10 @@ async function buildAllPdfsOptimized(params: {
       let protoCurrentY = Math.round(CONTENT_TOP);
 
       for (const protocol of protos) {
-        const boxHeight = calcProtocolBoxHeight(protocol.content, protocolsDoc.fontRegular, protoBoxWidth);
+        // Limite de 500 caracteres por quadrado de orientação
+        const limitedContent = (protocol.content || "").slice(0, 500);
+        const limitedProtocol = { ...protocol, content: limitedContent };
+        const boxHeight = calcProtocolBoxHeight(limitedContent, protocolsDoc.fontRegular, protoBoxWidth);
         if (protoCurrentY - boxHeight < CONTENT_BOTTOM + protoGap) {
           protoPage = protocolsDoc.pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
           drawHeader(protocolsDoc, protoPage, {
@@ -1033,7 +1042,7 @@ async function buildAllPdfsOptimized(params: {
           drawFooter(protocolsDoc, protoPage);
           protoCurrentY = Math.round(CONTENT_TOP);
         }
-        drawProtocolBox(protocolsDoc, protoPage, protoBoxX, protoCurrentY - boxHeight, protoBoxWidth, boxHeight, protocol);
+        drawProtocolBox(protocolsDoc, protoPage, protoBoxX, protoCurrentY - boxHeight, protoBoxWidth, boxHeight, limitedProtocol);
         protoCurrentY -= boxHeight + protoGap;
       }
     }
@@ -1049,9 +1058,13 @@ async function buildAllPdfsOptimized(params: {
 
 function drawShoppingFrame(doc: LayoutDoc, page: PDFPage, items: ShoppingItem[], shoppingDays: number) {
   const boxX = PAGE_MARGIN_X + 4;
-  const boxY = CONTENT_BOTTOM;
   const boxWidth = PAGE_WIDTH - (PAGE_MARGIN_X + 4) * 2;
-  const boxHeight = CONTENT_TOP - boxY - 4;
+
+  // Altura dinâmica: quadrado acompanha o conteúdo, limitado pelo espaço disponível
+  const maxBoxH = CONTENT_TOP - CONTENT_BOTTOM - 4;
+  const dynH = SHOP_HEADER_H + items.length * SHOP_LINE_H + SHOP_BOTTOM_PAD;
+  const boxHeight = Math.min(dynH, maxBoxH);
+  const boxY = CONTENT_TOP - boxHeight;  // ancorado no topo (CONTENT_TOP)
 
   drawRoundedRect(page, boxX, boxY, boxWidth, boxHeight, BOX_RADIUS, {
     fillColor: rgb(1, 1, 1),
@@ -1068,11 +1081,10 @@ function drawShoppingFrame(doc: LayoutDoc, page: PDFPage, items: ShoppingItem[],
     color: rgb(0.2, 0.2, 0.2),
   });
 
-  let cursorY = boxY + boxHeight - 48;
-  const lineHeight = 19;
+  let cursorY = boxY + boxHeight - SHOP_HEADER_H;
 
   items.forEach((item) => {
-    if (cursorY < boxY + 20) return;
+    if (cursorY < boxY + SHOP_BOTTOM_PAD) return;
 
     page.drawCircle({
       x: boxX + 16,
@@ -1098,13 +1110,21 @@ function drawShoppingFrame(doc: LayoutDoc, page: PDFPage, items: ShoppingItem[],
       qtyText = item.displayQty || `${item.qty ?? ""} ${item.unit ?? ""}`.trim();
     }
 
-    const maxLabelWidth = boxWidth - 140;
+    const maxLabelWidth = boxWidth - 60;
     const nameLines = wrapText(simpleName, maxLabelWidth, doc.fontBold, 11.5);
     const firstLine = nameLines[0] || simpleName;
-    const dotCount = Math.max(4, Math.floor((boxWidth - 90 - doc.fontBold.widthOfTextAtSize(firstLine, 11.5) - doc.fontBold.widthOfTextAtSize(qtyText, 11.5)) / doc.fontRegular.widthOfTextAtSize(".", 11.5)));
-    const dots = ".".repeat(Math.min(dotCount, 40));
 
-    // Draw first line of name + dots + qty on same line
+    // Cálculo correto dos pontilhados: preenchem do fim do nome até o início da quantidade
+    const nameW = doc.fontBold.widthOfTextAtSize(firstLine, 11.5);
+    const qtyW = doc.fontBold.widthOfTextAtSize(qtyText, 11.5);
+    const dotW = doc.fontRegular.widthOfTextAtSize(".", 11.5);
+    // nameStartX = boxX + 24; qtyEndX = boxX + boxWidth - 18
+    // dotsArea = boxWidth - 24 - 18 - nameW - qtyW - 4 (4pt buffer)
+    const dotsAreaWidth = boxWidth - 24 - 18 - nameW - qtyW - 4;
+    const dotCount = Math.max(2, Math.floor(dotsAreaWidth / dotW));
+    const dots = ".".repeat(dotCount);
+
+    // Desenha nome
     page.drawText(firstLine, {
       x: boxX + 24,
       y: cursorY,
@@ -1113,27 +1133,29 @@ function drawShoppingFrame(doc: LayoutDoc, page: PDFPage, items: ShoppingItem[],
       color: rgb(0.08, 0.08, 0.08),
     });
 
+    // Desenha pontilhados logo após o nome (encostando na quantidade)
     page.drawText(dots, {
-      x: boxX + 24 + doc.fontBold.widthOfTextAtSize(firstLine, 11.5) + 4,
+      x: boxX + 24 + nameW + 1,
       y: cursorY,
       size: 11.5,
       font: doc.fontRegular,
       color: rgb(0.4, 0.4, 0.4),
     });
 
+    // Desenha quantidade alinhada à direita do quadrado
     page.drawText(qtyText, {
-      x: boxX + boxWidth - 18 - doc.fontBold.widthOfTextAtSize(qtyText, 11.5),
+      x: boxX + boxWidth - 18 - qtyW,
       y: cursorY,
       size: 11.5,
       font: doc.fontBold,
       color: rgb(0.08, 0.08, 0.08),
     });
 
-    cursorY -= lineHeight;
+    cursorY -= SHOP_LINE_H;
 
-    // Draw any additional name lines (wrapped overflow)
+    // Linhas adicionais do nome (quebra de linha)
     for (let ni = 1; ni < nameLines.length; ni++) {
-      if (cursorY < boxY + 20) break;
+      if (cursorY < boxY + SHOP_BOTTOM_PAD) break;
       page.drawText(nameLines[ni], {
         x: boxX + 24,
         y: cursorY,
@@ -1141,7 +1163,7 @@ function drawShoppingFrame(doc: LayoutDoc, page: PDFPage, items: ShoppingItem[],
         font: doc.fontBold,
         color: rgb(0.08, 0.08, 0.08),
       });
-      cursorY -= lineHeight;
+      cursorY -= SHOP_LINE_H;
     }
   });
 }
@@ -1157,7 +1179,8 @@ async function buildShoppingListPdf(params: {
 }) {
   const doc = await createLayoutDoc();
   const items = params.shoppingList.length > 0 ? params.shoppingList : [{ name: "Nenhum item disponível", displayQty: "—" }];
-  const perPage = 24;
+  const maxBoxH = CONTENT_TOP - CONTENT_BOTTOM - 4;
+  const perPage = Math.max(1, Math.floor((maxBoxH - SHOP_HEADER_H - SHOP_BOTTOM_PAD) / SHOP_LINE_H));
 
   for (let start = 0; start < items.length; start += perPage) {
     const page = addBasePage(doc, {
@@ -1256,7 +1279,10 @@ async function buildProtocolsPdf(params: {
     let currentY = Math.round(CONTENT_TOP);
 
     for (const protocol of protocols) {
-      const boxHeight = calcProtocolBoxHeight(protocol.content, doc.fontRegular, boxWidth);
+      // Limite de 500 caracteres por quadrado de orientação
+      const limitedContent = (protocol.content || "").slice(0, 500);
+      const limitedProtocol = { ...protocol, content: limitedContent };
+      const boxHeight = calcProtocolBoxHeight(limitedContent, doc.fontRegular, boxWidth);
       if (currentY - boxHeight < CONTENT_BOTTOM + gap) {
         page = addBasePage(doc, {
           title: "orientações",
@@ -1269,7 +1295,7 @@ async function buildProtocolsPdf(params: {
         });
         currentY = Math.round(CONTENT_TOP);
       }
-      drawProtocolBox(doc, page, boxX, currentY - boxHeight, boxWidth, boxHeight, protocol);
+      drawProtocolBox(doc, page, boxX, currentY - boxHeight, boxWidth, boxHeight, limitedProtocol);
       currentY -= boxHeight + gap;
     }
   }
