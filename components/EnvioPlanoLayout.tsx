@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 type EnvioPlanoProps = {
   pacienteId: string
@@ -115,7 +115,7 @@ function PrintableLayout({
           alignItems: 'flex-start',
           borderBottom: '2px solid #0f172a',
           paddingBottom: 12,
-          marginBottom: '5mm',
+          marginBottom: '1cm',
           position: 'relative',
           zIndex: 1,
         }}
@@ -324,20 +324,12 @@ export default function EnvioPlanoLayout({
     }
   }, [pacienteId])
 
-  // Load protocols from localStorage (global — same for all patients of this nutri)
+  // Load protocols from API (per-nutritionist, persisted in DB)
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem('protocols_global')
-      if (raw) setProtocols(JSON.parse(raw))
-    } catch {
-      // ignore
-    }
-  }, [])
-
-  // Save protocols when changed
-  const saveProtocols = useCallback((p: Protocol[]) => {
-    setProtocols(p)
-    window.localStorage.setItem('protocols_global', JSON.stringify(p))
+    fetch('/api/protocolos')
+      .then(r => r.ok ? r.json() : [])
+      .then((data: Protocol[]) => setProtocols(Array.isArray(data) ? data : []))
+      .catch(() => {})
   }, [])
 
   const toggleMealExpand = (id: string) => {
@@ -396,27 +388,45 @@ export default function EnvioPlanoLayout({
     p.name.toLowerCase().includes(protocolSearch.toLowerCase())
   )
 
-  const addProtocol = () => {
+  const addProtocol = async () => {
     if (!newProtocolName.trim()) return
-    const p: Protocol = {
-      id: Date.now().toString(),
-      name: newProtocolName.trim(),
-      content: newProtocolContent.trim(),
-    }
-    saveProtocols([...protocols, p])
-    setNewProtocolName('')
-    setNewProtocolContent('')
+    try {
+      const res = await fetch('/api/protocolos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newProtocolName.trim(), content: newProtocolContent.trim() }),
+      })
+      if (res.ok) {
+        const p: Protocol = await res.json()
+        setProtocols(prev => [...prev, p])
+        setNewProtocolName('')
+        setNewProtocolContent('')
+      }
+    } catch {}
   }
 
-  const deleteProtocol = (id: string) => {
+  const deleteProtocol = async (id: string) => {
     if (!window.confirm('Excluir protocolo?')) return
-    saveProtocols(protocols.filter(p => p.id !== id))
+    try {
+      const res = await fetch('/api/protocolos/' + id, { method: 'DELETE' })
+      if (res.ok) setProtocols(prev => prev.filter(p => p.id !== id))
+    } catch {}
   }
 
-  const updateProtocol = () => {
+  const updateProtocol = async () => {
     if (!editingProtocol) return
-    saveProtocols(protocols.map(p => p.id === editingProtocol.id ? editingProtocol : p))
-    setEditingProtocol(null)
+    try {
+      const res = await fetch('/api/protocolos/' + editingProtocol.id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editingProtocol.name, content: editingProtocol.content }),
+      })
+      if (res.ok) {
+        const updated: Protocol = await res.json()
+        setProtocols(prev => prev.map(p => p.id === updated.id ? updated : p))
+        setEditingProtocol(null)
+      }
+    } catch {}
   }
 
   const handleAddAttachment = () => {
@@ -621,9 +631,9 @@ export default function EnvioPlanoLayout({
                   value={editingProtocol.content}
                   onChange={e => setEditingProtocol({ ...editingProtocol, content: e.target.value })}
                   style={{ ...inputStyle, minHeight: 100, resize: 'vertical' }}
-                  maxLength={500}
+                  maxLength={300}
                 />
-                <div style={{ textAlign: 'right', fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{(editingProtocol.content || '').length}/500</div>
+                <div style={{ textAlign: 'right', fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{(editingProtocol.content || '').length}/300</div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   <button onClick={updateProtocol} style={{ ...smallBtnStyle, background: '#16a34a', color: '#fff' }}>✓ Salvar</button>
                   <button onClick={() => setEditingProtocol(null)} style={smallBtnStyle}>✕ Cancelar</button>
