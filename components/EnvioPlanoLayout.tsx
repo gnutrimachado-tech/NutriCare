@@ -146,20 +146,39 @@ function PrintableLayout({
       {/* Content */}
       <div style={{ position: 'relative', zIndex: 1 }}>
         {type === 'plano' ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, paddingBottom: '1cm' }}>
-            {meals.map((meal, idx) => (
+          /* Grade de refeições: 2 colunas, caixas crescem com conteúdo.
+             A cada 4 refeições (2 linhas × 2 colunas) inserimos uma quebra de página
+             para que o rodapé CRN apareça antes de estourar a margem. */
+          <div style={{ paddingBottom: '1cm' }}>
+            {Array.from({ length: Math.ceil(meals.length / 4) }, (_, pageIdx) => {
+              const pageMeals = meals.slice(pageIdx * 4, pageIdx * 4 + 4)
+              return (
+                <div
+                  key={pageIdx}
+                  style={{
+                    pageBreakBefore: pageIdx > 0 ? 'always' : 'auto',
+                    breakBefore: pageIdx > 0 ? 'page' : 'auto',
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: 14,
+                    marginBottom: pageIdx < Math.ceil(meals.length / 4) - 1 ? 0 : 0,
+                  } as React.CSSProperties}
+                >
+                  {pageMeals.map((meal, idx) => (
               <div
                 key={meal.id}
                 style={{
                   border: '1px solid #d1d5db',
                   borderRadius: 10,
                   padding: '14px 18px',
-                  minHeight: 180,
                   background: 'rgba(255,255,255,0.55)',
+                  breakInside: 'avoid',
+                  pageBreakInside: 'avoid',
+                  minHeight: 120,
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, borderBottom: '1px solid #e5e7eb', paddingBottom: 8 }}>
-                  <span style={{ fontWeight: 700, fontSize: 14 }}>{meal.name || `Refeição ${idx + 1}`}</span>
+                  <span style={{ fontWeight: 700, fontSize: 14 }}>{meal.name || `Refeição ${pageIdx * 4 + idx + 1}`}</span>
                   <span style={{ fontSize: 11, color: '#666' }}>{meal.time}</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 11 }}>
@@ -197,7 +216,10 @@ function PrintableLayout({
                   </div>
                 </div>
               </div>
-            ))}
+                  ))}
+                </div>
+              )
+            })}
           </div>
         ) : type === 'compras' ? (
           /* Lista de Compras layout */
@@ -299,6 +321,7 @@ export default function EnvioPlanoLayout({
   const [attachments, setAttachments] = useState<File[]>([])
   const [selectedProtocolIds, setSelectedProtocolIds] = useState<Set<string>>(new Set())
   const [shoppingDays, setShoppingDays] = useState(30)
+  const shoppingDaysRef = useRef(30)
   const [includeShoppingList, setIncludeShoppingList] = useState(true)
   const [includeProtocols, setIncludeProtocols] = useState(true)
   const [sending, setSending] = useState(false)
@@ -324,12 +347,27 @@ export default function EnvioPlanoLayout({
     }
   }, [pacienteId])
 
-  // Load protocols from API (per-nutritionist, persisted in DB)
+  // Load protocols from API; if API returns 401 (not authorized locally), use localStorage
   useEffect(() => {
+    const LOCAL_KEY = 'nutricare_protocolos_local'
     fetch('/api/protocolos')
-      .then(r => r.ok ? r.json() : [])
+      .then(async r => {
+        if (r.status === 401) {
+          // Fallback: carregar do localStorage
+          try {
+            const raw = window.localStorage.getItem(LOCAL_KEY)
+            return raw ? JSON.parse(raw) : []
+          } catch { return [] }
+        }
+        return r.ok ? r.json() : []
+      })
       .then((data: Protocol[]) => setProtocols(Array.isArray(data) ? data : []))
-      .catch(() => {})
+      .catch(() => {
+        try {
+          const raw = window.localStorage.getItem('nutricare_protocolos_local')
+          if (raw) setProtocols(JSON.parse(raw))
+        } catch { /* ignore */ }
+      })
   }, [])
 
   const toggleMealExpand = (id: string) => {
@@ -390,27 +428,90 @@ export default function EnvioPlanoLayout({
 
   const addProtocol = async () => {
     if (!newProtocolName.trim()) return
+    const LOCAL_KEY = 'nutricare_protocolos_local'
+
+    // Função auxiliar para salvar localmente
+    const salvarLocal = (lista: Protocol[]) => {
+      try { window.localStorage.setItem(LOCAL_KEY, JSON.stringify(lista)) } catch { /* ignore */ }
+    }
+
     try {
       const res = await fetch('/api/protocolos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newProtocolName.trim(), content: newProtocolContent.trim() }),
       })
+
       if (res.ok) {
         const p: Protocol = await res.json()
-        setProtocols(prev => [...prev, p])
+        setProtocols(prev => {
+          const nova = [...prev, p]
+          salvarLocal(nova)
+          return nova
+        })
+        setSelectedProtocolIds(prev => { const next = new Set(prev); next.add(p.id); return next })
         setNewProtocolName('')
         setNewProtocolContent('')
+        setProtocolSearch('')
+      } else if (res.status === 401) {
+        // API sem autenticação: salvar apenas no localStorage
+        const novoLocal: Protocol = {
+          id: `local_${Date.now()}`,
+          name: newProtocolName.trim(),
+          content: newProtocolContent.trim(),
+        }
+        setProtocols(prev => {
+          const nova = [...prev, novoLocal]
+          salvarLocal(nova)
+          return nova
+        })
+        setSelectedProtocolIds(prev => { const next = new Set(prev); next.add(novoLocal.id); return next })
+        setNewProtocolName('')
+        setNewProtocolContent('')
+        setProtocolSearch('')
+      } else {
+        const data = await res.json().catch(() => ({}))
+        alert('Erro ao criar protocolo: ' + (data.error || res.statusText))
       }
-    } catch {}
+    } catch {
+      // Erro de rede — salvar localmente
+      const novoLocal: Protocol = {
+        id: `local_${Date.now()}`,
+        name: newProtocolName.trim(),
+        content: newProtocolContent.trim(),
+      }
+      setProtocols(prev => {
+        const nova = [...prev, novoLocal]
+        salvarLocal(nova)
+        return nova
+      })
+      setSelectedProtocolIds(prev => { const next = new Set(prev); next.add(novoLocal.id); return next })
+      setNewProtocolName('')
+      setNewProtocolContent('')
+      setProtocolSearch('')
+    }
   }
 
   const deleteProtocol = async (id: string) => {
     if (!window.confirm('Excluir protocolo?')) return
+    const LOCAL_KEY = 'nutricare_protocolos_local'
+    const removeFromState = () => {
+      setProtocols(prev => {
+        const next = prev.filter(p => p.id !== id)
+        try { window.localStorage.setItem(LOCAL_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+        return next
+      })
+    }
+    if (id.startsWith('local_')) {
+      removeFromState()
+      return
+    }
     try {
       const res = await fetch('/api/protocolos/' + id, { method: 'DELETE' })
-      if (res.ok) setProtocols(prev => prev.filter(p => p.id !== id))
-    } catch {}
+      if (res.ok || res.status === 401 || res.status === 404) removeFromState()
+    } catch {
+      removeFromState()
+    }
   }
 
   const updateProtocol = async () => {
@@ -456,7 +557,7 @@ export default function EnvioPlanoLayout({
       formData.append('meals', JSON.stringify(meals.map(m => ({ name: m.name, time: m.time, foods: m.foods, subs: m.subs }))))
       formData.append('protocols', JSON.stringify(includeProtocols ? protocols.filter(p => selectedProtocolIds.has(p.id)) : []))
       formData.append('shoppingList', JSON.stringify(shoppingList))
-      formData.append('shoppingDays', shoppingDays.toString())
+      formData.append('shoppingDays', shoppingDaysRef.current.toString())
       formData.append('dataNascimento', dataNascimento)
       formData.append('sexoPaciente', sexoPaciente)
       formData.append('pesoKg', pesoKg.toString())
@@ -582,7 +683,7 @@ export default function EnvioPlanoLayout({
               type="text"
               inputMode="numeric"
               value={shoppingDays}
-              onChange={e => { const v = e.target.value.replace(/[^\d]/g, ''); setShoppingDays(Math.max(1, parseInt(v) || 1)) }}
+              onChange={e => { const v = e.target.value.replace(/[^\d]/g, ''); const n = Math.max(1, parseInt(v) || 1); shoppingDaysRef.current = n; setShoppingDays(n) }}
               style={{ width: 60, padding: '6px 10px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 13, textAlign: 'center', fontWeight: 700 }}
             />
           </div>
@@ -616,7 +717,8 @@ export default function EnvioPlanoLayout({
           style={{ ...inputStyle, marginBottom: 12 }}
         />
 
-        {/* Protocol list */}
+        {/* Protocol list — card com scroll */}
+        <div style={{ maxHeight: 320, overflowY: 'auto', paddingRight: 4, marginBottom: 4 }}>
         {filteredProtocols.map(p => (
           <div key={p.id} style={mealCardStyle}>
             {editingProtocol?.id === p.id ? (
@@ -664,6 +766,7 @@ export default function EnvioPlanoLayout({
             )}
           </div>
         ))}
+        </div>
 
         {/* New protocol */}
         <div style={{ marginTop: 16, padding: 12, background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>

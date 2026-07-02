@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 type Paciente = { id: string; nome: string; email: string };
@@ -24,7 +24,7 @@ type Props = {
 };
 
 const TIPOS = ["Consulta inicial", "Retorno", "Reavaliação física", "Avaliação física"];
-const HORARIOS = [
+const HORARIOS_DEFAULT = [
   "07:00","07:30","08:00","08:30","09:00","09:30",
   "10:00","10:30","11:00","11:30","12:00","12:30",
   "13:00","13:30","14:00","14:30","15:00","15:30",
@@ -40,6 +40,10 @@ const DIAS_SEMANA_FULL = [
   "Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado",
 ];
 
+// Anos disponíveis no seletor: 5 anos passados + 5 futuros
+const anoAtual = new Date().getFullYear();
+const ANOS = Array.from({ length: 11 }, (_, i) => anoAtual - 5 + i);
+
 function statusCor(status: string): { bg: string; color: string; border: string } {
   switch (status) {
     case "Confirmado": return { bg: "#f0fdf4", color: "#16a34a", border: "#bbf7d0" };
@@ -53,11 +57,6 @@ function horarioStr(iso: string): string {
   const h = String(d.getUTCHours()).padStart(2, "0");
   const m = String(d.getUTCMinutes()).padStart(2, "0");
   return `${h}:${m}`;
-}
-
-function dataLocalStr(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getUTCDate()).padStart(2,"0")}/${String(d.getUTCMonth()+1).padStart(2,"0")}/${d.getUTCFullYear()}`;
 }
 
 function isoDateStr(date: Date): string {
@@ -88,22 +87,32 @@ export default function AgendaClient({ pacientes, agendamentosIniciais }: Props)
   const [formPaciente, setFormPaciente] = useState("");
   const [formTipo, setFormTipo] = useState(TIPOS[0]);
   const [formHorario, setFormHorario] = useState("");
-  const [formObs, setFormObs] = useState("");
   const [buscaPaciente, setBuscaPaciente] = useState("");
   const [pacienteFiltrado, setPacienteFiltrado] = useState<Paciente | null>(null);
 
-  // Edit state
+  // Edit state (modal edição de agendamento na lista)
   const [editHorario, setEditHorario] = useState("");
   const [editTipo, setEditTipo] = useState("");
   const [editObs, setEditObs] = useState("");
+
+  // Inline time edit (double-click no horário da lista do dia)
+  const [inlineEditId, setInlineEditId] = useState<string | null>(null);
+  const [inlineEditTime, setInlineEditTime] = useState("");
+  const inlineInputRef = useRef<HTMLInputElement>(null);
+
+  // Horários editáveis na grade de seleção do formulário
+  const [horariosCustom, setHorariosCustom] = useState<string[]>(HORARIOS_DEFAULT);
+  const [editingSlotIdx, setEditingSlotIdx] = useState<number | null>(null);
+  const [editingSlotVal, setEditingSlotVal] = useState("");
+  const slotInputRef = useRef<HTMLInputElement>(null);
 
   const toast = (text: string, tipo: "ok" | "erro" = "ok") => {
     setMsg({ text, tipo });
     setTimeout(() => setMsg(null), 4000);
   };
 
-  const carregarMes = useCallback(async (ano: number, mes: number) => {
-    setLoading(true);
+  const carregarMes = useCallback(async (ano: number, mes: number, silencioso = false) => {
+    if (!silencioso) setLoading(true);
     try {
       const dataInicio = `${ano}-${String(mes+1).padStart(2,"0")}-01`;
       const ultimoDia = new Date(ano, mes+1, 0).getDate();
@@ -114,17 +123,37 @@ export default function AgendaClient({ pacientes, agendamentosIniciais }: Props)
         setAgendamentos(data);
       }
     } finally {
-      setLoading(false);
+      if (!silencioso) setLoading(false);
     }
   }, []);
 
-  const mudarMes = (delta: number) => {
-    const nova = new Date(viewDate.getFullYear(), viewDate.getMonth() + delta, 1);
+  // Polling automático a cada 60s
+  useEffect(() => {
+    const interval = setInterval(() => {
+      carregarMes(viewDate.getFullYear(), viewDate.getMonth(), true);
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [carregarMes, viewDate]);
+
+  const irParaMes = (ano: number, mes: number) => {
+    const nova = new Date(ano, mes, 1);
     setViewDate(nova);
-    carregarMes(nova.getFullYear(), nova.getMonth());
+    carregarMes(ano, mes);
+  };
+
+  const irParaHoje = () => {
+    const h = new Date();
+    h.setHours(0,0,0,0);
+    setSelectedDate(new Date(h));
+    const nova = new Date(h.getFullYear(), h.getMonth(), 1);
+    setViewDate(nova);
+    carregarMes(h.getFullYear(), h.getMonth());
   };
 
   const agendamentosDia = agendamentos.filter(a => sameUTCDay(a.data_agendamento, selectedDate));
+
+  // Horários já ocupados no dia selecionado (bloquear na grade)
+  const horariosOcupados = new Set(agendamentosDia.map(a => horarioStr(a.horario)));
 
   const diasNoMes = () => {
     const ano = viewDate.getFullYear();
@@ -136,10 +165,35 @@ export default function AgendaClient({ pacientes, agendamentosIniciais }: Props)
     return dias;
   };
 
-  const handleCriar = async () => {
+  // Salva edição de slot de horário na grade do formulário
+  const salvarSlot = (idx: number, val: string) => {
+    const limpo = val.trim();
+    if (!limpo) { setEditingSlotIdx(null); return; }
+    // Aceita formato HH:MM ou H:MM
+    const match = limpo.match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) { toast("Formato inválido. Use HH:MM", "erro"); setEditingSlotIdx(null); return; }
+    const novo = `${match[1].padStart(2,"0")}:${match[2]}`;
+    setHorariosCustom(prev => {
+      const next = [...prev];
+      next[idx] = novo;
+      return next;
+    });
+    // Se este slot estava selecionado, atualiza o formHorario também
+    if (formHorario === horariosCustom[idx]) setFormHorario(novo);
+    setEditingSlotIdx(null);
+  };
+
+  const handleCriarEEnviar = async () => {
     if (!formPaciente || !formHorario) {
       toast("Selecione o paciente e o horário.", "erro"); return;
     }
+    if (!pacienteFiltrado?.email) {
+      toast("Paciente sem e-mail cadastrado.", "erro"); return;
+    }
+    if (horariosOcupados.has(formHorario)) {
+      toast("Horário já ocupado nesta data. Escolha outro.", "erro"); return;
+    }
+    setEnviando("novo");
     try {
       const res = await fetch("/api/agendamentos", {
         method: "POST",
@@ -149,17 +203,30 @@ export default function AgendaClient({ pacientes, agendamentosIniciais }: Props)
           data_agendamento: isoDateStr(selectedDate),
           horario: formHorario,
           tipo: formTipo,
-          observacoes: formObs,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
       const novo = await res.json();
       setAgendamentos(prev => [...prev, novo]);
-      setFormPaciente(""); setFormHorario(""); setFormObs("");
+      setFormPaciente(""); setFormHorario("");
       setBuscaPaciente(""); setPacienteFiltrado(null);
-      toast("Agendamento criado com sucesso!");
+      setFormTipo(TIPOS[0]);
+
+      const envRes = await fetch("/api/agendamentos/enviar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agendamento_id: novo.id }),
+      });
+      if (envRes.ok) {
+        setAgendamentos(prev => prev.map(a => a.id === novo.id ? { ...a, email_enviado: true } : a));
+        toast("Agendamento criado e e-mail de confirmação enviado!");
+      } else {
+        toast("Agendamento criado! (erro ao enviar e-mail)", "erro");
+      }
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Erro ao criar", "erro");
+      toast(e instanceof Error ? e.message : "Erro ao criar/enviar", "erro");
+    } finally {
+      setEnviando(null);
     }
   };
 
@@ -181,6 +248,30 @@ export default function AgendaClient({ pacientes, agendamentosIniciais }: Props)
     }
   };
 
+  // Salva horário via inline edit (duplo clique no horário da lista)
+  const handleSalvarInlineTime = async (id: string) => {
+    const val = inlineEditTime.trim();
+    if (!val) { setInlineEditId(null); return; }
+    const match = val.match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) { toast("Formato inválido. Use HH:MM", "erro"); setInlineEditId(null); return; }
+    const timeStr = `${match[1].padStart(2,"0")}:${match[2]}`;
+    try {
+      const res = await fetch(`/api/agendamentos/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ horario: timeStr }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      const updated = await res.json();
+      setAgendamentos(prev => prev.map(a => a.id === updated.id ? { ...a, ...updated } : a));
+      toast("Horário atualizado!");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Erro ao atualizar horário", "erro");
+    } finally {
+      setInlineEditId(null);
+    }
+  };
+
   const handleDeletar = async (id: string) => {
     if (!confirm("Excluir este agendamento?")) return;
     try {
@@ -189,47 +280,6 @@ export default function AgendaClient({ pacientes, agendamentosIniciais }: Props)
       toast("Agendamento excluído.");
     } catch {
       toast("Erro ao excluir.", "erro");
-    }
-  };
-
-  const handleCriarEEnviar = async () => {
-    if (!formPaciente || !formHorario) {
-      toast("Selecione o paciente e o horário.", "erro"); return;
-    }
-    if (!pacienteFiltrado?.email) {
-      toast("Paciente sem e-mail cadastrado.", "erro"); return;
-    }
-    setEnviando("novo");
-    try {
-      const res = await fetch("/api/agendamentos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          paciente_id: formPaciente,
-          data_agendamento: isoDateStr(selectedDate),
-          horario: formHorario,
-          tipo: formTipo,
-          observacoes: formObs,
-        }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error);
-      const novo = await res.json();
-      setAgendamentos(prev => [...prev, novo]);
-      setFormPaciente(""); setFormHorario(""); setFormObs("");
-      setBuscaPaciente(""); setPacienteFiltrado(null);
-
-      const envRes = await fetch("/api/agendamentos/enviar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agendamento_id: novo.id }),
-      });
-      if (!res.ok) throw new Error((await envRes.json()).error);
-      setAgendamentos(prev => prev.map(a => a.id === novo.id ? { ...a, email_enviado: true } : a));
-      toast("Agendamento criado e e-mail de confirmação enviado!");
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Erro ao criar/enviar", "erro");
-    } finally {
-      setEnviando(null);
     }
   };
 
@@ -294,12 +344,40 @@ export default function AgendaClient({ pacientes, agendamentosIniciais }: Props)
         <div style={s.left}>
           {/* CALENDAR */}
           <div style={s.card}>
-            <div style={s.cardHeader}>
-              <button onClick={() => mudarMes(-1)} style={{ ...s.btn, ...s.btnGhost, padding: "6px 12px" }}>‹</button>
-              <span style={{ fontWeight: 700, fontSize: 16, color: "#1e293b" }}>
-                {MESES[viewDate.getMonth()]} {viewDate.getFullYear()}
-              </span>
-              <button onClick={() => mudarMes(1)} style={{ ...s.btn, ...s.btnGhost, padding: "6px 12px" }}>›</button>
+            {/* Cabeçalho: selects de mês/ano + botão Hoje */}
+            <div style={{ ...s.cardHeader, gap: 8, flexWrap: "wrap" }}>
+              <button
+                onClick={irParaHoje}
+                style={{ ...s.btn, background: "#1e5fa8", color: "#fff", padding: "6px 14px", fontSize: 12 }}
+              >
+                Hoje
+              </button>
+
+              <div style={{ display: "flex", gap: 6, flex: 1, justifyContent: "center", alignItems: "center" }}>
+                {/* Seletor de Mês */}
+                <select
+                  value={viewDate.getMonth()}
+                  onChange={e => irParaMes(viewDate.getFullYear(), parseInt(e.target.value))}
+                  style={{ padding: "6px 10px", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 13, background: "#fff", fontWeight: 600, cursor: "pointer" }}
+                >
+                  {MESES.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                </select>
+
+                {/* Seletor de Ano */}
+                <select
+                  value={viewDate.getFullYear()}
+                  onChange={e => irParaMes(parseInt(e.target.value), viewDate.getMonth())}
+                  style={{ padding: "6px 10px", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 13, background: "#fff", fontWeight: 600, cursor: "pointer" }}
+                >
+                  {ANOS.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+
+              {/* Setas mês anterior/próximo */}
+              <div style={{ display: "flex", gap: 4 }}>
+                <button onClick={() => irParaMes(viewDate.getFullYear(), viewDate.getMonth() - 1)} style={{ ...s.btn, ...s.btnGhost, padding: "6px 10px" }}>‹</button>
+                <button onClick={() => irParaMes(viewDate.getFullYear(), viewDate.getMonth() + 1)} style={{ ...s.btn, ...s.btnGhost, padding: "6px 10px" }}>›</button>
+              </div>
             </div>
 
             <div style={{ padding: "16px 20px" }}>
@@ -364,13 +442,44 @@ export default function AgendaClient({ pacientes, agendamentosIniciais }: Props)
               {agendamentosDia.map(ag => {
                 const cor = statusCor(ag.status);
                 const isEditing = editando?.id === ag.id;
+                const isInlineEdit = inlineEditId === ag.id;
                 return (
                   <div key={ag.id} style={{
                     display: "flex", gap: 16, alignItems: "flex-start",
                     padding: "14px 0", borderBottom: "1px solid #f1f5f9",
                   }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", minWidth: 44, paddingTop: 2 }}>
-                      {horarioStr(ag.horario)}
+                    {/* HORÁRIO — duplo clique para editar inline */}
+                    <div style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", minWidth: 50, paddingTop: 2 }}>
+                      {isInlineEdit ? (
+                        <input
+                          ref={inlineInputRef}
+                          type="text"
+                          value={inlineEditTime}
+                          onChange={e => setInlineEditTime(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") handleSalvarInlineTime(ag.id);
+                            if (e.key === "Escape") setInlineEditId(null);
+                          }}
+                          onBlur={() => handleSalvarInlineTime(ag.id)}
+                          style={{
+                            width: 58, padding: "3px 5px", border: "2px solid #1e5fa8",
+                            borderRadius: 6, fontSize: 13, fontWeight: 700, textAlign: "center",
+                          }}
+                          autoFocus
+                        />
+                      ) : (
+                        <span
+                          title="Duplo clique para editar o horário"
+                          onDoubleClick={() => {
+                            setInlineEditId(ag.id);
+                            setInlineEditTime(horarioStr(ag.horario));
+                            setTimeout(() => inlineInputRef.current?.select(), 50);
+                          }}
+                          style={{ cursor: "pointer", borderBottom: "1px dashed #94a3b8", paddingBottom: 1 }}
+                        >
+                          {horarioStr(ag.horario)}
+                        </span>
+                      )}
                     </div>
 
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -379,7 +488,7 @@ export default function AgendaClient({ pacientes, agendamentosIniciais }: Props)
                           <div style={s.field}>
                             <label style={s.label}>Horário</label>
                             <select style={s.select} value={editHorario} onChange={e => setEditHorario(e.target.value)}>
-                              {HORARIOS.map(h => <option key={h}>{h}</option>)}
+                              {HORARIOS_DEFAULT.map(h => <option key={h}>{h}</option>)}
                             </select>
                           </div>
                           <div style={s.field}>
@@ -426,10 +535,10 @@ export default function AgendaClient({ pacientes, agendamentosIniciais }: Props)
                       )}
                     </div>
 
-                    {!isEditing && (
+                    {!isEditing && !isInlineEdit && (
                       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                         <button
-                          onClick={() => { setEditando(ag); setEditHorario(horarioStr(ag.horario)); setEditTipo(ag.tipo); setEditObs(ag.observacoes); }}
+                          onClick={() => { setEditando(ag); setEditHorario(horarioStr(ag.horario)); setEditTipo(ag.tipo); setEditObs(ag.observacoes ?? ""); }}
                           title="Editar" style={{ ...s.btn, ...s.btnGhost, padding: "6px 10px" }}>✏️</button>
                         <button
                           onClick={() => handleEnviarEmail(ag)}
@@ -440,7 +549,7 @@ export default function AgendaClient({ pacientes, agendamentosIniciais }: Props)
                         </button>
                         <button
                           onClick={() => handleDeletar(ag.id)}
-                          title="Excluir" style={{ ...s.btn, ...s.btnGhost, padding: "6px 10px", color: "#dc2626" }}>🗑️</button>
+                          title="Excluir agendamento" style={{ ...s.btn, ...s.btnGhost, padding: "6px 10px", color: "#dc2626" }}>🗑️</button>
                       </div>
                     )}
                   </div>
@@ -506,16 +615,6 @@ export default function AgendaClient({ pacientes, agendamentosIniciais }: Props)
                 )}
               </div>
 
-              {/* Email do paciente (readonly) */}
-              {pacienteFiltrado?.email && (
-                <div style={s.field}>
-                  <label style={s.label}>E-mail do paciente</label>
-                  <div style={{ ...s.input, background: "#f8fafc", color: "#64748b", display: "flex", alignItems: "center", gap: 6 }}>
-                    📧 {pacienteFiltrado.email}
-                  </div>
-                </div>
-              )}
-
               {/* Tipo */}
               <div style={s.field}>
                 <label style={s.label}>Tipo de consulta</label>
@@ -524,42 +623,109 @@ export default function AgendaClient({ pacientes, agendamentosIniciais }: Props)
                 </select>
               </div>
 
-              {/* Horário */}
+              {/* Horário — slots editáveis */}
               <div style={s.field}>
-                <label style={s.label}>Horário</label>
+                <label style={s.label}>
+                  Horário
+                </label>
+                {horariosOcupados.size > 0 && (
+                  <div style={{ fontSize: 11, color: "#dc2626", marginBottom: 6 }}>
+                    🔴 Horários em vermelho já estão ocupados nesta data
+                  </div>
+                )}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}>
-                  {HORARIOS.map(h => (
-                    <button key={h} onClick={() => setFormHorario(h)} style={{
-                      padding: "7px 4px", border: "1px solid",
-                      borderColor: formHorario === h ? "#1e5fa8" : "#e2e8f0",
-                      borderRadius: 7, fontSize: 12, cursor: "pointer",
-                      background: formHorario === h ? "#1e5fa8" : "#fff",
-                      color: formHorario === h ? "#fff" : "#475569",
-                      fontWeight: formHorario === h ? 700 : 400,
-                    }}>{h}</button>
-                  ))}
+                  {horariosCustom.map((h, idx) => {
+                    const ocupado = horariosOcupados.has(h);
+                    const selecionado = formHorario === h;
+                    const editandoEsteSlot = editingSlotIdx === idx;
+
+                    if (editandoEsteSlot) {
+                      return (
+                        <div key={idx} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                          <input
+                            ref={slotInputRef}
+                            type="text"
+                            value={editingSlotVal}
+                            onChange={e => setEditingSlotVal(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") salvarSlot(idx, editingSlotVal);
+                              if (e.key === "Escape") setEditingSlotIdx(null);
+                            }}
+                            onBlur={() => salvarSlot(idx, editingSlotVal)}
+                            style={{
+                              width: "100%", padding: "5px 4px", border: "2px solid #1e5fa8",
+                              borderRadius: 7, fontSize: 12, fontWeight: 700, textAlign: "center",
+                              boxSizing: "border-box",
+                            }}
+                            autoFocus
+                          />
+                          <button
+                            onMouseDown={e => { e.preventDefault(); salvarSlot(idx, editingSlotVal); }}
+                            style={{ fontSize: 14, background: "#16a34a", color: "#fff", border: "none", borderRadius: 5, padding: "2px 6px", cursor: "pointer" }}
+                            title="Salvar horário"
+                          >
+                            ✓
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div key={idx} style={{ position: "relative" }}>
+                        <button
+                          onClick={() => { if (!ocupado) setFormHorario(h); }}
+                          disabled={ocupado}
+                          title={ocupado ? "Horário já ocupado" : h}
+                          style={{
+                            width: "100%", padding: "7px 4px", border: "1px solid",
+                            borderRadius: 7, fontSize: 12,
+                            cursor: ocupado ? "not-allowed" : "pointer",
+                            borderColor: ocupado ? "#fca5a5" : selecionado ? "#1e5fa8" : "#e2e8f0",
+                            background: ocupado ? "#fee2e2" : selecionado ? "#1e5fa8" : "#fff",
+                            color: ocupado ? "#dc2626" : selecionado ? "#fff" : "#475569",
+                            fontWeight: selecionado ? 700 : ocupado ? 600 : 400,
+                            textDecoration: ocupado ? "line-through" : "none",
+                            paddingRight: 20,
+                          }}
+                        >
+                          {h}
+                        </button>
+                        {/* Botão lápis para editar o horário do slot */}
+                        <button
+                          onClick={() => {
+                            setEditingSlotIdx(idx);
+                            setEditingSlotVal(h);
+                            setTimeout(() => slotInputRef.current?.select(), 50);
+                          }}
+                          title="Editar este horário"
+                          style={{
+                            position: "absolute", top: "50%", right: 3, transform: "translateY(-50%)",
+                            fontSize: 9, background: "none", border: "none", cursor: "pointer",
+                            color: selecionado ? "rgba(255,255,255,0.8)" : "#94a3b8",
+                            padding: 0, lineHeight: 1,
+                          }}
+                        >
+                          ✏
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Observações */}
-              <div style={s.field}>
-                <label style={s.label}>Observações (opcional)</label>
-                <textarea style={{ ...s.input, resize: "vertical", minHeight: 64 }}
-                  placeholder="Observações..." value={formObs} onChange={e => setFormObs(e.target.value)} />
-              </div>
-
-              <button onClick={handleCriar} style={{
-                ...s.btn, ...s.btnPrimary, width: "100%", padding: "12px 0", fontSize: 14, marginBottom: 8,
-              }}>
-                📅 Cadastrar agendamento
-              </button>
+              {/* Único botão */}
               <button onClick={handleCriarEEnviar} disabled={enviando === "novo"} style={{
-                ...s.btn, width: "100%", padding: "12px 0", fontSize: 14,
-                background: "#16a34a", color: "#fff", border: "none", cursor: "pointer",
-                opacity: enviando === "novo" ? 0.6 : 1,
+                ...s.btn, width: "100%", padding: "13px 0", fontSize: 14,
+                background: enviando === "novo" ? "#86efac" : "#16a34a",
+                color: "#fff", border: "none", cursor: enviando === "novo" ? "not-allowed" : "pointer",
+                marginTop: 4,
               }}>
-                {enviando === "novo" ? "Enviando..." : "📧 Cadastrar e enviar confirmação"}
+                {enviando === "novo" ? "⏳ Enviando..." : "📧 Cadastrar e enviar confirmação"}
               </button>
+
+              <p style={{ fontSize: 11, color: "#94a3b8", textAlign: "center", marginTop: 8 }}>
+                Cadastra o agendamento e envia e-mail ao paciente
+              </p>
             </div>
           </div>
         </div>
