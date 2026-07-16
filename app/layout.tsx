@@ -1,4 +1,7 @@
 import "./globals.css";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import SessionProvider from "@/components/SessionProvider";
 import Sidebar from "@/components/Sidebar";
 
 export const metadata = {
@@ -6,32 +9,39 @@ export const metadata = {
   description: "Sistema para nutricionistas",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const session = await getServerSession(authOptions);
+
   return (
     <html lang="pt-BR">
       <body>
-        <div
-          style={{
-            display: "flex",
-            minHeight: "100vh",
-            backgroundColor: "#f8fafc",
-          }}
-        >
-          <Sidebar />
-
-          <main
-            style={{
-              flex: 1,
-              padding: "40px",
-            }}
-          >
-            {children}
-          </main>
-        </div>
+        <SessionProvider session={session}>
+          {session ? (
+            <div
+              style={{
+                display: "flex",
+                minHeight: "100vh",
+                backgroundColor: "#f8fafc",
+              }}
+            >
+              <Sidebar />
+              <main
+                style={{
+                  flex: 1,
+                  padding: "40px",
+                }}
+              >
+                {children}
+              </main>
+            </div>
+          ) : (
+            <>{children}</>
+          )}
+        </SessionProvider>
       </body>
     </html>
   );

@@ -1,6 +1,20 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useSession } from 'next-auth/react'
+
+function NomeNutricionista() {
+  const { data: session } = useSession()
+  const u = session?.user as { nomeNutri?: string; crn?: string } | undefined
+  const nome = u?.nomeNutri || 'Nutricionista'
+  const crn = u?.crn ? `CRN: ${u.crn}` : 'CRN:'
+  return (
+    <>
+      <div style={{ fontSize: 11 }}>{nome}</div>
+      <div style={{ fontSize: 10, color: '#666' }}>{crn}</div>
+    </>
+  )
+}
 
 type EnvioPlanoProps = {
   pacienteId: string
@@ -282,8 +296,7 @@ function PrintableLayout({
       >
         <div style={{ fontFamily: "'Georgia', serif", fontStyle: 'italic', color: '#333' }}>
           <div style={{ fontSize: 14, fontWeight: 600 }}>____________________</div>
-          <div style={{ fontSize: 11 }}>Nutricionista</div>
-          <div style={{ fontSize: 10, color: '#666' }}>CRN:</div>
+          <NomeNutricionista />
         </div>
         <div style={{ opacity: 0.3 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFFont, type PDFPage } from "pdf-lib";
@@ -40,6 +42,8 @@ type LayoutDoc = {
   fontScript: PDFFont | null;
   logo: PDFImage | null;
   background: PDFImage | null;
+  nutricionistaNome: string;
+  nutricionistaCrn: string;
 };
 
 type BasePageOptions = {
@@ -438,7 +442,7 @@ async function createLayoutDoc(): Promise<LayoutDoc> {
       : await pdf.embedPng(bgResult.data)
     : null;
 
-  return { pdf, fontRegular, fontBold, fontScript, logo, background };
+  return { pdf, fontRegular, fontBold, fontScript, logo, background, nutricionistaNome: '', nutricionistaCrn: '' };
 }
 
 function drawCoverImage(page: PDFPage, image: PDFImage, opacity: number) {
@@ -560,8 +564,11 @@ function drawFooter(doc: LayoutDoc, page: PDFPage) {
     color: rgb(0.2, 0.2, 0.2),
   });
 
+  const nomeRodape = doc.nutricionistaNome || "Nutricionista";
+  const crnRodape = doc.nutricionistaCrn || CRN_LABEL;
+
   if (doc.fontScript) {
-    page.drawText("Nutricionista", {
+    page.drawText(nomeRodape, {
       x: PAGE_MARGIN_X,
       y: footerY + 20,
       size: 22,
@@ -569,7 +576,7 @@ function drawFooter(doc: LayoutDoc, page: PDFPage) {
       color: rgb(0.12, 0.12, 0.12),
     });
   } else {
-    page.drawText("Nutricionista", {
+    page.drawText(nomeRodape, {
       x: PAGE_MARGIN_X,
       y: footerY + 20,
       size: 13,
@@ -578,7 +585,7 @@ function drawFooter(doc: LayoutDoc, page: PDFPage) {
     });
   }
 
-  page.drawText(CRN_LABEL, {
+  page.drawText(crnRodape, {
     x: PAGE_MARGIN_X,
     y: footerY + 5,
     size: 9,
@@ -875,7 +882,7 @@ async function createLayoutDocOptimized(): Promise<LayoutDoc> {
       : await pdf.embedPng(assets.background)
     : null;
 
-  return { pdf, fontRegular, fontBold, fontScript, logo, background };
+  return { pdf, fontRegular, fontBold, fontScript, logo, background, nutricionistaNome: '', nutricionistaCrn: '' };
 }
 
 // Função otimizada para gerar todos os PDFs usando assets compartilhados
@@ -894,6 +901,8 @@ async function buildAllPdfsOptimized(params: {
   shoppingList: ShoppingItem[];
   includeProtocols: boolean;
   protocols: Protocol[];
+  nutricionistaNome?: string;
+  nutricionistaCrn?: string;
 }): Promise<{ planoPdf: Buffer; shoppingPdf: Buffer | null; protocolsPdf: Buffer | null }> {
   // Pré-carregar assets UMA vez
   await preloadAssets();
@@ -904,6 +913,20 @@ async function buildAllPdfsOptimized(params: {
     params.includeShoppingList ? createLayoutDocOptimized() : Promise.resolve(null),
     params.includeProtocols ? createLayoutDocOptimized() : Promise.resolve(null),
   ]);
+
+  // Injetar dados do nutricionista em cada doc
+  const nutricionistaNome = params.nutricionistaNome || '';
+  const nutricionistaCrn = params.nutricionistaCrn || '';
+  planoDoc.nutricionistaNome = nutricionistaNome;
+  planoDoc.nutricionistaCrn = nutricionistaCrn;
+  if (shoppingDoc) {
+    shoppingDoc.nutricionistaNome = nutricionistaNome;
+    shoppingDoc.nutricionistaCrn = nutricionistaCrn;
+  }
+  if (protocolsDoc) {
+    protocolsDoc.nutricionistaNome = nutricionistaNome;
+    protocolsDoc.nutricionistaCrn = nutricionistaCrn;
+  }
 
   // Gerar páginas do Plano Alimentar
   const chunks: EnvioMeal[][] = [];
@@ -1387,6 +1410,22 @@ export async function POST(request: Request) {
       ...(uploadedFiles.length > 0 ? ["arquivos complementares anexados"] : []),
     ];
 
+    // Buscar dados do nutricionista logado para o rodapé do PDF
+    let nutricionistaNome = "";
+    let nutricionistaCrn = "";
+    const session = await getServerSession(authOptions);
+    const nutricionistaId = session?.user ? (session.user as { id?: string }).id : undefined;
+    if (nutricionistaId) {
+      const nutri = await prisma.nutricionistas.findUnique({
+        where: { id: nutricionistaId },
+        select: { nome: true, crn: true },
+      });
+      if (nutri) {
+        nutricionistaNome = nutri.nome;
+        nutricionistaCrn = nutri.crn ? `CRN: ${nutri.crn}` : "";
+      }
+    }
+
     // Usar função otimizada que pré-carrega assets uma única vez
     const { planoPdf, shoppingPdf, protocolsPdf } = await buildAllPdfsOptimized({
       nomePaciente: paciente.nome || nomePaciente,
@@ -1403,6 +1442,8 @@ export async function POST(request: Request) {
       shoppingList,
       includeProtocols,
       protocols,
+      nutricionistaNome,
+      nutricionistaCrn,
     });
 
     const mailAttachments: Array<{ filename: string; content: Buffer; contentType: string }> = [

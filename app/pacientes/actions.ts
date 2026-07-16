@@ -1,9 +1,17 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 export async function criarPaciente(formData: FormData) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) throw new Error("Não autenticado.");
+
+  const nutricionistaId = (session.user as { id?: string }).id;
+  if (!nutricionistaId) throw new Error("ID do nutricionista não encontrado.");
+
   const nome = String(formData.get("nome") || "");
   const email = String(formData.get("email") || "");
   const telefone = String(formData.get("telefone") || "");
@@ -18,21 +26,13 @@ export async function criarPaciente(formData: FormData) {
     throw new Error("O nome é obrigatório.");
   }
 
-  const nutricionista = await prisma.nutricionistas.findFirst();
-
-  if (!nutricionista) {
-    throw new Error("Nenhum nutricionista cadastrado na base.");
-  }
-
   await prisma.pacientes.create({
     data: {
-      nutricionista_id: nutricionista.id,
+      nutricionista_id: nutricionistaId,
       nome: nome.trim(),
       email: email.trim() || null,
       telefone: telefone.trim() || null,
-      data_nascimento: dataNascimento
-        ? new Date(dataNascimento)
-        : null,
+      data_nascimento: dataNascimento ? new Date(dataNascimento) : null,
       sexo: sexo.trim() || null,
       profissao: profissao.trim() || null,
       estado_civil: estadoCivil.trim() || null,

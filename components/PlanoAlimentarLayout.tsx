@@ -127,8 +127,7 @@ const MICRO_KEY: Record<string, keyof TBCAFood> = {
 
 // ==================== NUMBER FORMATTING ====================
 function fmtNum(n: number): string {
-  const rounded = Math.round(n * 10) / 10
-  return rounded.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+  return n.toFixed(1).replace('.', ',')
 }
 
 // ==================== TYPES ====================
@@ -1052,16 +1051,16 @@ export default function PlanoAlimentarLayout({
                         }}
                       >
                         <span style={{ fontWeight: 700, color: '#3182ce', fontSize: 12 }}>
-                          P{meal.foods.reduce((a, f) => a + f.prot, 0)}g
+                          P{fmtNum(meal.foods.reduce((a, f) => a + f.prot, 0))}g
                         </span>
                         <span style={{ fontWeight: 700, color: '#38a169', fontSize: 12 }}>
-                          C{meal.foods.reduce((a, f) => a + f.carb, 0)}g
+                          C{fmtNum(meal.foods.reduce((a, f) => a + f.carb, 0))}g
                         </span>
                         <span style={{ fontWeight: 700, color: '#dd6b20', fontSize: 12 }}>
-                          G{meal.foods.reduce((a, f) => a + f.fat, 0)}g
+                          G{fmtNum(meal.foods.reduce((a, f) => a + f.fat, 0))}g
                         </span>
                         <span style={{ fontWeight: 800, color: '#e53e3e', fontSize: 13 }}>
-                          {meal.foods.reduce((a, f) => a + f.kcal, 0)}kcal
+                          {Math.round(meal.foods.reduce((a, f) => a + f.kcal, 0))}kcal
                         </span>
                       </div>
 
@@ -1475,7 +1474,12 @@ function FoodRow({
               inputMode="numeric"
               value={food.qty || ''}
               placeholder="0"
-              onChange={(e) => { const v = e.target.value.replace(/[^\d.,]/g, ''); onUpdateQty(parseFloat(v.replace(',', '.')) || 0) }}
+              maxLength={4}
+              onChange={(e) => {
+                const v = e.target.value.replace(/[^\d.,]/g, '')
+                const n = parseFloat(v.replace(',', '.')) || 0
+                onUpdateQty(Math.min(n, 9999))
+              }}
               style={{
                 width: 50,
                 padding: '5px 6px',

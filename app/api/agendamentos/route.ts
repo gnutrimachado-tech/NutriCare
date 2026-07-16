@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
+  const nutricionistaId = (session.user as { id?: string }).id;
+  if (!nutricionistaId) return NextResponse.json({ error: "ID não encontrado" }, { status: 401 });
+
   const { searchParams } = new URL(req.url);
   const dataParam = searchParams.get("data");
   const dataInicio = searchParams.get("dataInicio");
@@ -13,8 +21,11 @@ export async function GET(req: NextRequest) {
   try {
     type WhereClause = {
       data_agendamento?: Date | { gte: Date; lte: Date };
+      pacientes?: { nutricionista_id: string };
     };
-    const where: WhereClause = {};
+    const where: WhereClause = {
+      pacientes: { nutricionista_id: nutricionistaId },
+    };
 
     if (dataParam) {
       where.data_agendamento = new Date(dataParam + "T00:00:00.000Z");
@@ -56,6 +67,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
   try {
     const body = await req.json();
     const { paciente_id, data_agendamento, horario, tipo, observacoes } = body;
@@ -65,7 +79,6 @@ export async function POST(req: NextRequest) {
     }
 
     const token = crypto.randomBytes(32).toString("hex");
-
     const datePart = data_agendamento.split("T")[0];
     const dataDate = new Date(datePart + "T00:00:00.000Z");
     const horarioDate = new Date(`1970-01-01T${horario}:00.000Z`);

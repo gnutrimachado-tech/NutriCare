@@ -1,14 +1,22 @@
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import NovoPacienteForm from "./NovoPacienteForm";
 import BuscaPacientes from "./BuscaPacientes";
 
 export const dynamic = "force-dynamic";
 
 export default async function PacientesPage() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) redirect("/");
+
+  const nutricionistaId = (session.user as { id?: string }).id;
+  if (!nutricionistaId) redirect("/");
+
   const pacientes = await prisma.pacientes.findMany({
-    orderBy: {
-      created_at: "desc",
-    },
+    where: { nutricionista_id: nutricionistaId },
+    orderBy: { created_at: "desc" },
     take: 200,
   });
 
@@ -22,9 +30,7 @@ export default async function PacientesPage() {
 
   return (
     <div>
-      <h1 style={{ fontSize: "32px", marginBottom: "20px" }}>
-        Pacientes
-      </h1>
+      <h1 style={{ fontSize: "32px", marginBottom: "20px" }}>Pacientes</h1>
 
       <NovoPacienteForm />
 
@@ -37,7 +43,6 @@ export default async function PacientesPage() {
         }}
       >
         <h2 style={{ marginBottom: "20px" }}>Lista de Pacientes</h2>
-
         <BuscaPacientes pacientes={pacientesSerializados} />
       </div>
     </div>

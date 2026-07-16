@@ -34,12 +34,25 @@ export const authOptions: NextAuthOptions = {
 
   callbacks: {
     async jwt({ token, user }) {
-      if (user) token.id = user.id;
+      if (user) {
+        token.id = user.id;
+        const nutri = await prisma.nutricionistas.findUnique({
+          where: { id: user.id as string },
+          select: { crn: true, nome: true },
+        });
+        if (nutri) {
+          token.crn = nutri.crn ?? "";
+          token.nomeNutri = nutri.nome;
+        }
+      }
       return token;
     },
     async session({ session, token }) {
       if (token?.id && session.user) {
-        (session.user as { id?: string }).id = token.id as string;
+        const u = session.user as { id?: string; crn?: string; nomeNutri?: string };
+        u.id = token.id as string;
+        u.crn = (token.crn as string) ?? "";
+        u.nomeNutri = (token.nomeNutri as string) ?? "";
       }
       return session;
     },
