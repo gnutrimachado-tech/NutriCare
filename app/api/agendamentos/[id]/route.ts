@@ -42,7 +42,6 @@ export async function PUT(
       tipo: updated.tipo ?? "Consulta inicial",
       status: updated.status ?? "Pendente",
       observacoes: updated.observacoes ?? "",
-      email_enviado: updated.email_enviado ?? false,
     });
   } catch (err) {
     console.error(err);
