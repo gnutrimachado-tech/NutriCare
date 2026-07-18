@@ -1,0 +1,65 @@
+Vercel CLI 56.2.1 (Node.js 24.15.0)
+Fetching deployment "nutri-care-ey2e-d62msnqxh-nutri-care-s-projects.vercel.app" in nutri-care-s-projects
+2026-07-16T13:54:58.989Z  Running build in Washington, D.C., USA (East) – iad1
+2026-07-16T13:54:58.991Z  Build machine configuration: 2 cores, 8 GB
+2026-07-16T13:54:58.996Z  Retrieving list of deployment files...
+2026-07-16T13:54:59.445Z  Downloading 87 deployment files...
+2026-07-16T13:55:01.965Z  Restored build cache from previous deployment (6zHNFqR81S5LqujXtDJcYyW7xXJQ)
+2026-07-16T13:55:02.244Z  Running "vercel build"
+2026-07-16T13:55:02.290Z  Vercel CLI 56.2.0
+2026-07-16T13:55:02.823Z  Installing dependencies...
+2026-07-16T13:55:04.571Z  
+2026-07-16T13:55:04.573Z  > nutricare-system@0.1.0 postinstall
+2026-07-16T13:55:04.574Z  > prisma generate || true
+2026-07-16T13:55:04.574Z  
+2026-07-16T13:55:05.978Z  Loaded Prisma config from prisma.config.ts.
+2026-07-16T13:55:05.979Z  
+2026-07-16T13:55:06.097Z  Prisma schema loaded from prisma/schema.prisma.
+2026-07-16T13:55:06.680Z  
+2026-07-16T13:55:06.682Z  ✔ Generated Prisma Client (v7.8.0) to ./node_modules/@prisma/client in 340ms
+2026-07-16T13:55:06.683Z  
+2026-07-16T13:55:06.683Z  Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+2026-07-16T13:55:06.683Z  
+2026-07-16T13:55:06.683Z  
+2026-07-16T13:55:06.721Z  
+2026-07-16T13:55:06.721Z  up to date in 4s
+2026-07-16T13:55:06.722Z  
+2026-07-16T13:55:06.722Z  165 packages are looking for funding
+2026-07-16T13:55:06.722Z  run `npm fund` for details
+2026-07-16T13:55:06.770Z  Detected Next.js version: 16.2.6
+2026-07-16T13:55:06.778Z  Running "npm run build"
+2026-07-16T13:55:06.934Z  
+2026-07-16T13:55:06.935Z  > nutricare-system@0.1.0 build
+2026-07-16T13:55:06.935Z  > prisma generate && next build
+2026-07-16T13:55:06.936Z  
+2026-07-16T13:55:07.955Z  Loaded Prisma config from prisma.config.ts.
+2026-07-16T13:55:07.956Z  
+2026-07-16T13:55:07.996Z  Prisma schema loaded from prisma/schema.prisma.
+2026-07-16T13:55:08.903Z  
+2026-07-16T13:55:08.905Z  ✔ Generated Prisma Client (v7.8.0) to ./node_modules/@prisma/client in 702ms
+2026-07-16T13:55:08.905Z  
+2026-07-16T13:55:08.905Z  Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+2026-07-16T13:55:08.906Z  
+2026-07-16T13:55:08.906Z  
+2026-07-16T13:55:10.180Z  Applying modifyConfig from Vercel
+2026-07-16T13:55:10.201Z  ▲ Next.js 16.2.6 (Turbopack)
+2026-07-16T13:55:10.202Z  - Environments: .env
+2026-07-16T13:55:10.202Z  
+2026-07-16T13:55:10.255Z  Creating an optimized production build ...
+2026-07-16T13:55:27.040Z  ✓ Compiled successfully in 16.3s
+2026-07-16T13:55:27.044Z  Running TypeScript ...
+2026-07-16T13:55:39.675Z  Failed to type check.
+2026-07-16T13:55:39.676Z  
+2026-07-16T13:55:39.679Z  ./app/api/cadastro/route.ts:97:11
+2026-07-16T13:55:39.679Z  Type error: Object literal may only specify known properties, and 'cpf' does not exist in type '(Without<nutricionistasCreateInput, nutricionistasUncheckedCreateInput> & nutricionistasUncheckedCreateInput) | (Without<...> & nutricionistasCreateInput)'.
+2026-07-16T13:55:39.679Z  
+2026-07-16T13:55:39.679Z  95 |           telefone: telefone || null,
+2026-07-16T13:55:39.680Z  96 |           crn: crn || null,
+2026-07-16T13:55:39.680Z  >  97 |           cpf: cpfLimpo,
+2026-07-16T13:55:39.680Z  |           ^
+2026-07-16T13:55:39.680Z  98 |         },
+2026-07-16T13:55:39.680Z  99 |       })
+2026-07-16T13:55:39.680Z  100 |
+2026-07-16T13:55:39.741Z  Next.js build worker exited with code: 1 and signal: null
+2026-07-16T13:55:39.843Z  Error: Command "npm run build" exited with 1
+status	● Error

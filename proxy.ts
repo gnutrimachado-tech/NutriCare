@@ -17,7 +17,7 @@ export async function proxy(req: NextRequest) {
   const isLoginPage = pathname === "/";
   const isCadastroPage = pathname === "/cadastro";
 
-  // Rotas que não precisam verificar token
+  // Rotas que não precisam verificar token (API pública, assets, etc.)
   if (!isProtected && !isLoginPage && !isCadastroPage) {
     return NextResponse.next();
   }
@@ -27,15 +27,14 @@ export async function proxy(req: NextRequest) {
     secret: process.env.NEXTAUTH_SECRET,
   });
 
-  // Usuário já logado tentando acessar login ou cadastro → vai para dashboard
+  // Usuário já logado tentando acessar login ou cadastro → redireciona para dashboard
   if ((isLoginPage || isCadastroPage) && token) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
   // Rota protegida sem sessão → redireciona para login
   if (isProtected && !token) {
-    const loginUrl = new URL("/", req.url);
-    return NextResponse.redirect(loginUrl);
+    return NextResponse.redirect(new URL("/", req.url));
   }
 
   return NextResponse.next();

@@ -175,3 +175,20 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+model hotmart_compradores {
+  id            Int      @id @default(autoincrement())
+  email         String   @unique
+  cpf           String   @default("")
+  nome          String   @default("")
+  evento        String   @default("MANUAL")
+  criado_em     DateTime @default(now())
+  atualizado_em DateTime @default(now())
+}
+
+model password_reset_tokens {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  token     String
+  expira_em DateTime
+  criado_em DateTime @default(now())
+}
