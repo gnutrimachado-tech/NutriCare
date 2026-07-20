@@ -3,15 +3,18 @@
 import { usePathname } from 'next/navigation'
 import Sidebar from './Sidebar'
 
-const PUBLIC_PATHS = ['/', '/cadastro']
-
 export default function SidebarWrapper({
   children,
 }: {
   children: React.ReactNode
 }) {
   const pathname = usePathname()
-  const isPublic = PUBLIC_PATHS.includes(pathname)
+
+  const isPublic =
+    pathname === '/' ||
+    pathname.startsWith('/cadastro') ||
+    pathname.startsWith('/redefinir-senha') ||
+    pathname.startsWith('/formulario-paciente')
 
   if (isPublic) {
     return <>{children}</>

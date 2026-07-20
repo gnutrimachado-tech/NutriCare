@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import SidebarWrapper from '@/components/SidebarWrapper'
+import Providers from '@/components/Providers'
 
 export const metadata: Metadata = {
   title: 'NutriCare',
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body>
-        <SidebarWrapper>{children}</SidebarWrapper>
+        <Providers>
+          <SidebarWrapper>{children}</SidebarWrapper>
+        </Providers>
       </body>
     </html>
   )

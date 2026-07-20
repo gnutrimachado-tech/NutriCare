@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { signIn } from 'next-auth/react'
 import Image from 'next/image'
 import Link from 'next/link'
 
@@ -32,28 +33,31 @@ export default function LoginPage() {
     e.preventDefault()
     setErroTipo(''); setErroMsg(''); setLoading(true)
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, senha }),
+      const res = await signIn('credentials', {
+        email,
+        password: senha,
+        redirect: false,
       })
-      const data = await res.json()
-      if (res.ok) {
+      if (res?.ok && !res?.error) {
         router.push('/dashboard')
         return
       }
-      const msg: string = data.error ?? ''
-      // Detecta usuário não cadastrado
-      if (res.status === 404 ||
-          msg.toLowerCase().includes('não encontrado') ||
-          msg.toLowerCase().includes('not found') ||
-          msg.toLowerCase().includes('no user') ||
-          msg.toLowerCase().includes('não existe') ||
-          msg.toLowerCase().includes('invalid credentials')) {
-        setErroTipo('sem-conta')
+      const err = res?.error ?? ''
+      if (
+        err.toLowerCase().includes('não encontrado') ||
+        err.toLowerCase().includes('not found') ||
+        err.toLowerCase().includes('no user') ||
+        err.toLowerCase().includes('não existe') ||
+        err === 'CredentialsSignin'
+      ) {
+        // Credenciais inválidas genérico do NextAuth — tenta distinguir
+        // Se quiser mostrar "sem conta" vs "senha errada" precisaria de API
+        // separada; por padrão NextAuth retorna CredentialsSignin para ambos
+        setErroTipo('senha')
+        setErroMsg('E-mail ou senha incorretos.')
       } else {
         setErroTipo('senha')
-        setErroMsg(msg || 'E-mail ou senha incorretos.')
+        setErroMsg(err || 'E-mail ou senha incorretos.')
       }
     } catch {
       setErroTipo('senha'); setErroMsg('Erro de conexão. Tente novamente.')
@@ -190,14 +194,9 @@ export default function LoginPage() {
         ) : (
           /* ── LOGIN ── */
           <>
-            <div style={{ textAlign:'center',marginBottom:10 }}>
-              <Image src="/logo-nutricare.png" alt="NutriCare" width={108} height={108} style={{ objectFit:'contain' }} priority/>
-            </div>
-            <div style={{ textAlign:'center',marginBottom:26 }}>
-              <h1 style={{ fontFamily:"Georgia,'Times New Roman',serif",fontSize:36,fontWeight:900,color:'#1a4d1a',letterSpacing:'-0.5px',lineHeight:1,marginBottom:5 }}>
-                Nutri<span style={{ color:'#b8960c' }}>care</span>
-              </h1>
-              <p style={{ fontSize:10.5,letterSpacing:3.2,color:'#9ca3af',fontWeight:600 }}>CIÊNCIA • NUTRIÇÃO • BEM-ESTAR</p>
+            {/* Só o logo — sem texto "Nutricare" duplicado */}
+            <div style={{ textAlign:'center',marginBottom:28 }}>
+              <Image src="/logo-nutricare.png" alt="NutriCare" width={140} height={140} style={{ objectFit:'contain' }} priority/>
             </div>
 
             <form onSubmit={handleLogin} style={{ display:'flex',flexDirection:'column',gap:13 }}>

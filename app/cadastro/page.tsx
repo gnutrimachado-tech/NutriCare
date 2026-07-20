@@ -119,17 +119,13 @@ export default function CadastroPage() {
         <circle cx="595" cy="45" r="3.5" fill="#b8960c"/>
       </svg>
 
-      {/* ── LOGO (acima do card) ── */}
+      {/* ── LOGO acima do card — apenas imagem, sem texto ── */}
       <div style={{ position:'absolute',top:'2%',left:'50%',transform:'translateX(-50%)',textAlign:'center',zIndex:2 }}>
-        <Image src="/logo-nutricare.png" alt="NutriCare" width={100} height={100} style={{ objectFit:'contain' }} priority/>
-        <h1 style={{ fontFamily:"Georgia,'Times New Roman',serif",fontSize:32,fontWeight:900,color:'#1a4d1a',letterSpacing:'-0.4px',margin:'5px 0 2px' }}>
-          Nutri<span style={{ color:'#b8960c' }}>care</span>
-        </h1>
-        <p style={{ fontSize:9.5,letterSpacing:3.5,color:'#9ca3af',fontWeight:600 }}>CIÊNCIA • NUTRIÇÃO • BEM-ESTAR</p>
+        <Image src="/logo-nutricare.png" alt="NutriCare" width={130} height={130} style={{ objectFit:'contain' }} priority/>
       </div>
 
       {/* ═══ CARD ═══ */}
-      <div style={{ background:'#fff',borderRadius:26,padding:'22px 34px 26px',width:'100%',maxWidth:450,boxShadow:'0 8px 48px rgba(26,70,26,0.13),0 2px 8px rgba(0,0,0,0.05)',position:'relative',zIndex:1,marginTop:128 }}>
+      <div style={{ background:'#fff',borderRadius:26,padding:'22px 34px 26px',width:'100%',maxWidth:450,boxShadow:'0 8px 48px rgba(26,70,26,0.13),0 2px 8px rgba(0,0,0,0.05)',position:'relative',zIndex:1,marginTop:148 }}>
         {sucesso ? (
           <div style={{ textAlign:'center',padding:'28px 0' }}>
             <div style={{ fontSize:52,marginBottom:12 }}>✅</div>
@@ -138,7 +134,7 @@ export default function CadastroPage() {
           </div>
         ) : (
           <>
-            {/* Cabeçalho — SEM FOLHA */}
+            {/* Cabeçalho — SEM FOLHA, sem repetir "Nutricare" */}
             <div style={{ display:'flex',alignItems:'center',gap:13,marginBottom:16,paddingBottom:14,borderBottom:'1px solid #f1f5f9' }}>
               <div style={{ width:42,height:42,borderRadius:'50%',background:'#f0f7f0',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
                 <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#1a4d1a" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

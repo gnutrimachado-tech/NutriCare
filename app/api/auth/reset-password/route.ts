@@ -27,7 +27,6 @@ export async function POST(req: NextRequest) {
 
     // Verifica se expirou (1 hora)
     if (new Date() > new Date(registro.expira_em)) {
-      // Remove token expirado
       await prisma.password_reset_tokens.delete({ where: { id: registro.id } })
       return NextResponse.json(
         { error: 'Este link expirou. Solicite um novo link de redefinição.' },
@@ -35,12 +34,12 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Verifica se o usuário existe
-    const usuario = await prisma.user.findUnique({
+    // Verifica se o nutricionista existe (tabela correta)
+    const nutricionista = await prisma.nutricionistas.findUnique({
       where: { email: registro.email },
     })
 
-    if (!usuario) {
+    if (!nutricionista) {
       return NextResponse.json(
         { error: 'Usuário não encontrado.' },
         { status: 404 }
@@ -50,10 +49,10 @@ export async function POST(req: NextRequest) {
     // Gera hash da nova senha com custo 12 (seguro)
     const hash = await bcrypt.hash(novaSenha, 12)
 
-    // Atualiza a senha do usuário
-    await prisma.user.update({
+    // Atualiza a senha do nutricionista (campo correto: senha_hash)
+    await prisma.nutricionistas.update({
       where: { email: registro.email },
-      data: { password: hash },
+      data: { senha_hash: hash },
     })
 
     // Remove o token (uso único)

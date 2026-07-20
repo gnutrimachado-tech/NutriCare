@@ -82,15 +82,9 @@ function ResetForm() {
 
       {/* CARD */}
       <div style={card}>
-        {/* Logo */}
-        <div style={{ textAlign:'center',marginBottom:8 }}>
-          <Image src="/logo-nutricare.png" alt="NutriCare" width={86} height={86} style={{ objectFit:'contain' }} priority/>
-        </div>
+        {/* Só o logo — sem texto "Nutricare" */}
         <div style={{ textAlign:'center',marginBottom:22 }}>
-          <h1 style={{ fontFamily:"Georgia,'Times New Roman',serif",fontSize:28,fontWeight:900,color:'#1a4d1a',marginBottom:4 }}>
-            Nutri<span style={{ color:'#b8960c' }}>care</span>
-          </h1>
-          <p style={{ fontSize:9.5,letterSpacing:3,color:'#9ca3af',fontWeight:600 }}>CIÊNCIA • NUTRIÇÃO • BEM-ESTAR</p>
+          <Image src="/logo-nutricare.png" alt="NutriCare" width={120} height={120} style={{ objectFit:'contain' }} priority/>
         </div>
 
         {/* ── SUCESSO ── */}
