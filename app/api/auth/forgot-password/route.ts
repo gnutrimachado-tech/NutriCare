@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/prisma'
 
-const BREVO_API_KEY = process.env.BREVO_API_KEY!
+const BREVO_API_KEY   = process.env.BREVO_API_KEY!
 const BREVO_FROM_EMAIL = process.env.BREVO_FROM_EMAIL || 'noreply@nutricare.com'
-const BREVO_FROM_NAME = process.env.BREVO_FROM_NAME || 'NutriCare'
+const BREVO_FROM_NAME  = process.env.BREVO_FROM_NAME  || 'NutriCare'
 
 function getBaseUrl(): string {
   if (process.env.NEXTAUTH_URL) return process.env.NEXTAUTH_URL.replace(/\/$/, '')
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+  if (process.env.VERCEL_URL)   return `https://${process.env.VERCEL_URL}`
   return 'http://localhost:3000'
 }
 
@@ -25,30 +25,34 @@ export async function POST(req: NextRequest) {
     const emailNorm = email.trim().toLowerCase()
     const nutricionista = await prisma.nutricionistas.findUnique({ where: { email: emailNorm } })
 
-    // Resposta genérica: não revela se o e-mail existe (segurança)
     if (!nutricionista) {
       return NextResponse.json({ message: MSG_GENERICO })
     }
 
-    const token = randomBytes(32).toString('hex')
+    const token    = randomBytes(32).toString('hex')
     const expiracao = new Date(Date.now() + 60 * 60 * 1000) // 1 hora
 
-    // Tenta salvar na tabela dedicada; se não existir, ignora silenciosamente
+    // Salva o token — usa cast para suportar tabela adicionada manualmente
     try {
       await (prisma as any).password_reset_tokens.upsert({
-        where: { email: emailNorm },
+        where:  { email: emailNorm },
         update: { token, expira_em: expiracao },
         create: { email: emailNorm, token, expira_em: expiracao },
       })
-    } catch {
-      console.warn('[forgot-password] Tabela password_reset_tokens não encontrada — execute a migration SQL.')
+    } catch (e) {
+      console.error('[forgot-password] Erro ao salvar token — verifique se a tabela password_reset_tokens existe no banco:', e)
+      // Retorna erro explícito em vez de falha silenciosa
+      return NextResponse.json(
+        { error: 'Erro ao gerar link de redefinição. Contate o suporte.' },
+        { status: 500 }
+      )
     }
 
     const linkReset = `${getBaseUrl()}/redefinir-senha?token=${token}`
 
     if (BREVO_API_KEY) {
       await fetch('https://api.brevo.com/v3/smtp/email', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'api-key': BREVO_API_KEY, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sender: { name: BREVO_FROM_NAME, email: BREVO_FROM_EMAIL },

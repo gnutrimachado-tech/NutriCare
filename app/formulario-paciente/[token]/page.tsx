@@ -5,41 +5,53 @@ import { useParams } from "next/navigation";
 import Image from "next/image";
 
 const CAMPO_LABELS: Record<string, string> = {
-  peso: "Peso (kg)",
-  altura: "Altura (cm)",
-  percentual_gordura: "% Gordura",
-  massa_muscular: "Massa Muscular (kg)",
-  massa_adiposa: "Massa Adiposa (kg)",
-  agua_corporal: "Água Corporal (%)",
-  historico_clinico: "Histórico Clínico",
-  alergias: "Alergias",
-  medicamentos: "Medicamentos",
-  suplementos: "Suplementos",
+  peso:                "Peso (kg)",
+  altura:              "Altura (cm)",
+  percentual_gordura:  "% Gordura",
+  massa_muscular:      "Massa Muscular (kg)",
+  massa_adiposa:       "Massa Adiposa (kg)",
+  agua_corporal:       "Água Corporal (%)",
+  historico_clinico:   "Histórico Clínico",
+  alergias:            "Alergias",
+  medicamentos:        "Medicamentos",
+  suplementos:         "Suplementos",
   habitos_alimentares: "Hábitos Alimentares",
-  observacoes: "Observações",
+  observacoes:         "Observações",
 };
 
 const NUMERICOS = ["peso", "altura", "percentual_gordura", "massa_muscular", "massa_adiposa", "agua_corporal"];
 
+/** Resolve um campo salvo no banco (pode ser plain key ou JSON {key, label}) */
+function resolveCampo(campo: string): { fieldKey: string; label: string } {
+  try {
+    const parsed = JSON.parse(campo);
+    const fieldKey = String(parsed.key  ?? campo);
+    const label    = String(parsed.label ?? CAMPO_LABELS[fieldKey] ?? fieldKey);
+    return { fieldKey, label };
+  } catch {
+    return { fieldKey: campo, label: CAMPO_LABELS[campo] ?? campo };
+  }
+}
+
 export default function FormularioPacientePage() {
   const params = useParams();
-  const token = params.token as string;
+  const token  = params.token as string;
 
-  const [estado, setEstado] = useState<"carregando" | "pronto" | "respondido" | "expirado" | "invalido" | "erro">("carregando");
-  const [campos, setCampos] = useState<string[]>([]);
+  const [estado, setEstado]           = useState<"carregando" | "pronto" | "respondido" | "expirado" | "invalido" | "erro">("carregando");
+  const [campos, setCampos]           = useState<string[]>([]);
   const [pacienteNome, setPacienteNome] = useState("");
-  const [respostas, setRespostas] = useState<Record<string, string>>({});
-  const [enviando, setEnviando] = useState(false);
-  const [sucesso, setSucesso] = useState(false);
+  const [respostas, setRespostas]     = useState<Record<string, string>>({});
+  const [enviando, setEnviando]       = useState(false);
+  const [sucesso, setSucesso]         = useState(false);
 
   useEffect(() => {
     async function carregarFormulario() {
       try {
-        const res = await fetch(`/api/anamnese/formulario-resposta?token=${token}`);
+        const res  = await fetch(`/api/anamnese/formulario-resposta?token=${token}`);
         const data = await res.json();
-        if (res.status === 404) { setEstado("invalido"); return; }
-        if (res.status === 410) { setEstado("expirado"); return; }
-        if (!res.ok) { setEstado("erro"); return; }
+        if (res.status === 404) { setEstado("invalido");   return; }
+        if (res.status === 410) { setEstado("expirado");   return; }
+        if (!res.ok)            { setEstado("erro");        return; }
         if (data.status === "respondido") { setEstado("respondido"); return; }
         setCampos(data.campos || []);
         setPacienteNome(data.pacienteNome || "");
@@ -55,18 +67,14 @@ export default function FormularioPacientePage() {
     e.preventDefault();
     setEnviando(true);
     try {
-      const res = await fetch("/api/anamnese/formulario-resposta", {
-        method: "POST",
+      const res  = await fetch("/api/anamnese/formulario-resposta", {
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, respostas }),
+        body:    JSON.stringify({ token, respostas }),
       });
       const data = await res.json();
-      if (res.ok) {
-        setSucesso(true);
-        setEstado("respondido");
-      } else {
-        alert(data.error || "Erro ao enviar respostas.");
-      }
+      if (res.ok) { setSucesso(true); setEstado("respondido"); }
+      else        { alert(data.error || "Erro ao enviar respostas."); }
     } catch {
       alert("Erro de conexão.");
     } finally {
@@ -77,81 +85,65 @@ export default function FormularioPacientePage() {
   const containerStyle: React.CSSProperties = {
     minHeight: "100vh",
     background: "linear-gradient(135deg, #f5faf6 0%, #eaf4ee 40%, #f2f8f4 70%, #fafcf7 100%)",
-    display: "flex",
-    alignItems: "flex-start",
-    justifyContent: "center",
+    display: "flex", alignItems: "flex-start", justifyContent: "center",
     padding: "40px 20px",
   };
-
   const cardStyle: React.CSSProperties = {
-    background: "rgba(255,255,255,0.97)",
-    borderRadius: "24px",
-    width: "100%",
-    maxWidth: "560px",
-    boxShadow: "0 24px 64px rgba(0,0,0,0.09)",
-    overflow: "hidden",
+    background: "rgba(255,255,255,0.97)", borderRadius: "24px",
+    width: "100%", maxWidth: "560px",
+    boxShadow: "0 24px 64px rgba(0,0,0,0.09)", overflow: "hidden",
   };
-
   const headerStyle: React.CSSProperties = {
     background: "linear-gradient(135deg, #1a6b3c 0%, #145530 100%)",
-    padding: "28px 36px",
-    textAlign: "center",
+    padding: "28px 36px", textAlign: "center",
   };
 
-  if (estado === "carregando") {
-    return (
-      <div style={containerStyle}>
-        <div style={{ ...cardStyle, padding: "60px 40px", textAlign: "center" }}>
-          <div style={{ fontSize: "40px", marginBottom: "16px" }}>⏳</div>
-          <p style={{ color: "#475569", fontSize: "16px" }}>Carregando formulário...</p>
-        </div>
+  if (estado === "carregando") return (
+    <div style={containerStyle}>
+      <div style={{ ...cardStyle, padding: "60px 40px", textAlign: "center" }}>
+        <div style={{ fontSize: "40px", marginBottom: "16px" }}>⏳</div>
+        <p style={{ color: "#475569", fontSize: "16px" }}>Carregando formulário...</p>
       </div>
-    );
-  }
+    </div>
+  );
 
-  if (estado === "invalido") {
-    return (
-      <div style={containerStyle}>
-        <div style={{ ...cardStyle, padding: "60px 40px", textAlign: "center" }}>
-          <div style={{ fontSize: "48px", marginBottom: "16px" }}>❌</div>
-          <h2 style={{ color: "#dc2626", marginBottom: "8px" }}>Link inválido</h2>
-          <p style={{ color: "#64748b" }}>Este link não existe ou foi removido.</p>
-        </div>
+  if (estado === "invalido") return (
+    <div style={containerStyle}>
+      <div style={{ ...cardStyle, padding: "60px 40px", textAlign: "center" }}>
+        <div style={{ fontSize: "48px", marginBottom: "16px" }}>❌</div>
+        <h2 style={{ color: "#dc2626", marginBottom: "8px" }}>Link inválido</h2>
+        <p style={{ color: "#64748b" }}>Este link não existe ou foi removido.</p>
       </div>
-    );
-  }
+    </div>
+  );
 
-  if (estado === "expirado") {
-    return (
-      <div style={containerStyle}>
-        <div style={{ ...cardStyle, padding: "60px 40px", textAlign: "center" }}>
-          <div style={{ fontSize: "48px", marginBottom: "16px" }}>⏰</div>
-          <h2 style={{ color: "#d97706", marginBottom: "8px" }}>Link expirado</h2>
-          <p style={{ color: "#64748b" }}>Este link expirou. Peça ao seu nutricionista para reenviar o formulário.</p>
-        </div>
+  if (estado === "expirado") return (
+    <div style={containerStyle}>
+      <div style={{ ...cardStyle, padding: "60px 40px", textAlign: "center" }}>
+        <div style={{ fontSize: "48px", marginBottom: "16px" }}>⏰</div>
+        <h2 style={{ color: "#d97706", marginBottom: "8px" }}>Link expirado</h2>
+        <p style={{ color: "#64748b" }}>Este link expirou. Peça ao seu nutricionista para reenviar o formulário.</p>
       </div>
-    );
-  }
+    </div>
+  );
 
-  if (estado === "respondido" || sucesso) {
-    return (
-      <div style={containerStyle}>
-        <div style={cardStyle}>
-          <div style={headerStyle}>
-            <Image src="/logo-nutricare.png" alt="NutriCare" width={80} height={80} style={{ objectFit: "contain" }} />
-            <p style={{ color: "rgba(255,255,255,0.8)", margin: "6px 0 0", fontSize: "11px", letterSpacing: "2px" }}>CIÊNCIA · NUTRIÇÃO · BEM-ESTAR</p>
-          </div>
-          <div style={{ padding: "48px 40px", textAlign: "center" }}>
-            <div style={{ fontSize: "56px", marginBottom: "16px" }}>✅</div>
-            <h2 style={{ color: "#1a4d2e", marginBottom: "8px" }}>Respostas enviadas!</h2>
-            <p style={{ color: "#64748b", lineHeight: 1.6 }}>
-              Obrigado por preencher o formulário. Seu nutricionista já pode visualizar suas respostas.
-            </p>
-          </div>
+  if (estado === "respondido" || sucesso) return (
+    <div style={containerStyle}>
+      <div style={cardStyle}>
+        <div style={headerStyle}>
+          <Image src="/logo-nutricare.png" alt="NutriCare" width={80} height={80} style={{ objectFit: "contain" }} />
+          <p style={{ color: "rgba(255,255,255,0.8)", margin: "6px 0 0", fontSize: "11px", letterSpacing: "2px" }}>CIÊNCIA · NUTRIÇÃO · BEM-ESTAR</p>
+        </div>
+        <div style={{ padding: "48px 40px", textAlign: "center" }}>
+          <div style={{ fontSize: "56px", marginBottom: "16px" }}>✅</div>
+          <h2 style={{ color: "#1a4d2e", marginBottom: "8px" }}>Respostas enviadas!</h2>
+          <p style={{ color: "#64748b", lineHeight: 1.6 }}>
+            Obrigado por preencher o formulário. Seu nutricionista já pode visualizar suas respostas.
+          </p>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
     <div style={containerStyle}>
@@ -163,9 +155,7 @@ export default function FormularioPacientePage() {
 
         <div style={{ padding: "32px 36px 40px" }}>
           <div style={{ marginBottom: "28px" }}>
-            <h2 style={{ margin: "0 0 6px", color: "#1a4d2e", fontSize: "20px" }}>
-              Formulário de Anamnese
-            </h2>
+            <h2 style={{ margin: "0 0 6px", color: "#1a4d2e", fontSize: "20px" }}>Formulário de Anamnese</h2>
             {pacienteNome && (
               <p style={{ margin: 0, color: "#64748b", fontSize: "14px" }}>
                 Olá, <strong>{pacienteNome.split(" ")[0]}</strong>! Preencha os campos abaixo.
@@ -175,10 +165,12 @@ export default function FormularioPacientePage() {
 
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
             {campos.map((campo) => {
-              const label = CAMPO_LABELS[campo] || campo;
-              const isNumerico = NUMERICOS.includes(campo);
+              // ── FIX: resolve label mesmo para campo personalizado (field_...) ──
+              const { fieldKey, label } = resolveCampo(campo);
+              const isNumerico = NUMERICOS.includes(fieldKey);
+
               return (
-                <div key={campo}>
+                <div key={fieldKey}>
                   <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
                     {label}
                   </label>
@@ -186,40 +178,21 @@ export default function FormularioPacientePage() {
                     <input
                       type="text"
                       placeholder={`Digite ${label.toLowerCase()}`}
-                      value={respostas[campo] || ""}
-                      onChange={(e) => setRespostas((prev) => ({ ...prev, [campo]: e.target.value }))}
-                      style={{
-                        width: "100%",
-                        padding: "11px 14px",
-                        border: "1.5px solid #e2e8f0",
-                        borderRadius: "10px",
-                        fontSize: "14px",
-                        outline: "none",
-                        boxSizing: "border-box",
-                        background: "#fafcfd",
-                      }}
-                      onFocus={(e) => (e.target.style.borderColor = "#1a6b3c")}
-                      onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
+                      value={respostas[fieldKey] || ""}
+                      onChange={(e) => setRespostas((prev) => ({ ...prev, [fieldKey]: e.target.value }))}
+                      style={{ width: "100%", padding: "11px 14px", border: "1.5px solid #e2e8f0", borderRadius: "10px", fontSize: "14px", outline: "none", boxSizing: "border-box", background: "#fafcfd" }}
+                      onFocus={(e)  => (e.target.style.borderColor = "#1a6b3c")}
+                      onBlur={(e)   => (e.target.style.borderColor = "#e2e8f0")}
                     />
                   ) : (
                     <textarea
                       rows={3}
                       placeholder={`Descreva ${label.toLowerCase()}`}
-                      value={respostas[campo] || ""}
-                      onChange={(e) => setRespostas((prev) => ({ ...prev, [campo]: e.target.value }))}
-                      style={{
-                        width: "100%",
-                        padding: "11px 14px",
-                        border: "1.5px solid #e2e8f0",
-                        borderRadius: "10px",
-                        fontSize: "14px",
-                        outline: "none",
-                        boxSizing: "border-box",
-                        background: "#fafcfd",
-                        resize: "vertical",
-                      }}
-                      onFocus={(e) => (e.target.style.borderColor = "#1a6b3c")}
-                      onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
+                      value={respostas[fieldKey] || ""}
+                      onChange={(e) => setRespostas((prev) => ({ ...prev, [fieldKey]: e.target.value }))}
+                      style={{ width: "100%", padding: "11px 14px", border: "1.5px solid #e2e8f0", borderRadius: "10px", fontSize: "14px", outline: "none", boxSizing: "border-box", background: "#fafcfd", resize: "vertical" }}
+                      onFocus={(e)  => (e.target.style.borderColor = "#1a6b3c")}
+                      onBlur={(e)   => (e.target.style.borderColor = "#e2e8f0")}
                     />
                   )}
                 </div>
@@ -229,22 +202,7 @@ export default function FormularioPacientePage() {
             <button
               type="submit"
               disabled={enviando}
-              style={{
-                width: "100%",
-                padding: "14px",
-                background: enviando
-                  ? "#94a3b8"
-                  : "linear-gradient(135deg, #1a6b3c 0%, #145530 100%)",
-                color: "white",
-                border: "none",
-                borderRadius: "12px",
-                fontSize: "14px",
-                fontWeight: 700,
-                letterSpacing: "1.5px",
-                cursor: enviando ? "not-allowed" : "pointer",
-                marginTop: "8px",
-                boxShadow: enviando ? "none" : "0 4px 14px rgba(26,107,60,0.30)",
-              }}
+              style={{ width: "100%", padding: "14px", background: enviando ? "#94a3b8" : "linear-gradient(135deg, #1a6b3c 0%, #145530 100%)", color: "white", border: "none", borderRadius: "12px", fontSize: "14px", fontWeight: 700, letterSpacing: "1.5px", cursor: enviando ? "not-allowed" : "pointer", marginTop: "8px", boxShadow: enviando ? "none" : "0 4px 14px rgba(26,107,60,0.30)" }}
             >
               {enviando ? "ENVIANDO..." : "ENVIAR RESPOSTAS"}
             </button>

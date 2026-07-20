@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Busca o token no banco
-    const registro = await prisma.password_reset_tokens.findFirst({
+    const registro = await (prisma as any).password_reset_tokens.findFirst({
       where: { token },
     })
 
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 
     // Verifica se expirou (1 hora)
     if (new Date() > new Date(registro.expira_em)) {
-      await prisma.password_reset_tokens.delete({ where: { id: registro.id } })
+      await (prisma as any).password_reset_tokens.delete({ where: { id: registro.id } })
       return NextResponse.json(
         { error: 'Este link expirou. Solicite um novo link de redefinição.' },
         { status: 400 }
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Gera hash da nova senha com custo 12 (seguro)
+    // Gera hash da nova senha com custo 12
     const hash = await bcrypt.hash(novaSenha, 12)
 
     // Atualiza a senha do nutricionista (campo correto: senha_hash)
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     })
 
     // Remove o token (uso único)
-    await prisma.password_reset_tokens.delete({ where: { id: registro.id } })
+    await (prisma as any).password_reset_tokens.delete({ where: { id: registro.id } })
 
     return NextResponse.json({ ok: true, message: 'Senha redefinida com sucesso.' })
   } catch (err) {

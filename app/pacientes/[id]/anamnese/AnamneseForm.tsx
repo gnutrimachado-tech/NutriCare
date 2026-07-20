@@ -35,16 +35,35 @@ const CAMPOS_FIXOS = [
   { id: "observacoes", label: "Observações" },
 ];
 
-const STORAGE_KEY = "nutricare_formulario_campos_padrao";
+// ── Campos personalizados GLOBAIS (compartilhados entre todos os pacientes) ──
+const CUSTOM_FIELDS_KEY = "nutricare_campos_personalizados";
+const SELECTION_KEY     = "nutricare_formulario_campos_padrao";
+
+function carregarCamposCustom(): Array<{ id: string; label: string }> {
+  if (typeof window === "undefined") return [];
+  try {
+    const salvo = localStorage.getItem(CUSTOM_FIELDS_KEY);
+    if (salvo) return JSON.parse(salvo);
+  } catch { /* ignore */ }
+  return [];
+}
+
+function salvarCamposCustom(fields: DynamicField[]) {
+  const customFields = fields.filter((f) => f.id.startsWith("field_"));
+  try {
+    localStorage.setItem(
+      CUSTOM_FIELDS_KEY,
+      JSON.stringify(customFields.map((f) => ({ id: f.id, label: f.label })))
+    );
+  } catch { /* ignore */ }
+}
 
 function carregarPadrao(): string[] {
   if (typeof window === "undefined") return CAMPOS_FIXOS.map((c) => c.id);
   try {
-    const salvo = localStorage.getItem(STORAGE_KEY);
+    const salvo = localStorage.getItem(SELECTION_KEY);
     if (salvo) return JSON.parse(salvo);
-  } catch {
-    // ignore
-  }
+  } catch { /* ignore */ }
   return CAMPOS_FIXOS.map((c) => c.id);
 }
 
@@ -52,26 +71,37 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
   const [saving, setSaving] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
-  const defaultFields: DynamicField[] = [
-    { id: "historico_clinico", label: "Histórico Clínico", value: String(dados?.historico_clinico || ""), editing: false },
-    { id: "alergias", label: "Alergias", value: String(dados?.alergias || ""), editing: false },
-    { id: "medicamentos", label: "Medicamentos", value: String(dados?.medicamentos || ""), editing: false },
-    { id: "suplementos", label: "Suplementos", value: String(dados?.suplementos || ""), editing: false },
-    { id: "habitos_alimentares", label: "Hábitos Alimentares", value: String(dados?.habitos_alimentares || ""), editing: false },
-    { id: "observacoes", label: "Observações", value: String(dados?.observacoes || ""), editing: false },
+  const buildDefaultFields = (): DynamicField[] => [
+    { id: "historico_clinico", label: "Histórico Clínico",     value: String(dados?.historico_clinico   || ""), editing: false },
+    { id: "alergias",          label: "Alergias",              value: String(dados?.alergias            || ""), editing: false },
+    { id: "medicamentos",      label: "Medicamentos",          value: String(dados?.medicamentos        || ""), editing: false },
+    { id: "suplementos",       label: "Suplementos",           value: String(dados?.suplementos         || ""), editing: false },
+    { id: "habitos_alimentares",label: "Hábitos Alimentares",  value: String(dados?.habitos_alimentares || ""), editing: false },
+    { id: "observacoes",       label: "Observações",           value: String(dados?.observacoes         || ""), editing: false },
   ];
 
-  const [fields, setFields] = useState<DynamicField[]>(defaultFields);
-
-  const [showModal, setShowModal] = useState(false);
+  const [fields, setFields]                 = useState<DynamicField[]>(buildDefaultFields());
+  const [showModal, setShowModal]           = useState(false);
   const [camposSelecionados, setCamposSelecionados] = useState<string[]>([]);
-  const [envioStatus, setEnvioStatus] = useState<"idle" | "loading" | "ok" | "erro">("idle");
-  const [envioMsg, setEnvioMsg] = useState("");
+  const [envioStatus, setEnvioStatus]       = useState<"idle" | "loading" | "ok" | "erro">("idle");
+  const [envioMsg, setEnvioMsg]             = useState("");
 
+  // ── Carrega campos globais e seleção salva ao montar ──
   useEffect(() => {
+    const customSalvos = carregarCamposCustom();
+    if (customSalvos.length > 0) {
+      setFields((prev) => {
+        const existingIds = new Set(prev.map((f) => f.id));
+        const novos = customSalvos
+          .filter((c) => !existingIds.has(c.id))
+          .map((c) => ({ id: c.id, label: c.label, value: "", editing: false }));
+        return [...prev, ...novos];
+      });
+    }
     setCamposSelecionados(carregarPadrao());
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Helpers de formatação ──
   function valorDecimal(valor: unknown) {
     if (valor === null || valor === undefined) return "";
     const numero =
@@ -101,29 +131,41 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
     if (valor.includes(".") || valor.includes(",")) {
       event.preventDefault();
       alert("A altura deve ser informada sem ponto ou vírgula.\n\nDigite apenas valor inteiro.\nExemplo correto: 173");
-      alturaInput.focus();
-      alturaInput.select();
-      return;
+      alturaInput.focus(); alturaInput.select(); return;
     }
     if (!/^\d+$/.test(valor)) {
       event.preventDefault();
       alert("A altura deve ser informada usando apenas números inteiros.\n\nExemplo correto: 173");
-      alturaInput.focus();
-      alturaInput.select();
-      return;
+      alturaInput.focus(); alturaInput.select(); return;
     }
   }
 
+  // ── Gerenciamento de campos dinâmicos (persiste globalmente) ──
   const addField = useCallback(() => {
-    setFields((prev) => [...prev, { id: genFieldId(), label: "", value: "", editing: true }]);
+    const newField: DynamicField = { id: genFieldId(), label: "", value: "", editing: true };
+    setFields((prev) => {
+      const next = [...prev, newField];
+      salvarCamposCustom(next);
+      return next;
+    });
   }, []);
 
   const removeField = useCallback((fieldId: string) => {
-    setFields((prev) => prev.filter((f) => f.id !== fieldId));
+    setFields((prev) => {
+      const next = prev.filter((f) => f.id !== fieldId);
+      salvarCamposCustom(next);
+      // Remove também da seleção se estava selecionado
+      setCamposSelecionados((sel) => sel.filter((id) => id !== fieldId));
+      return next;
+    });
   }, []);
 
   const updateFieldLabel = useCallback((fieldId: string, label: string) => {
-    setFields((prev) => prev.map((f) => (f.id === fieldId ? { ...f, label } : f)));
+    setFields((prev) => {
+      const next = prev.map((f) => (f.id === fieldId ? { ...f, label } : f));
+      salvarCamposCustom(next);
+      return next;
+    });
   }, []);
 
   const updateFieldValue = useCallback((fieldId: string, value: string) => {
@@ -131,9 +173,14 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
   }, []);
 
   const toggleEditing = useCallback((fieldId: string) => {
-    setFields((prev) => prev.map((f) => (f.id === fieldId ? { ...f, editing: !f.editing } : f)));
+    setFields((prev) => {
+      const next = prev.map((f) => (f.id === fieldId ? { ...f, editing: !f.editing } : f));
+      salvarCamposCustom(next);
+      return next;
+    });
   }, []);
 
+  // ── Auto-save ──
   const lastSavedRef = useRef<string>("");
 
   const buildFormData = useCallback(() => {
@@ -152,20 +199,13 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
     try {
       await autoSalvarAnamnese(pacienteId, formData);
       lastSavedRef.current = snapshot;
-    } catch {
-      // silent fail
-    } finally {
-      setSaving(false);
-    }
+    } catch { /* silent */ } finally { setSaving(false); }
   }, [buildFormData, pacienteId]);
 
   useEffect(() => {
     const formData = buildFormData();
-    if (formData) {
-      lastSavedRef.current = JSON.stringify(Array.from(formData.entries()));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (formData) lastSavedRef.current = JSON.stringify(Array.from(formData.entries()));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const autoSaveRef = useRef(autoSave);
   useEffect(() => { autoSaveRef.current = autoSave; }, [autoSave]);
@@ -185,6 +225,14 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
     };
   }, []);
 
+  // ── Modal de seleção de campos ──
+  function getAllCampos() {
+    const dinamicos = fields
+      .filter((f) => f.label.trim() && f.id.startsWith("field_"))
+      .map((f) => ({ id: f.id, label: f.label }));
+    return [...CAMPOS_FIXOS, ...dinamicos];
+  }
+
   function toggleCampo(id: string) {
     setCamposSelecionados((prev) =>
       prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
@@ -192,19 +240,11 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
   }
 
   function selecionarTodos() {
-    const todosIds = getAllCampos().map((c) => c.id);
-    setCamposSelecionados(todosIds);
+    setCamposSelecionados(getAllCampos().map((c) => c.id));
   }
 
   function limparSelecao() {
     setCamposSelecionados([]);
-  }
-
-  function getAllCampos() {
-    const dinamicos = fields
-      .filter((f) => f.label.trim())
-      .map((f) => ({ id: f.id, label: f.label }));
-    return [...CAMPOS_FIXOS, ...dinamicos];
   }
 
   async function handleEnviarFormulario() {
@@ -213,11 +253,20 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
       return;
     }
 
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(camposSelecionados));
-    } catch {
-      // ignore
-    }
+    // Salva seleção atual como padrão
+    try { localStorage.setItem(SELECTION_KEY, JSON.stringify(camposSelecionados)); } catch { /* ignore */ }
+
+    // ── FIX PRINCIPAL: Para campos personalizados (field_...) envia {key, label}
+    //    Para campos fixos, envia só o ID (pois o label é conhecido pelo frontend)
+    const camposComLabels = camposSelecionados.map((id) => {
+      const fixo = CAMPOS_FIXOS.find((c) => c.id === id);
+      if (fixo) return id; // campo fixo: envia só o ID
+      const dinamico = fields.find((f) => f.id === id);
+      if (dinamico && dinamico.label.trim()) {
+        return JSON.stringify({ key: id, label: dinamico.label.trim() });
+      }
+      return id; // fallback
+    });
 
     setEnvioStatus("loading");
     setEnvioMsg("");
@@ -226,17 +275,13 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
       const res = await fetch("/api/anamnese/enviar-formulario", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pacienteId, campos: camposSelecionados }),
+        body: JSON.stringify({ pacienteId, campos: camposComLabels }),
       });
       const data = await res.json();
       if (res.ok) {
         setEnvioStatus("ok");
         setEnvioMsg("Formulário enviado com sucesso para o e-mail do paciente!");
-        setTimeout(() => {
-          setShowModal(false);
-          setEnvioStatus("idle");
-          setEnvioMsg("");
-        }, 2500);
+        setTimeout(() => { setShowModal(false); setEnvioStatus("idle"); setEnvioMsg(""); }, 2500);
       } else {
         setEnvioStatus("erro");
         setEnvioMsg(data.error || "Erro ao enviar.");
@@ -254,12 +299,7 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
         action={salvarAnamnese.bind(null, pacienteId)}
         onSubmit={validarFormulario}
         onInput={handleFormInput}
-        style={{
-          background: "white",
-          padding: "30px",
-          borderRadius: "12px",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-        }}
+        style={{ background: "white", padding: "30px", borderRadius: "12px", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "10px" }}>
           <h2 style={{ margin: 0 }}>Dados da Anamnese</h2>
@@ -267,31 +307,15 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
             {saving && <span style={{ fontSize: "12px", color: "#94a3b8" }}>Salvando...</span>}
             <button
               type="button"
-              onClick={() => {
-                setEnvioStatus("idle");
-                setEnvioMsg("");
-                setShowModal(true);
-              }}
-              style={{
-                padding: "9px 18px",
-                background: "linear-gradient(135deg, #1a6b3c 0%, #145530 100%)",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                fontSize: "13px",
-                fontWeight: 600,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                boxShadow: "0 2px 8px rgba(26,107,60,0.25)",
-              }}
+              onClick={() => { setEnvioStatus("idle"); setEnvioMsg(""); setShowModal(true); }}
+              style={{ padding: "9px 18px", background: "linear-gradient(135deg, #1a6b3c 0%, #145530 100%)", color: "white", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", boxShadow: "0 2px 8px rgba(26,107,60,0.25)" }}
             >
               <span>📧</span> Enviar Formulário
             </button>
           </div>
         </div>
 
+        {/* Campos de medição numérica */}
         <div style={rowStyle}>
           <div style={campoPequenoStyle}>
             <label style={campoLabelStyle}>Peso (kg)</label>
@@ -319,6 +343,7 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
           </div>
         </div>
 
+        {/* Campos de texto (fixos + dinâmicos) */}
         {fields.map((field) => (
           <div key={field.id} style={{ marginBottom: "8px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
@@ -334,24 +359,21 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
                   onKeyDown={(e) => { if (e.key === "Enter") toggleEditing(field.id); }}
                 />
               ) : (
-                <span
-                  style={{ fontSize: "13px", fontWeight: 600, color: "#374151", cursor: "pointer" }}
-                  onClick={() => toggleEditing(field.id)}
-                  title="Clique para renomear"
-                >
+                <span style={{ fontSize: "13px", fontWeight: 600, color: "#374151", cursor: field.id.startsWith("field_") ? "pointer" : "default" }}
+                  onClick={() => { if (field.id.startsWith("field_")) toggleEditing(field.id); }}
+                  title={field.id.startsWith("field_") ? "Clique para renomear" : undefined}>
                   {field.label || "(sem nome)"}
                 </span>
               )}
-              <button type="button" onClick={() => toggleEditing(field.id)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "#3b82f6", padding: "2px" }} title="Editar nome">✏️</button>
-              <button type="button" onClick={() => removeField(field.id)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "15px", color: "#ef4444", padding: "2px", fontWeight: 700 }} title="Excluir campo">×</button>
+              {/* Botões de edição/remoção apenas para campos personalizados */}
+              {field.id.startsWith("field_") && (
+                <>
+                  <button type="button" onClick={() => toggleEditing(field.id)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "#3b82f6", padding: "2px" }} title="Editar nome">✏️</button>
+                  <button type="button" onClick={() => removeField(field.id)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "15px", color: "#ef4444", padding: "2px", fontWeight: 700 }} title="Excluir campo">×</button>
+                </>
+              )}
             </div>
-            <textarea
-              name={field.id}
-              rows={2}
-              style={textareaStyle}
-              value={field.value}
-              onChange={(e) => updateFieldValue(field.id, e.target.value)}
-            />
+            <textarea name={field.id} rows={2} style={textareaStyle} value={field.value} onChange={(e) => updateFieldValue(field.id, e.target.value)} />
           </div>
         ))}
 
@@ -363,20 +385,17 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
         </div>
       </form>
 
+      {/* ── Modal de envio ── */}
       {showModal && (
         <div
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false); }}
         >
-          <div
-            style={{ background: "white", borderRadius: "16px", width: "100%", maxWidth: "480px", boxShadow: "0 20px 60px rgba(0,0,0,0.2)", overflow: "hidden" }}
-          >
+          <div style={{ background: "white", borderRadius: "16px", width: "100%", maxWidth: "480px", boxShadow: "0 20px 60px rgba(0,0,0,0.2)", overflow: "hidden" }}>
             <div style={{ background: "linear-gradient(135deg, #1a6b3c, #145530)", padding: "20px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
                 <h3 style={{ margin: 0, color: "white", fontSize: "16px" }}>📧 Enviar Formulário</h3>
-                <p style={{ margin: "4px 0 0", color: "rgba(255,255,255,0.75)", fontSize: "12px" }}>
-                  Selecione os campos para enviar ao paciente
-                </p>
+                <p style={{ margin: "4px 0 0", color: "rgba(255,255,255,0.75)", fontSize: "12px" }}>Selecione os campos para enviar ao paciente</p>
               </div>
               <button onClick={() => setShowModal(false)} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "white", borderRadius: "50%", width: "30px", height: "30px", cursor: "pointer", fontSize: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
             </div>
@@ -392,16 +411,8 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
                 {getAllCampos().map((campo) => {
                   const marcado = camposSelecionados.includes(campo.id);
                   return (
-                    <label
-                      key={campo.id}
-                      style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", borderRadius: "8px", cursor: "pointer", background: marcado ? "#f0fdf4" : "transparent", border: `1px solid ${marcado ? "#86efac" : "#e2e8f0"}`, transition: "all 0.15s" }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={marcado}
-                        onChange={() => toggleCampo(campo.id)}
-                        style={{ width: "16px", height: "16px", accentColor: "#1a6b3c", cursor: "pointer" }}
-                      />
+                    <label key={campo.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 10px", borderRadius: "8px", cursor: "pointer", background: marcado ? "#f0fdf4" : "transparent", border: `1px solid ${marcado ? "#86efac" : "#e2e8f0"}`, transition: "all 0.15s" }}>
+                      <input type="checkbox" checked={marcado} onChange={() => toggleCampo(campo.id)} style={{ width: "16px", height: "16px", accentColor: "#1a6b3c", cursor: "pointer" }} />
                       <span style={{ fontSize: "13.5px", color: marcado ? "#1a4d2e" : "#374151", fontWeight: marcado ? 600 : 400 }}>{campo.label}</span>
                     </label>
                   );
@@ -409,7 +420,7 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
               </div>
 
               <p style={{ margin: "12px 0 0", fontSize: "11px", color: "#94a3b8" }}>
-                💾 Sua seleção será salva como padrão para os próximos pacientes.
+                💾 Campos personalizados são compartilhados entre todos os pacientes.
               </p>
 
               {envioMsg && (
@@ -420,12 +431,7 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
             </div>
 
             <div style={{ padding: "0 24px 24px", display: "flex", gap: "10px" }}>
-              <button
-                onClick={() => setShowModal(false)}
-                style={{ flex: 1, padding: "11px", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: "10px", cursor: "pointer", fontSize: "13.5px", color: "#475569", fontWeight: 600 }}
-              >
-                Cancelar
-              </button>
+              <button onClick={() => setShowModal(false)} style={{ flex: 1, padding: "11px", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: "10px", cursor: "pointer", fontSize: "13.5px", color: "#475569", fontWeight: 600 }}>Cancelar</button>
               <button
                 onClick={handleEnviarFormulario}
                 disabled={envioStatus === "loading" || camposSelecionados.length === 0}
@@ -441,42 +447,8 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
   );
 }
 
-const rowStyle = {
-  display: "flex",
-  gap: "12px",
-  marginBottom: "12px",
-  flexWrap: "nowrap" as const,
-  alignItems: "stretch",
-};
-
-const campoPequenoStyle = {
-  flex: 1,
-  minWidth: 0,
-  display: "flex" as const,
-  flexDirection: "column" as const,
-};
-
-const campoLabelStyle = {
-  fontSize: "12px",
-  fontWeight: 600,
-  color: "#475569",
-  marginBottom: "4px",
-} as const;
-
-const inputLinhaStyle = {
-  width: "100%",
-  padding: "12px",
-  border: "1px solid #cbd5e1",
-  borderRadius: "8px",
-  fontSize: "14px",
-} as const;
-
-const textareaStyle = {
-  width: "100%",
-  padding: "10px 12px",
-  border: "1px solid #cbd5e1",
-  borderRadius: "8px",
-  fontSize: "14px",
-  resize: "vertical" as const,
-  boxSizing: "border-box" as const,
-} as const;
+const rowStyle = { display: "flex", gap: "12px", marginBottom: "12px", flexWrap: "nowrap" as const, alignItems: "stretch" };
+const campoPequenoStyle = { flex: 1, minWidth: 0, display: "flex" as const, flexDirection: "column" as const };
+const campoLabelStyle = { fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "4px" } as const;
+const inputLinhaStyle  = { width: "100%", padding: "12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "14px" } as const;
+const textareaStyle    = { width: "100%", padding: "10px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "14px", resize: "vertical" as const, boxSizing: "border-box" as const } as const;

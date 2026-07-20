@@ -1,15 +1,45 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+// Colunas reais da tabela anamneses (todas as outras vão para observacoes)
+const COLUNAS_FIXAS = new Set([
+  "peso", "altura", "imc", "percentual_gordura", "massa_muscular",
+  "massa_adiposa", "agua_corporal", "taxa_metabolica",
+  "historico_clinico", "alergias", "medicamentos", "suplementos",
+  "habitos_alimentares", "observacoes",
+]);
+
+const NUMERICOS = new Set([
+  "peso", "altura", "imc", "percentual_gordura", "massa_muscular",
+  "massa_adiposa", "agua_corporal", "taxa_metabolica",
+]);
+
+function toDecimal(valor: unknown): number | null {
+  const texto = String(valor || "").replace(",", ".").trim();
+  if (!texto) return null;
+  const numero = Number(texto);
+  return isNaN(numero) ? null : numero;
+}
+
+/** Resolve um campo salvo no banco (pode ser plain key ou JSON {key, label}) */
+function resolveCampo(campo: string): { fieldKey: string; label: string } {
+  try {
+    const parsed = JSON.parse(campo);
+    return {
+      fieldKey: String(parsed.key   ?? campo),
+      label:    String(parsed.label ?? campo),
+    };
+  } catch {
+    return { fieldKey: campo, label: campo };
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const { token, respostas } = await request.json();
 
     if (!token || !respostas) {
-      return NextResponse.json(
-        { error: "Token e respostas são obrigatórios." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Token e respostas são obrigatórios." }, { status: 400 });
     }
 
     const formulario = await prisma.formulario_tokens.findUnique({
@@ -22,35 +52,45 @@ export async function POST(request: Request) {
     }
 
     if (formulario.status === "respondido") {
-      return NextResponse.json(
-        { error: "Este formulário já foi respondido." },
-        { status: 409 }
-      );
+      return NextResponse.json({ error: "Este formulário já foi respondido." }, { status: 409 });
     }
 
     if (new Date() > formulario.expires_at) {
       return NextResponse.json({ error: "Este link expirou." }, { status: 410 });
     }
 
-    const toDecimal = (valor: unknown) => {
-      const texto = String(valor || "").replace(",", ".").trim();
-      if (!texto) return null;
-      const numero = Number(texto);
-      if (isNaN(numero)) return null;
-      return numero;
-    };
+    // ── FIX PRINCIPAL: separa colunas conhecidas de campos personalizados ──
+    const dadosFixos: Record<string, unknown> = {};
+    const extrasTexto: string[] = [];
 
-    const dados: Record<string, unknown> = {};
     for (const campo of formulario.campos) {
-      const valor = respostas[campo];
-      const numericos = ["peso", "altura", "percentual_gordura", "massa_muscular", "massa_adiposa", "agua_corporal"];
-      if (numericos.includes(campo)) {
-        dados[campo] = toDecimal(valor);
-      } else {
-        dados[campo] = valor || null;
+      const { fieldKey, label } = resolveCampo(campo);
+      const valor = respostas[fieldKey]; // usa a key resolvida para buscar a resposta
+
+      if (COLUNAS_FIXAS.has(fieldKey)) {
+        // Coluna existente na tabela
+        if (NUMERICOS.has(fieldKey)) {
+          dadosFixos[fieldKey] = toDecimal(valor);
+        } else {
+          dadosFixos[fieldKey] = valor || null;
+        }
+      } else if (fieldKey.startsWith("field_")) {
+        // Campo personalizado — concatena em observacoes
+        if (valor && String(valor).trim()) {
+          extrasTexto.push(`${label}: ${String(valor).trim()}`);
+        }
       }
+      // Qualquer outro campo desconhecido é ignorado com segurança
     }
 
+    // Anexa perguntas personalizadas ao campo observacoes
+    if (extrasTexto.length > 0) {
+      const separador = "\n\n--- Perguntas personalizadas ---\n";
+      const existente = typeof dadosFixos.observacoes === "string" ? dadosFixos.observacoes : "";
+      dadosFixos.observacoes = existente + separador + extrasTexto.join("\n");
+    }
+
+    // Upsert na tabela anamneses
     const existente = await prisma.anamneses.findFirst({
       where: { paciente_id: formulario.paciente_id },
     });
@@ -58,25 +98,26 @@ export async function POST(request: Request) {
     if (existente) {
       await prisma.anamneses.update({
         where: { id: existente.id },
-        data: dados,
+        data:  dadosFixos,
       });
     } else {
       await prisma.anamneses.create({
         data: {
           paciente_id: formulario.paciente_id,
-          ...dados,
+          ...dadosFixos,
         },
       });
     }
 
+    // Marca o token como respondido
     await prisma.formulario_tokens.update({
       where: { id: formulario.id },
-      data: { status: "respondido" },
+      data:  { status: "respondido" },
     });
 
     return NextResponse.json({ message: "Respostas salvas com sucesso!" });
   } catch (err) {
-    console.error("Erro formulario-resposta:", err);
+    console.error("Erro formulario-resposta POST:", err);
     return NextResponse.json({ error: "Erro interno." }, { status: 500 });
   }
 }
@@ -103,8 +144,8 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    campos: formulario.campos,
+    campos:       formulario.campos,   // retorna como estão (client faz o parse)
     pacienteNome: formulario.pacientes.nome,
-    status: formulario.status,
+    status:       formulario.status,
   });
 }
