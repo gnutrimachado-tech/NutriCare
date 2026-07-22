@@ -6,9 +6,15 @@ const BREVO_API_KEY   = process.env.BREVO_API_KEY!
 const BREVO_FROM_EMAIL = process.env.BREVO_FROM_EMAIL || 'noreply@nutricare.com'
 const BREVO_FROM_NAME  = process.env.BREVO_FROM_NAME  || 'NutriCare'
 
-function getBaseUrl(): string {
-  if (process.env.NEXTAUTH_URL) return process.env.NEXTAUTH_URL.replace(/\/$/, '')
-  if (process.env.VERCEL_URL)   return `https://${process.env.VERCEL_URL}`
+function getBaseUrl(req?: NextRequest): string {
+  // Prioridade: NEXT_PUBLIC_APP_URL → NEXTAUTH_URL → VERCEL_URL → Origin do request → localhost (último recurso)
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, '')
+  if (process.env.NEXTAUTH_URL)        return process.env.NEXTAUTH_URL.replace(/\/+$/, '')
+  if (process.env.VERCEL_URL)          return `https://${process.env.VERCEL_URL}`
+  if (req) {
+    const origin = req.headers.get('origin') || req.headers.get('referer') || ''
+    try { if (origin) return new URL(origin).origin } catch { /* ignore */ }
+  }
   return 'http://localhost:3000'
 }
 
@@ -48,7 +54,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const linkReset = `${getBaseUrl()}/redefinir-senha?token=${token}`
+    const linkReset = `${getBaseUrl(req)}/redefinir-senha?token=${token}`
 
     if (BREVO_API_KEY) {
       await fetch('https://api.brevo.com/v3/smtp/email', {

@@ -38,9 +38,13 @@ export async function POST(request: Request) {
   try {
     const { token, respostas } = await request.json();
 
-    if (!token || !respostas) {
-      return NextResponse.json({ error: "Token e respostas são obrigatórios." }, { status: 400 });
+    if (!token) {
+      return NextResponse.json({ error: "Token é obrigatório." }, { status: 400 });
     }
+
+    // Aceita envio mesmo sem respostas (todas em branco)
+    const respostasSeguras: Record<string, unknown> =
+      respostas && typeof respostas === "object" ? respostas : {};
 
     const formulario = await prisma.formulario_tokens.findUnique({
       where: { token },
@@ -65,18 +69,19 @@ export async function POST(request: Request) {
 
     for (const campo of formulario.campos) {
       const { fieldKey, label } = resolveCampo(campo);
-      const valor = respostas[fieldKey]; // usa a key resolvida para buscar a resposta
+      const valor = respostasSeguras[fieldKey]; // usa a key resolvida para buscar a resposta
 
       if (COLUNAS_FIXAS.has(fieldKey)) {
         // Coluna existente na tabela
         if (NUMERICOS.has(fieldKey)) {
           dadosFixos[fieldKey] = toDecimal(valor);
         } else {
-          dadosFixos[fieldKey] = valor || null;
+          const texto = valor == null ? "" : String(valor).trim();
+          dadosFixos[fieldKey] = texto ? texto : null;
         }
       } else if (fieldKey.startsWith("field_")) {
-        // Campo personalizado — concatena em observacoes
-        if (valor && String(valor).trim()) {
+        // Campo personalizado — concatena em observacoes só se houver resposta
+        if (valor != null && String(valor).trim()) {
           extrasTexto.push(`${label}: ${String(valor).trim()}`);
         }
       }

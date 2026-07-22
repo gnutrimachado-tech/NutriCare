@@ -131,8 +131,14 @@ export default function FormularioPacientePage() {
     <div style={containerStyle}>
       <div style={cardStyle}>
         <div style={headerStyle}>
-          <Image src="/logo-nutricare.png" alt="NutriCare" width={80} height={80} style={{ objectFit: "contain" }} />
-          <p style={{ color: "rgba(255,255,255,0.8)", margin: "6px 0 0", fontSize: "11px", letterSpacing: "2px" }}>CIÊNCIA · NUTRIÇÃO · BEM-ESTAR</p>
+          <Image
+            src="/logo-nutricare.png"
+            alt="NutriCare"
+            width={160}
+            height={160}
+            style={{ objectFit: "contain", width: "clamp(120px, 26vw, 160px)", height: "auto", filter: "brightness(0) invert(1)" }}
+          />
+          <p style={{ color: "rgba(255,255,255,0.85)", margin: "8px 0 0", fontSize: "11px", letterSpacing: "2px" }}>CIÊNCIA · NUTRIÇÃO · BEM-ESTAR</p>
         </div>
         <div style={{ padding: "48px 40px", textAlign: "center" }}>
           <div style={{ fontSize: "56px", marginBottom: "16px" }}>✅</div>
@@ -149,8 +155,14 @@ export default function FormularioPacientePage() {
     <div style={containerStyle}>
       <div style={cardStyle}>
         <div style={headerStyle}>
-          <Image src="/logo-nutricare.png" alt="NutriCare" width={80} height={80} style={{ objectFit: "contain" }} />
-          <p style={{ color: "rgba(255,255,255,0.8)", margin: "6px 0 0", fontSize: "11px", letterSpacing: "2px" }}>CIÊNCIA · NUTRIÇÃO · BEM-ESTAR</p>
+          <Image
+            src="/logo-nutricare.png"
+            alt="NutriCare"
+            width={160}
+            height={160}
+            style={{ objectFit: "contain", width: "clamp(120px, 26vw, 160px)", height: "auto", filter: "brightness(0) invert(1)" }}
+          />
+          <p style={{ color: "rgba(255,255,255,0.85)", margin: "8px 0 0", fontSize: "11px", letterSpacing: "2px" }}>CIÊNCIA · NUTRIÇÃO · BEM-ESTAR</p>
         </div>
 
         <div style={{ padding: "32px 36px 40px" }}>

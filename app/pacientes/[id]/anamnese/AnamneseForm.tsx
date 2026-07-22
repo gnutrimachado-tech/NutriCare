@@ -86,7 +86,7 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
   const [envioStatus, setEnvioStatus]       = useState<"idle" | "loading" | "ok" | "erro">("idle");
   const [envioMsg, setEnvioMsg]             = useState("");
 
-  // ── Carrega campos globais e seleção salva ao montar ──
+  // ── Carrega campos globais e seleção salva ao montar / trocar paciente ──
   useEffect(() => {
     const customSalvos = carregarCamposCustom();
     if (customSalvos.length > 0) {
@@ -98,8 +98,36 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
         return [...prev, ...novos];
       });
     }
-    setCamposSelecionados(carregarPadrao());
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Seleção padrão: inclui automáticamente todos os campos personalizados globais
+    const padraoSalvo = carregarPadrao();
+    const idsCustom   = customSalvos.map((c) => c.id);
+    const selecaoFinal = Array.from(new Set([...padraoSalvo, ...idsCustom]));
+    setCamposSelecionados(selecaoFinal);
+  }, [pacienteId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Mantém as perguntas globais sincronizadas entre abas/janelas ──
+  useEffect(() => {
+    function onStorage(ev: StorageEvent) {
+      if (ev.key !== CUSTOM_FIELDS_KEY) return;
+      const customSalvos = carregarCamposCustom();
+      setFields((prev) => {
+        const fixosMantidos = prev.filter((f) => !f.id.startsWith("field_"));
+        const dinamicos = customSalvos.map((c) => {
+          const existente = prev.find((f) => f.id === c.id);
+          return {
+            id: c.id,
+            label: c.label,
+            value: existente?.value ?? "",
+            editing: existente?.editing ?? false,
+          };
+        });
+        return [...fixosMantidos, ...dinamicos];
+      });
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   // ── Helpers de formatação ──
   function valorDecimal(valor: unknown) {

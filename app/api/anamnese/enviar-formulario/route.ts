@@ -48,10 +48,22 @@ export async function POST(request: Request) {
       },
     });
 
-    const baseUrl =
-      process.env.NEXTAUTH_URL ||
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+    // ── URL pública: nunca usa localhost em produção ──
+    // Prioridade: NEXT_PUBLIC_APP_URL → NEXTAUTH_URL → VERCEL_URL → Origin do request → localhost (último recurso)
+    const originHeader = request.headers.get("origin") || request.headers.get("referer") || "";
+    let originHost = "";
+    try {
+      if (originHeader) originHost = new URL(originHeader).origin;
+    } catch { /* ignore */ }
 
+    const rawBase =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.NEXTAUTH_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+      originHost ||
+      "http://localhost:3000";
+
+    const baseUrl = rawBase.replace(/\/+$/, "");
     const linkFormulario = `${baseUrl}/formulario-paciente/${token}`;
 
     const htmlEmail = `

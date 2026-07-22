@@ -95,14 +95,16 @@ export default function LoginPage() {
           </>
         ) : (
           <>
-            {/* Logo + título */}
-            <div style={{ textAlign: 'center', marginBottom: 24 }}>
-              <Image src="/logo-nutricare.png" alt="NutriCare" width={148} height={148}
-                style={{ objectFit: 'contain' }} priority />
-              <h1 style={titleStyle}>
-                Nutri<span style={{ color: '#b8960c' }}>care</span>
-              </h1>
-              <p style={subtitleStyle}>CIÊNCIA • NUTRIÇÃO • BEM-ESTAR</p>
+            {/* Logo (sem texto duplicado) */}
+            <div style={{ textAlign: 'center', marginBottom: 22 }}>
+              <Image
+                src="/logo-nutricare.png"
+                alt="NutriCare"
+                width={200}
+                height={200}
+                style={{ objectFit: 'contain', width: 'clamp(140px, 32vw, 200px)', height: 'auto' }}
+                priority
+              />
             </div>
 
             <form onSubmit={handleLogin} style={formCol}>
@@ -173,21 +175,25 @@ export default function LoginPage() {
 /* ─── Estilos ─── */
 const bgStyle: React.CSSProperties = {
   minHeight: '100vh',
-  backgroundImage: "url('/bg-login.jpg')",
+  backgroundImage:
+    "linear-gradient(rgba(255,255,255,0.55), rgba(255,255,255,0.55)), url('/bg-login.jpg')",
   backgroundSize: 'cover',
   backgroundPosition: 'center top',
   backgroundRepeat: 'no-repeat',
+  backgroundColor: '#f5f8f4',
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   padding: '24px', position: 'relative',
   fontFamily: "'Segoe UI',system-ui,-apple-system,sans-serif",
 }
 const cardStyle: React.CSSProperties = {
-  background: 'rgba(255,255,255,0.96)',
-  backdropFilter: 'blur(6px)',
+  background: 'rgba(255,255,255,0.82)',
+  backdropFilter: 'blur(10px)',
+  WebkitBackdropFilter: 'blur(10px)',
   borderRadius: 26,
-  padding: '36px 38px 32px',
+  padding: '32px 34px 28px',
   width: '100%', maxWidth: 420,
-  boxShadow: '0 8px 56px rgba(26,70,26,0.18), 0 2px 12px rgba(0,0,0,0.08)',
+  boxShadow: '0 8px 40px rgba(26,70,26,0.14), 0 2px 10px rgba(0,0,0,0.06)',
+  border: '1px solid rgba(255,255,255,0.55)',
   position: 'relative', zIndex: 1,
 }
 const titleStyle: React.CSSProperties = {
