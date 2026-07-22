@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import EditarPacienteForm from "./EditarPacienteForm";
+import PatientTabsNav from "@/components/PatientTabsNav";
 
 export const dynamic = "force-dynamic";
 
@@ -48,50 +48,19 @@ export default async function PacienteDetalhePage({
     <div>
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "20px",
+          textAlign: "center",
+          marginBottom: "16px",
         }}
       >
-        <h1 style={{ fontSize: "32px" }}>
-          {paciente.nome}
+        <h1 style={{ fontSize: "32px", margin: 0 }}>
+          Paciente
         </h1>
-
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-          }}
-        >
-          <Link
-            href={`/pacientes/${paciente.id}/anamnese`}
-            style={{
-              textDecoration: "none",
-              background: "#2563eb",
-              color: "white",
-              padding: "10px 16px",
-              borderRadius: "8px",
-              fontWeight: "600",
-            }}
-          >
-            Próxima → Anamnese
-          </Link>
-
-          <Link
-            href="/pacientes"
-            style={{
-              textDecoration: "none",
-              background: "#e2e8f0",
-              padding: "10px 16px",
-              borderRadius: "8px",
-              color: "#0f172a",
-            }}
-          >
-            ← Voltar
-          </Link>
-        </div>
+        <p style={{ margin: "10px 0 0", fontSize: "18px", color: "#64748b" }}>
+          Paciente: {paciente.nome}
+        </p>
       </div>
+
+      <PatientTabsNav patientId={paciente.id} activeTab="paciente" />
 
       <EditarPacienteForm paciente={paciente} />
 

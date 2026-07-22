@@ -66,10 +66,12 @@ export async function POST(request: Request) {
     const baseUrl = rawBase.replace(/\/+$/, "");
     const linkFormulario = `${baseUrl}/formulario-paciente/${token}`;
 
+    const logoUrl = `${baseUrl}/logo-nutricare.png`;
+
     const htmlEmail = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
         <div style="background: linear-gradient(135deg, #1a6b3c, #145530); padding: 32px; text-align: center;">
-          <h1 style="color: white; margin: 0; font-size: 26px;">NutriCare</h1>
+          <img src="${logoUrl}" alt="NutriCare" style="display:block; margin:0 auto 10px; max-width:120px; height:auto;" />
           <p style="color: rgba(255,255,255,0.8); margin: 6px 0 0; font-size: 12px; letter-spacing: 2px;">CIÊNCIA · NUTRIÇÃO · BEM-ESTAR</p>
         </div>
         <div style="padding: 32px;">

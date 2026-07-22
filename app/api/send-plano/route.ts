@@ -556,34 +556,30 @@ function drawHeader(doc: LayoutDoc, page: PDFPage, options: BasePageOptions) {
 
 function drawFooter(doc: LayoutDoc, page: PDFPage) {
   const footerY = 56;
+  const nomeBase = (doc.nutricionistaNome || "").trim();
+  const nomeRodape = nomeBase ? `Nutricionista: ${nomeBase}` : "Nutricionista";
+  const crnRodape = (doc.nutricionistaCrn || CRN_LABEL).trim();
+  const signatureFont = doc.fontScript || doc.fontBold;
+  const signatureSize = doc.fontScript ? 22 : 13;
+  const signatureWidth = Math.min(
+    signatureFont.widthOfTextAtSize(nomeRodape, signatureSize),
+    PAGE_WIDTH - PAGE_MARGIN_X * 2 - 70
+  );
+
+  page.drawText(nomeRodape, {
+    x: PAGE_MARGIN_X,
+    y: footerY + 20,
+    size: signatureSize,
+    font: signatureFont,
+    color: rgb(0.12, 0.12, 0.12),
+  });
 
   page.drawLine({
-    start: { x: PAGE_MARGIN_X + 4, y: footerY + 18 },
-    end: { x: PAGE_MARGIN_X + 132, y: footerY + 18 },
+    start: { x: PAGE_MARGIN_X, y: footerY + 18 },
+    end: { x: PAGE_MARGIN_X + Math.max(signatureWidth, 90), y: footerY + 18 },
     thickness: 0.8,
     color: rgb(0.2, 0.2, 0.2),
   });
-
-  const nomeRodape = doc.nutricionistaNome || "Nutricionista";
-  const crnRodape = doc.nutricionistaCrn || CRN_LABEL;
-
-  if (doc.fontScript) {
-    page.drawText(nomeRodape, {
-      x: PAGE_MARGIN_X,
-      y: footerY + 20,
-      size: 22,
-      font: doc.fontScript,
-      color: rgb(0.12, 0.12, 0.12),
-    });
-  } else {
-    page.drawText(nomeRodape, {
-      x: PAGE_MARGIN_X,
-      y: footerY + 20,
-      size: 13,
-      font: doc.fontBold,
-      color: rgb(0.12, 0.12, 0.12),
-    });
-  }
 
   page.drawText(crnRodape, {
     x: PAGE_MARGIN_X,
@@ -1405,7 +1401,7 @@ export async function POST(request: Request) {
 
     const emailSummaryItems = [
       "PDF do plano alimentar",
-      ...(includeShoppingList && shoppingList.length > 0 ? [`PDF da lista de compras (${shoppingDays} dias)`] : []),
+      ...(includeShoppingList ? [`PDF da lista de compras (${shoppingDays} dias)`] : []),
       ...(includeProtocols && protocols.length > 0 ? ["PDF das orientações"] : []),
       ...(uploadedFiles.length > 0 ? ["arquivos complementares anexados"] : []),
     ];
@@ -1478,6 +1474,22 @@ export async function POST(request: Request) {
       });
     }
 
+    const originHeader = request.headers.get("origin") || request.headers.get("referer") || "";
+    let originHost = "";
+    try {
+      if (originHeader) originHost = new URL(originHeader).origin;
+    } catch { /* ignore */ }
+
+    const rawBase =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.NEXTAUTH_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+      originHost ||
+      "http://localhost:3000";
+
+    const baseUrl = rawBase.replace(/\/+$/, "");
+    const logoUrl = `${baseUrl}/logo-nutricare.png`;
+
     const messageHtml = message
       ? `
         <div style="margin:18px 28px 0;padding:16px 18px;border:1px solid #d7e3ef;border-radius:12px;background:#f8fbff;">
@@ -1491,8 +1503,8 @@ export async function POST(request: Request) {
 <head><meta charset="utf-8"></head>
 <body style="margin:0;padding:24px;background:#eef3f8;font-family:'Segoe UI',Arial,sans-serif;">
   <div style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #dbe3ec;">
-    <div style="padding:24px 28px;background:linear-gradient(180deg, #3f6faa 0%, #265d99 45%, #183865 100%);color:#ffffff;">
-      <div style="font-size:24px;font-weight:700;">NutriCare</div>
+    <div style="padding:24px 28px;background:linear-gradient(180deg, #3f6faa 0%, #265d99 45%, #183865 100%);color:#ffffff;text-align:center;">
+      <img src="${logoUrl}" alt="NutriCare" style="display:block;margin:0 auto 10px;max-width:120px;height:auto;" />
       <div style="font-size:16px;font-weight:600;margin-top:4px;">Plano alimentar enviado para download</div>
       <div style="font-size:13px;line-height:1.7;margin-top:8px;color:#dbe8f7;">
         Paciente: ${escapeHtml(paciente.nome || nomePaciente)}

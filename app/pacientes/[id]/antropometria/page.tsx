@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import AntropometriaLayout from "./AntropometriaLayout";
+import PatientTabsNav from "@/components/PatientTabsNav";
 
 export const dynamic = "force-dynamic";
 
@@ -92,60 +92,33 @@ export default async function AntropometriaPage({
       {/* Cabeçalho */}
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: "24px",
-          marginBottom: "24px",
-          flexWrap: "wrap",
+          textAlign: "center",
+          marginBottom: "16px",
         }}
       >
-        {/* Título */}
-        <div>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "48px",
-              fontWeight: "bold",
-              color: "#0f172a",
-            }}
-          >
-            Antropometria
-          </h1>
-
-          <p
-            style={{
-              margin: "8px 0 0 0",
-              fontSize: "18px",
-              color: "#64748b",
-            }}
-          >
-            Paciente: {paciente.nome}
-          </p>
-        </div>
-
-        {/* BOTÕES */}
-        <div
+        <h1
           style={{
-            display: "flex",
-            gap: "12px",
-            alignItems: "center",
-            marginTop: "8px",
+            margin: 0,
+            fontSize: "48px",
+            fontWeight: "bold",
+            color: "#0f172a",
           }}
         >
-          <Link href={`/pacientes/${id}/anamnese`}>
-            <button style={buttonSecondary}>
-              ← Anamnese
-            </button>
-          </Link>
+          Antropometria
+        </h1>
 
-          <Link href={`/pacientes/${id}/gasto-calorico`}>
-            <button style={buttonPrimary}>
-              Gasto Calórico →
-            </button>
-          </Link>
-        </div>
+        <p
+          style={{
+            margin: "8px 0 0 0",
+            fontSize: "18px",
+            color: "#64748b",
+          }}
+        >
+          Paciente: {paciente.nome}
+        </p>
       </div>
+
+      <PatientTabsNav patientId={id} activeTab="antropometria" />
 
       {/* LAYOUT */}
       <AntropometriaLayout
@@ -159,21 +132,3 @@ export default async function AntropometriaPage({
   );
 }
 
-const buttonPrimary = {
-  padding: "10px 16px",
-  backgroundColor: "#2563eb",
-  color: "white",
-  border: "none",
-  borderRadius: "8px",
-  cursor: "pointer",
-  fontWeight: "bold",
-};
-
-const buttonSecondary = {
-  padding: "10px 16px",
-  backgroundColor: "#e2e8f0",
-  color: "#0f172a",
-  border: "none",
-  borderRadius: "8px",
-  cursor: "pointer",
-};

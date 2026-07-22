@@ -136,7 +136,7 @@ export default function FormularioPacientePage() {
             alt="NutriCare"
             width={160}
             height={160}
-            style={{ objectFit: "contain", width: "clamp(120px, 26vw, 160px)", height: "auto", filter: "brightness(0) invert(1)" }}
+            style={{ objectFit: "contain", width: "clamp(120px, 26vw, 160px)", height: "auto" }}
           />
           <p style={{ color: "rgba(255,255,255,0.85)", margin: "8px 0 0", fontSize: "11px", letterSpacing: "2px" }}>CIÊNCIA · NUTRIÇÃO · BEM-ESTAR</p>
         </div>
@@ -160,7 +160,7 @@ export default function FormularioPacientePage() {
             alt="NutriCare"
             width={160}
             height={160}
-            style={{ objectFit: "contain", width: "clamp(120px, 26vw, 160px)", height: "auto", filter: "brightness(0) invert(1)" }}
+            style={{ objectFit: "contain", width: "clamp(120px, 26vw, 160px)", height: "auto" }}
           />
           <p style={{ color: "rgba(255,255,255,0.85)", margin: "8px 0 0", fontSize: "11px", letterSpacing: "2px" }}>CIÊNCIA · NUTRIÇÃO · BEM-ESTAR</p>
         </div>

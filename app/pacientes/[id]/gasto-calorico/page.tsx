@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import GastoCaloricoLayout from "@/components/GastoCaloricoLayout";
+import PatientTabsNav from "@/components/PatientTabsNav";
 
 export const dynamic = "force-dynamic";
 
@@ -69,52 +69,32 @@ export default async function GastoCaloricoPage({ params }: Props) {
     <div>
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: "24px",
-          marginBottom: "24px",
-          flexWrap: "wrap",
+          textAlign: "center",
+          marginBottom: "16px",
         }}
       >
-        <div>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "48px",
-              fontWeight: "bold",
-              color: "#0f172a",
-            }}
-          >
-            Gasto Calórico
-          </h1>
-          <p
-            style={{
-              margin: "8px 0 0 0",
-              fontSize: "18px",
-              color: "#64748b",
-            }}
-          >
-            Paciente: {paciente.nome}
-          </p>
-        </div>
-
-        <div
+        <h1
           style={{
-            display: "flex",
-            gap: "12px",
-            alignItems: "center",
-            marginTop: "8px",
+            margin: 0,
+            fontSize: "48px",
+            fontWeight: "bold",
+            color: "#0f172a",
           }}
         >
-          <Link href={`/pacientes/${id}/antropometria`}>
-            <button style={buttonNav}>← Antropometria</button>
-          </Link>
-          <Link href={`/pacientes/${id}/plano-alimentar`}>
-            <button style={buttonNavNext}>Plano Alimentar →</button>
-          </Link>
-        </div>
+          Gasto Calórico
+        </h1>
+        <p
+          style={{
+            margin: "8px 0 0 0",
+            fontSize: "18px",
+            color: "#64748b",
+          }}
+        >
+          Paciente: {paciente.nome}
+        </p>
       </div>
+
+      <PatientTabsNav patientId={id} activeTab="gasto-calorico" />
 
       <GastoCaloricoLayout
         pacienteId={id}
@@ -131,22 +111,3 @@ export default async function GastoCaloricoPage({ params }: Props) {
   );
 }
 
-const buttonNav: React.CSSProperties = {
-  padding: "10px 16px",
-  backgroundColor: "#e2e8f0",
-  color: "#0f172a",
-  border: "none",
-  borderRadius: "8px",
-  cursor: "pointer",
-  fontWeight: "600",
-};
-
-const buttonNavNext: React.CSSProperties = {
-  padding: "10px 16px",
-  backgroundColor: "#2563eb",
-  color: "white",
-  border: "none",
-  borderRadius: "8px",
-  cursor: "pointer",
-  fontWeight: "600",
-};

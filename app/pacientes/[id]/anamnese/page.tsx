@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import Link from "next/link";
 import AnamneseForm from "./AnamneseForm";
+import PatientTabsNav from "@/components/PatientTabsNav";
 
 export const dynamic = "force-dynamic";
 
@@ -35,79 +35,34 @@ export default async function AnamnesePage({ params }: Props) {
     <div>
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          marginBottom: "30px",
-          gap: "24px",
-          flexWrap: "wrap",
+          textAlign: "center",
+          marginBottom: "16px",
         }}
       >
-        <div>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "42px",
-              fontWeight: "700",
-              color: "#0f172a",
-              lineHeight: "1",
-            }}
-          >
-            Anamnese
-          </h1>
-
-          <p
-            style={{
-              marginTop: "10px",
-              color: "#64748b",
-              fontSize: "18px",
-            }}
-          >
-            Paciente: {paciente.nome}
-          </p>
-        </div>
-
-        <div
+        <h1
           style={{
-            display: "flex",
-            gap: "12px",
-            alignItems: "center",
-            marginTop: "4px",
+            margin: 0,
+            fontSize: "42px",
+            fontWeight: "700",
+            color: "#0f172a",
+            lineHeight: "1",
           }}
         >
-          <Link
-            href={`/pacientes/${id}`}
-            style={{
-              backgroundColor: "#e2e8f0",
-              color: "#0f172a",
-              padding: "10px 18px",
-              borderRadius: "10px",
-              textDecoration: "none",
-              fontWeight: "600",
-              fontSize: "14px",
-              border: "1px solid #cbd5e1",
-            }}
-          >
-            ← Paciente
-          </Link>
+          Anamnese
+        </h1>
 
-          <Link
-            href={`/pacientes/${id}/antropometria`}
-            style={{
-              backgroundColor: "#2563eb",
-              color: "#ffffff",
-              padding: "10px 18px",
-              borderRadius: "10px",
-              textDecoration: "none",
-              fontWeight: "600",
-              fontSize: "14px",
-              border: "none",
-            }}
-          >
-            Antropometria →
-          </Link>
-        </div>
+        <p
+          style={{
+            marginTop: "10px",
+            color: "#64748b",
+            fontSize: "18px",
+          }}
+        >
+          Paciente: {paciente.nome}
+        </p>
       </div>
+
+      <PatientTabsNav patientId={id} activeTab="anamnese" />
 
       <AnamneseForm
         pacienteId={id}

@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+const CUSTOM_SECTION_TITLE = "--- Perguntas personalizadas ---";
+
 function parseFormData(formData: FormData) {
   const toDecimal = (valor: FormDataEntryValue | null) => {
     const texto = String(valor || "").replace(",", ".").trim();
@@ -12,6 +14,25 @@ function parseFormData(formData: FormData) {
     if (Number.isNaN(numero)) return null;
     return numero;
   };
+
+  const observacoesBase = String(formData.get("observacoes") || "").trim();
+  const customLines: string[] = [];
+
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("field_")) continue;
+    const resposta = String(value || "").trim();
+    if (!resposta) continue;
+    const label = String(formData.get(`__label__${key}`) || key).trim();
+    if (!label) continue;
+    customLines.push(`[[${key}]] ${label}: ${resposta}`);
+  }
+
+  const observacoes = [
+    observacoesBase,
+    customLines.length > 0 ? `${CUSTOM_SECTION_TITLE}\n${customLines.join("\n")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   return {
     peso: toDecimal(formData.get("peso")),
@@ -25,7 +46,7 @@ function parseFormData(formData: FormData) {
     medicamentos: (formData.get("medicamentos") as string) || null,
     suplementos: (formData.get("suplementos") as string) || null,
     habitos_alimentares: (formData.get("habitos_alimentares") as string) || null,
-    observacoes: (formData.get("observacoes") as string) || null,
+    observacoes: observacoes || null,
   };
 }
 

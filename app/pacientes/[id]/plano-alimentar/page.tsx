@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import PlanoAlimentarLayout from "@/components/PlanoAlimentarLayout";
+import PatientTabsNav from "@/components/PatientTabsNav";
 
 export const dynamic = "force-dynamic";
 
@@ -70,55 +70,32 @@ export default async function PlanoAlimentarPage({ params }: Props) {
     <div>
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: "24px",
-          marginBottom: "24px",
-          flexWrap: "wrap",
+          textAlign: "center",
+          marginBottom: "16px",
         }}
       >
-        <div>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "48px",
-              fontWeight: "bold",
-              color: "#0f172a",
-            }}
-          >
-            Plano Alimentar
-          </h1>
-          <p
-            style={{
-              margin: "8px 0 0 0",
-              fontSize: "18px",
-              color: "#64748b",
-            }}
-          >
-            Paciente: {paciente.nome}
-          </p>
-        </div>
-
-        <div
+        <h1
           style={{
-            display: "flex",
-            gap: "12px",
-            alignItems: "center",
-            marginTop: "8px",
+            margin: 0,
+            fontSize: "48px",
+            fontWeight: "bold",
+            color: "#0f172a",
           }}
         >
-          <Link href={`/pacientes/${id}/gasto-calorico`}>
-            <button style={buttonNav}>← Gasto Calórico</button>
-          </Link>
-          <Link href={`/pacientes/${id}`}>
-            <button style={buttonNav}>← Voltar ao Paciente</button>
-          </Link>
-          <Link href={`/pacientes/${id}/envio-plano`}>
-            <button style={buttonNavNext}>Próxima → Envio do Plano</button>
-          </Link>
-        </div>
+          Plano Alimentar
+        </h1>
+        <p
+          style={{
+            margin: "8px 0 0 0",
+            fontSize: "18px",
+            color: "#64748b",
+          }}
+        >
+          Paciente: {paciente.nome}
+        </p>
       </div>
+
+      <PatientTabsNav patientId={id} activeTab="plano-alimentar" />
 
       <PlanoAlimentarLayout
         pacienteId={id}
@@ -130,22 +107,3 @@ export default async function PlanoAlimentarPage({ params }: Props) {
   );
 }
 
-const buttonNav: React.CSSProperties = {
-  padding: "10px 16px",
-  backgroundColor: "#e2e8f0",
-  color: "#0f172a",
-  border: "none",
-  borderRadius: "8px",
-  cursor: "pointer",
-  fontWeight: "600",
-};
-
-const buttonNavNext: React.CSSProperties = {
-  padding: "10px 16px",
-  backgroundColor: "#2563eb",
-  color: "#fff",
-  border: "none",
-  borderRadius: "8px",
-  cursor: "pointer",
-  fontWeight: "600",
-};

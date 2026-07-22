@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { salvarAnamnese, autoSalvarAnamnese } from "./actions";
+
+const CUSTOM_SECTION_TITLE = "--- Perguntas personalizadas ---";
 
 type Props = {
   pacienteId: string;
@@ -67,9 +69,59 @@ function carregarPadrao(): string[] {
   return CAMPOS_FIXOS.map((c) => c.id);
 }
 
+function normalizeLabel(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function extraKey(fieldId: string | undefined, label: string) {
+  if (fieldId && fieldId.startsWith("field_")) return `field:${fieldId}`;
+  return `label:${normalizeLabel(label)}`;
+}
+
+function parseCustomAnswers(rawValue: unknown) {
+  const raw = typeof rawValue === "string" ? rawValue : "";
+  const extras = new Map<string, { fieldId?: string; label: string; value: string }>();
+
+  if (!raw.trim()) {
+    return { baseObservacoes: "", extras };
+  }
+
+  const markerIndex = raw.indexOf(CUSTOM_SECTION_TITLE);
+  if (markerIndex === -1) {
+    return { baseObservacoes: raw, extras };
+  }
+
+  const baseObservacoes = raw.slice(0, markerIndex).trim();
+  const customBlock = raw.slice(markerIndex + CUSTOM_SECTION_TITLE.length).trim();
+  const lines = customBlock.split("\n").map((line) => line.trim()).filter(Boolean);
+
+  for (const line of lines) {
+    const structuredMatch = line.match(/^\[\[(field_[^\]]+)\]\]\s*(.+?)\s*:\s*(.+)$/);
+    if (structuredMatch) {
+      const [, fieldId, label, value] = structuredMatch;
+      extras.set(extraKey(fieldId, label), { fieldId, label: label.trim(), value: value.trim() });
+      continue;
+    }
+
+    const legacyMatch = line.match(/^(.+?)\s*:\s*(.+)$/);
+    if (legacyMatch) {
+      const [, label, value] = legacyMatch;
+      extras.set(extraKey(undefined, label), { label: label.trim(), value: value.trim() });
+    }
+  }
+
+  return { baseObservacoes, extras };
+}
+
 export default function AnamneseForm({ pacienteId, dados }: Props) {
   const [saving, setSaving] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+  const parsedObservacoes = useMemo(() => parseCustomAnswers(dados?.observacoes), [dados?.observacoes]);
 
   const buildDefaultFields = (): DynamicField[] => [
     { id: "historico_clinico", label: "Histórico Clínico",     value: String(dados?.historico_clinico   || ""), editing: false },
@@ -77,7 +129,7 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
     { id: "medicamentos",      label: "Medicamentos",          value: String(dados?.medicamentos        || ""), editing: false },
     { id: "suplementos",       label: "Suplementos",           value: String(dados?.suplementos         || ""), editing: false },
     { id: "habitos_alimentares",label: "Hábitos Alimentares",  value: String(dados?.habitos_alimentares || ""), editing: false },
-    { id: "observacoes",       label: "Observações",           value: String(dados?.observacoes         || ""), editing: false },
+    { id: "observacoes",       label: "Observações",           value: parsedObservacoes.baseObservacoes || "", editing: false },
   ];
 
   const [fields, setFields]                 = useState<DynamicField[]>(buildDefaultFields());
@@ -89,22 +141,47 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
   // ── Carrega campos globais e seleção salva ao montar / trocar paciente ──
   useEffect(() => {
     const customSalvos = carregarCamposCustom();
-    if (customSalvos.length > 0) {
-      setFields((prev) => {
-        const existingIds = new Set(prev.map((f) => f.id));
-        const novos = customSalvos
-          .filter((c) => !existingIds.has(c.id))
-          .map((c) => ({ id: c.id, label: c.label, value: "", editing: false }));
-        return [...prev, ...novos];
-      });
-    }
+    const extras = parsedObservacoes.extras;
 
-    // Seleção padrão: inclui automáticamente todos os campos personalizados globais
+    setFields(() => {
+      const baseFields = buildDefaultFields();
+      const usados = new Set<string>();
+
+      const customFields = customSalvos.map((c) => {
+        const byId = extras.get(extraKey(c.id, c.label));
+        const byLabel = extras.get(extraKey(undefined, c.label));
+        const match = byId || byLabel;
+        if (match) usados.add(match.fieldId ? extraKey(match.fieldId, match.label) : extraKey(undefined, match.label));
+        return {
+          id: c.id,
+          label: c.label,
+          value: match?.value || "",
+          editing: false,
+        };
+      });
+
+      extras.forEach((extra, key) => {
+        if (usados.has(key)) return;
+        const fieldId = extra.fieldId || genFieldId();
+        customFields.push({
+          id: fieldId,
+          label: extra.label,
+          value: extra.value,
+          editing: false,
+        });
+      });
+
+      const next = [...baseFields, ...customFields];
+      salvarCamposCustom(next);
+      return next;
+    });
+
     const padraoSalvo = carregarPadrao();
-    const idsCustom   = customSalvos.map((c) => c.id);
-    const selecaoFinal = Array.from(new Set([...padraoSalvo, ...idsCustom]));
+    const idsCustom = customSalvos.map((c) => c.id);
+    const idsExtras = Array.from(parsedObservacoes.extras.values()).map((item) => item.fieldId).filter((id): id is string => Boolean(id));
+    const selecaoFinal = Array.from(new Set([...padraoSalvo, ...idsCustom, ...idsExtras]));
     setCamposSelecionados(selecaoFinal);
-  }, [pacienteId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pacienteId, parsedObservacoes, dados]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Mantém as perguntas globais sincronizadas entre abas/janelas ──
   useEffect(() => {
@@ -402,6 +479,9 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
               )}
             </div>
             <textarea name={field.id} rows={2} style={textareaStyle} value={field.value} onChange={(e) => updateFieldValue(field.id, e.target.value)} />
+            {field.id.startsWith("field_") && (
+              <input type="hidden" name={`__label__${field.id}`} value={field.label} />
+            )}
           </div>
         ))}
 
