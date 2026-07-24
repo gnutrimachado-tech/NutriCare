@@ -84,17 +84,17 @@ export default function FormularioPacientePage() {
 
   const containerStyle: React.CSSProperties = {
     minHeight: "100vh",
-    background: "linear-gradient(135deg, #f5faf6 0%, #eaf4ee 40%, #f2f8f4 70%, #fafcf7 100%)",
+    background: "linear-gradient(135deg, #eef3f8 0%, #d7e3ef 40%, #e2eaf3 70%, #eef3f8 100%)",
     display: "flex", alignItems: "flex-start", justifyContent: "center",
     padding: "40px 20px",
   };
   const cardStyle: React.CSSProperties = {
-    background: "rgba(255,255,255,0.97)", borderRadius: "24px",
+    background: "rgba(255,255,255,0.97)", borderRadius: "20px",
     width: "100%", maxWidth: "560px",
-    boxShadow: "0 24px 64px rgba(0,0,0,0.09)", overflow: "hidden",
+    boxShadow: "0 24px 64px rgba(24,56,101,0.12)", overflow: "hidden",
   };
   const headerStyle: React.CSSProperties = {
-    background: "linear-gradient(135deg, #1a6b3c 0%, #145530 100%)",
+    background: "linear-gradient(135deg, #3f6faa 0%, #265d99 45%, #183865 100%)",
     padding: "28px 36px", textAlign: "center",
   };
 
@@ -142,7 +142,7 @@ export default function FormularioPacientePage() {
         </div>
         <div style={{ padding: "48px 40px", textAlign: "center" }}>
           <div style={{ fontSize: "56px", marginBottom: "16px" }}>✅</div>
-          <h2 style={{ color: "#1a4d2e", marginBottom: "8px" }}>Respostas enviadas!</h2>
+          <h2 style={{ color: "#183865", marginBottom: "8px" }}>Respostas enviadas!</h2>
           <p style={{ color: "#64748b", lineHeight: 1.6 }}>
             Obrigado por preencher o formulário. Seu nutricionista já pode visualizar suas respostas.
           </p>
@@ -167,7 +167,7 @@ export default function FormularioPacientePage() {
 
         <div style={{ padding: "32px 36px 40px" }}>
           <div style={{ marginBottom: "28px" }}>
-            <h2 style={{ margin: "0 0 6px", color: "#1a4d2e", fontSize: "20px" }}>Formulário de Anamnese</h2>
+            <h2 style={{ margin: "0 0 6px", color: "#183865", fontSize: "20px" }}>Formulário de Anamnese</h2>
             {pacienteNome && (
               <p style={{ margin: 0, color: "#64748b", fontSize: "14px" }}>
                 Olá, <strong>{pacienteNome.split(" ")[0]}</strong>! Preencha os campos abaixo.
@@ -193,7 +193,7 @@ export default function FormularioPacientePage() {
                       value={respostas[fieldKey] || ""}
                       onChange={(e) => setRespostas((prev) => ({ ...prev, [fieldKey]: e.target.value }))}
                       style={{ width: "100%", padding: "11px 14px", border: "1.5px solid #e2e8f0", borderRadius: "10px", fontSize: "14px", outline: "none", boxSizing: "border-box", background: "#fafcfd" }}
-                      onFocus={(e)  => (e.target.style.borderColor = "#1a6b3c")}
+                      onFocus={(e)  => (e.target.style.borderColor = "#3f6faa")}
                       onBlur={(e)   => (e.target.style.borderColor = "#e2e8f0")}
                     />
                   ) : (
@@ -203,7 +203,7 @@ export default function FormularioPacientePage() {
                       value={respostas[fieldKey] || ""}
                       onChange={(e) => setRespostas((prev) => ({ ...prev, [fieldKey]: e.target.value }))}
                       style={{ width: "100%", padding: "11px 14px", border: "1.5px solid #e2e8f0", borderRadius: "10px", fontSize: "14px", outline: "none", boxSizing: "border-box", background: "#fafcfd", resize: "vertical" }}
-                      onFocus={(e)  => (e.target.style.borderColor = "#1a6b3c")}
+                      onFocus={(e)  => (e.target.style.borderColor = "#3f6faa")}
                       onBlur={(e)   => (e.target.style.borderColor = "#e2e8f0")}
                     />
                   )}
@@ -214,7 +214,7 @@ export default function FormularioPacientePage() {
             <button
               type="submit"
               disabled={enviando}
-              style={{ width: "100%", padding: "14px", background: enviando ? "#94a3b8" : "linear-gradient(135deg, #1a6b3c 0%, #145530 100%)", color: "white", border: "none", borderRadius: "12px", fontSize: "14px", fontWeight: 700, letterSpacing: "1.5px", cursor: enviando ? "not-allowed" : "pointer", marginTop: "8px", boxShadow: enviando ? "none" : "0 4px 14px rgba(26,107,60,0.30)" }}
+              style={{ width: "100%", padding: "14px", background: enviando ? "#94a3b8" : "linear-gradient(135deg, #3f6faa 0%, #183865 100%)", color: "white", border: "none", borderRadius: "12px", fontSize: "14px", fontWeight: 700, letterSpacing: "1.5px", cursor: enviando ? "not-allowed" : "pointer", marginTop: "8px", boxShadow: enviando ? "none" : "0 4px 14px rgba(24,56,101,0.30)" }}
             >
               {enviando ? "ENVIANDO..." : "ENVIAR RESPOSTAS"}
             </button>

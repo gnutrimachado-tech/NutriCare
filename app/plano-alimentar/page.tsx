@@ -131,6 +131,11 @@ interface Meal {
   editing: boolean
 }
 
+// ==================== HELPER: format number to 2 decimal places ====================
+function fmtNum(n: number): string {
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+}
+
 // ==================== HELPER: calculate macros from TBCA ====================
 function calcMacros(food: TBCAFood, qty: number, unit: string) {
   const grams = qty * (UNIT_FACTORS[unit] || 1)
@@ -730,9 +735,9 @@ export default function PlanoAlimentarPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 18 }}>
           {[
             { value: totalKcal.toLocaleString('pt-BR'), sub: 'kcal', label: 'Calorias Totais', bg: 'linear-gradient(135deg, #fc5c65, #eb3b5a)' },
-            { value: totals.prot.toString(), sub: 'g', label: 'Proteínas', bg: 'linear-gradient(135deg, #45aaf2, #2d98da)' },
-            { value: totals.carb.toString(), sub: 'g', label: 'Carboidratos', bg: 'linear-gradient(135deg, #26de81, #20bf6b)' },
-            { value: totals.fat.toString(), sub: 'g', label: 'Gorduras', bg: 'linear-gradient(135deg, #fed330, #f7b731)' },
+            { value: fmtNum(totals.prot), sub: 'g', label: 'Proteínas', bg: 'linear-gradient(135deg, #45aaf2, #2d98da)' },
+            { value: fmtNum(totals.carb), sub: 'g', label: 'Carboidratos', bg: 'linear-gradient(135deg, #26de81, #20bf6b)' },
+            { value: fmtNum(totals.fat), sub: 'g', label: 'Gorduras', bg: 'linear-gradient(135deg, #fed330, #f7b731)' },
           ].map((card) => (
             <div
               key={card.label}
@@ -906,16 +911,16 @@ export default function PlanoAlimentarPage() {
                         }}
                       >
                         <span style={{ fontWeight: 700, color: '#3182ce', fontSize: 12 }}>
-                          P{mealTotals.prot}g
+                          P{fmtNum(mealTotals.prot)}g
                         </span>
                         <span style={{ fontWeight: 700, color: '#38a169', fontSize: 12 }}>
-                          C{mealTotals.carb}g
+                          C{fmtNum(mealTotals.carb)}g
                         </span>
                         <span style={{ fontWeight: 700, color: '#dd6b20', fontSize: 12 }}>
-                          G{mealTotals.fat}g
+                          G{fmtNum(mealTotals.fat)}g
                         </span>
                         <span style={{ fontWeight: 800, color: '#e53e3e', fontSize: 13 }}>
-                          {mealTotals.kcal}kcal
+                          {fmtNum(mealTotals.kcal)}kcal
                         </span>
                       </div>
 
@@ -1354,10 +1359,10 @@ function FoodRow({
             </select>
           </div>
         </td>
-        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: '#4a5568' }}>{food.prot}g</td>
-        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: '#4a5568' }}>{food.carb}g</td>
-        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: '#4a5568' }}>{food.fat}g</td>
-        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, color: '#1a365d' }}>{food.kcal}</td>
+        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: '#4a5568' }}>{fmtNum(food.prot)}g</td>
+        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: '#4a5568' }}>{fmtNum(food.carb)}g</td>
+        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600, color: '#4a5568' }}>{fmtNum(food.fat)}g</td>
+        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 800, color: '#1a365d' }}>{fmtNum(food.kcal)}</td>
         <td style={tdStyle}>
           <span onClick={onRemove} style={{ cursor: 'pointer', color: '#cbd5e0', fontSize: 16, padding: '2px 4px' }}>
             ×
@@ -1372,7 +1377,7 @@ function FoodRow({
             <span style={{ color: '#63b3ed', fontSize: 10, fontWeight: 600 }}>↳ SUB {idx + 1} +</span>
             <span style={{ fontSize: 11, color: '#4a5568', marginLeft: 8, fontWeight: 500 }}>{sub.name}</span>
             <span style={{ fontSize: 10, color: '#718096', fontWeight: 500, marginLeft: 8 }}>
-              P:{sub.prot}g · C:{sub.carb}g · G:{sub.fat}g ·
+              P:{fmtNum(sub.prot)}g · C:{fmtNum(sub.carb)}g · G:{fmtNum(sub.fat)}g ·
             </span>
             <span
               style={{
@@ -1386,7 +1391,7 @@ function FoodRow({
                 marginLeft: 4,
               }}
             >
-              {sub.kcal} kcal
+              {fmtNum(sub.kcal)} kcal
             </span>
             <span style={{ fontSize: 8, color: '#a0aec0', fontStyle: 'italic', display: 'block', marginTop: 2 }}>
               * Substituição — não contabiliza nos totais

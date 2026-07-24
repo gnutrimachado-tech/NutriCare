@@ -70,25 +70,25 @@ export async function POST(request: Request) {
 
     const htmlEmail = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff;">
-        <div style="background: linear-gradient(135deg, #1a6b3c, #145530); padding: 32px; text-align: center;">
-          <img src="${logoUrl}" alt="NutriCare" style="display:block; margin:0 auto 10px; max-width:120px; height:auto;" />
+        <div style="background: linear-gradient(180deg, #3f6faa 0%, #265d99 45%, #183865 100%); padding: 32px; text-align: center;">
+          <img src="${logoUrl}" alt="NutriCare" style="display:block; margin:0 auto 10px; max-width:200px; height:auto;" />
           <p style="color: rgba(255,255,255,0.8); margin: 6px 0 0; font-size: 12px; letter-spacing: 2px;">CIÊNCIA · NUTRIÇÃO · BEM-ESTAR</p>
         </div>
         <div style="padding: 32px;">
-          <h2 style="color: #1a4d2e; margin-top: 0;">Olá, ${paciente.nome.split(" ")[0]}!</h2>
+          <h2 style="color: #183865; margin-top: 0;">Olá, ${paciente.nome.split(" ")[0]}!</h2>
           <p style="color: #475569; line-height: 1.6;">
             Seu nutricionista enviou um formulário de anamnese para você preencher. 
             Por favor, clique no botão abaixo para responder às perguntas.
           </p>
           <div style="text-align: center; margin: 32px 0;">
             <a href="${linkFormulario}" 
-               style="background: linear-gradient(135deg, #1a6b3c, #145530); color: white; padding: 14px 36px; border-radius: 12px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block; letter-spacing: 1px;">
+               style="background: linear-gradient(135deg, #3f6faa, #183865); color: white; padding: 14px 36px; border-radius: 12px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block; letter-spacing: 1px;">
               Responder Formulário
             </a>
           </div>
           <p style="color: #94a3b8; font-size: 12px; line-height: 1.5;">
             Este link é válido por 7 dias. Se o botão não funcionar, copie e cole o link abaixo no seu navegador:<br>
-            <a href="${linkFormulario}" style="color: #1a6b3c; word-break: break-all;">${linkFormulario}</a>
+            <a href="${linkFormulario}" style="color: #3f6faa; word-break: break-all;">${linkFormulario}</a>
           </p>
         </div>
         <div style="background: #f8fafc; padding: 16px 32px; text-align: center; border-top: 1px solid #e2e8f0;">

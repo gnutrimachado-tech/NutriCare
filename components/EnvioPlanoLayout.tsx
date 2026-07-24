@@ -280,10 +280,10 @@ function PrintableLayout({
           paddingTop: 10,
         }}
       >
-        <div style={{ fontFamily: "'Georgia', serif", fontStyle: 'italic', color: '#333' }}>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>____________________</div>
-          <div style={{ fontSize: 11 }}>Nutricionista</div>
-          <div style={{ fontSize: 10, color: '#666' }}>CRN:</div>
+        <div style={{ color: '#333' }}>
+          <div style={{ fontSize: 8, color: '#555', marginBottom: 2 }}>Nutricionista</div>
+          <div style={{ fontFamily: "'Great Vibes', serif", fontSize: 22, color: '#222', lineHeight: 1.1, marginBottom: 2 }}>____________________</div>
+          <div style={{ fontFamily: "'Great Vibes', serif", fontSize: 14, color: '#666' }}>CRN:</div>
         </div>
         <div style={{ opacity: 0.3 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}

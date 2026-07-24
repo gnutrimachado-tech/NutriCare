@@ -557,35 +557,55 @@ function drawHeader(doc: LayoutDoc, page: PDFPage, options: BasePageOptions) {
 function drawFooter(doc: LayoutDoc, page: PDFPage) {
   const footerY = 56;
   const nomeBase = (doc.nutricionistaNome || "").trim();
-  const nomeRodape = nomeBase ? `Nutricionista: ${nomeBase}` : "Nutricionista";
   const crnRodape = (doc.nutricionistaCrn || CRN_LABEL).trim();
-  const signatureFont = doc.fontScript || doc.fontBold;
-  const signatureSize = doc.fontScript ? 22 : 13;
-  const signatureWidth = Math.min(
-    signatureFont.widthOfTextAtSize(nomeRodape, signatureSize),
-    PAGE_WIDTH - PAGE_MARGIN_X * 2 - 70
-  );
 
-  page.drawText(nomeRodape, {
+  // "Nutricionista" escrito pequeno (fonte regular)
+  const nutriLabel = "Nutricionista";
+  const labelSize = 8;
+  const labelWidth = doc.fontRegular.widthOfTextAtSize(nutriLabel, labelSize);
+
+  page.drawText(nutriLabel, {
     x: PAGE_MARGIN_X,
-    y: footerY + 20,
-    size: signatureSize,
-    font: signatureFont,
-    color: rgb(0.12, 0.12, 0.12),
+    y: footerY + 28,
+    size: labelSize,
+    font: doc.fontRegular,
+    color: rgb(0.35, 0.35, 0.35),
   });
 
-  page.drawLine({
-    start: { x: PAGE_MARGIN_X, y: footerY + 18 },
-    end: { x: PAGE_MARGIN_X + Math.max(signatureWidth, 90), y: footerY + 18 },
-    thickness: 0.8,
-    color: rgb(0.2, 0.2, 0.2),
-  });
+  // Nome do nutricionista em destaque (GreatVibes se disponível, senão bold)
+  if (nomeBase) {
+    const signatureFont = doc.fontScript || doc.fontBold;
+    const signatureSize = doc.fontScript ? 18 : 13;
+    const signatureWidth = Math.min(
+      signatureFont.widthOfTextAtSize(nomeBase, signatureSize),
+      PAGE_WIDTH - PAGE_MARGIN_X * 2 - 70
+    );
+
+    page.drawText(nomeBase, {
+      x: PAGE_MARGIN_X,
+      y: footerY + 12,
+      size: signatureSize,
+      font: signatureFont,
+      color: rgb(0.12, 0.12, 0.12),
+    });
+
+    page.drawLine({
+      start: { x: PAGE_MARGIN_X, y: footerY + 10 },
+      end: { x: PAGE_MARGIN_X + Math.max(signatureWidth, labelWidth, 90), y: footerY + 10 },
+      thickness: 0.8,
+      color: rgb(0.2, 0.2, 0.2),
+    });
+  }
+
+  // CRN com fonte GreatVibes (script) se disponível, senão regular
+  const crnFont = doc.fontScript || doc.fontRegular;
+  const crnSize = doc.fontScript ? 12 : 9;
 
   page.drawText(crnRodape, {
     x: PAGE_MARGIN_X,
-    y: footerY + 5,
-    size: 9,
-    font: doc.fontRegular,
+    y: footerY - 2,
+    size: crnSize,
+    font: crnFont,
     color: rgb(0.25, 0.25, 0.25),
   });
 
@@ -1221,12 +1241,12 @@ async function buildShoppingListPdf(params: {
 
 // ── Calculate dynamic height for a protocol box based on content ──────────────
 function calcProtocolBoxHeight(content: string | undefined | null, font: PDFFont, boxWidth: number): number {
-  const PROTO_OVERHEAD = 48;    // header name + divider + spacing + bottom pad
-  const PROTO_LINE_H = 9 + 3.5; // font size + line gap (matches drawProtocolBox)
-  const PROTO_MIN_H = 82;       // minimum height (former fixed value)
+  const PROTO_OVERHEAD = 52;      // header name + divider + spacing + bottom pad (aumentado para fonte maior)
+  const PROTO_LINE_H = 11.5 + 4; // font size 11.5 + line gap 4 (matches drawProtocolBox)
+  const PROTO_MIN_H = 82;         // minimum height (former fixed value)
   const contentWidth = boxWidth - 20;
   if (!content || content.trim() === "") return PROTO_MIN_H;
-  const lines = wrapText(content, contentWidth, font, 9);
+  const lines = wrapText(content, contentWidth, font, 11.5);
   return Math.max(PROTO_MIN_H, Math.ceil(PROTO_OVERHEAD + Math.max(1, lines.length) * PROTO_LINE_H));
 }
 
@@ -1238,24 +1258,24 @@ function drawProtocolBox(doc: LayoutDoc, page: PDFPage, x: number, y: number, wi
     borderWidth: 1,
   });
 
-  const nameText = fitText(protocol?.name || "orientação", width - 20, doc.fontBold, 10.5);
+  const nameText = fitText(protocol?.name || "orientação", width - 20, doc.fontBold, 12);
   page.drawText(nameText, {
     x: x + 10,
-    y: y + height - 18,
-    size: 10.5,
+    y: y + height - 20,
+    size: 12,
     font: doc.fontBold,
     color: rgb(0.08, 0.08, 0.08),
   });
 
   page.drawLine({
-    start: { x: x + 10, y: y + height - 25 },
-    end: { x: x + width - 10, y: y + height - 25 },
+    start: { x: x + 10, y: y + height - 28 },
+    end: { x: x + width - 10, y: y + height - 28 },
     thickness: 0.7,
     color: rgb(0.2, 0.2, 0.2),
   });
 
   const contentLines = protocol?.content
-    ? wrapText(protocol.content, width - 20, doc.fontRegular, 9)
+    ? wrapText(protocol.content, width - 20, doc.fontRegular, 11.5)
     : [];
 
   drawTextBlock({
@@ -1263,11 +1283,11 @@ function drawProtocolBox(doc: LayoutDoc, page: PDFPage, x: number, y: number, wi
     font: doc.fontRegular,
     textLines: contentLines,
     x: x + 10,
-    y: y + height - 38,
+    y: y + height - 42,
     width: width - 20,
-    maxHeight: height - 46,
-    fontSize: 9,
-    lineGap: 3.5,
+    maxHeight: height - 50,
+    fontSize: 11.5,
+    lineGap: 4,
     color: rgb(0.12, 0.12, 0.12),
   });
 }
@@ -1504,7 +1524,7 @@ export async function POST(request: Request) {
 <body style="margin:0;padding:24px;background:#eef3f8;font-family:'Segoe UI',Arial,sans-serif;">
   <div style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #dbe3ec;">
     <div style="padding:24px 28px;background:linear-gradient(180deg, #3f6faa 0%, #265d99 45%, #183865 100%);color:#ffffff;text-align:center;">
-      <img src="${logoUrl}" alt="NutriCare" style="display:block;margin:0 auto 10px;max-width:120px;height:auto;" />
+      <img src="${logoUrl}" alt="NutriCare" style="display:block;margin:0 auto 10px;max-width:200px;height:auto;" />
       <div style="font-size:16px;font-weight:600;margin-top:4px;">Plano alimentar enviado para download</div>
       <div style="font-size:13px;line-height:1.7;margin-top:8px;color:#dbe8f7;">
         Paciente: ${escapeHtml(paciente.nome || nomePaciente)}

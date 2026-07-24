@@ -27,6 +27,13 @@ interface PacienteAcompanhamento {
   statusColor: string
 }
 
+interface StatusPaciente {
+  id: string
+  nome: string
+  formularioStatus: 'pendente' | 'respondido' | 'expirado'
+  consultaStatus: 'pendente' | 'confirmado' | 'recusado' | 'nenhum'
+}
+
 interface Props {
   nomeNutri: string
   totalPacientes: number
@@ -42,6 +49,7 @@ interface Props {
   aniversariantes: Aniversariante[]
   consultasPorSemana: { label: string; count: number }[]
   pacientesAcompanhamento: PacienteAcompanhamento[]
+  statusPacientes?: StatusPaciente[]
 }
 
 export default function DashboardLayout({
@@ -59,6 +67,7 @@ export default function DashboardLayout({
   aniversariantes,
   consultasPorSemana,
   pacientesAcompanhamento,
+  statusPacientes = [],
 }: Props) {
   const [acompFilter, setAcompFilter] = useState('Todos')
 
@@ -331,38 +340,74 @@ export default function DashboardLayout({
 
         {/* Right Column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* E-mails Card */}
+          {/* Status Formulário / Consulta */}
           <div style={cardStyle}>
             <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
-              ✉️ E-mails
+              📋 Status — Formulário / Consulta
             </h3>
-            <div style={{ display: 'flex', gap: 20, marginBottom: 16 }}>
-              <div>
-                <span style={{ fontSize: 24, fontWeight: 700, color: '#3b82f6' }}>0</span>
-                <span style={{ fontSize: 13, color: '#64748b', marginLeft: 6 }}>não lidos</span>
+            {statusPacientes.length === 0 ? (
+              <div style={{ fontSize: 13, color: '#94a3b8', textAlign: 'center', padding: 16 }}>
+                Nenhum formulário ou consulta pendente.
               </div>
-              <div>
-                <span style={{ fontSize: 24, fontWeight: 700, color: '#f59e0b' }}>0</span>
-                <span style={{ fontSize: 13, color: '#64748b', marginLeft: 6 }}>aguardando resposta</span>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {statusPacientes.map((p) => (
+                  <div key={p.id} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 10px',
+                    borderRadius: 8,
+                    background: '#f8fafc',
+                  }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>
+                      {p.nome}
+                    </span>
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                      {p.formularioStatus !== ('pendente' as never) && p.formularioStatus !== ('expirado' as never) ? null : null}
+                      <span style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        padding: '3px 8px',
+                        borderRadius: 6,
+                        color: '#fff',
+                        background:
+                          p.formularioStatus === 'respondido' ? '#16a34a' :
+                          p.formularioStatus === 'expirado' ? '#dc2626' :
+                          '#f59e0b',
+                      }}>
+                        Formulário
+                      </span>
+                      <span style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        padding: '3px 8px',
+                        borderRadius: 6,
+                        color: '#fff',
+                        background:
+                          p.consultaStatus === 'confirmado' ? '#16a34a' :
+                          p.consultaStatus === 'recusado' ? '#dc2626' :
+                          p.consultaStatus === 'pendente' ? '#f59e0b' :
+                          '#cbd5e1',
+                      }}>
+                        Consulta
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
+            )}
+            <div style={{ display: 'flex', gap: 12, marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9', fontSize: 11, color: '#94a3b8' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f59e0b' }} /> Pendente
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#16a34a' }} /> Respondido/Confirmado
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#dc2626' }} /> Recusado/Expirado
+              </span>
             </div>
-            <div style={{ fontSize: 13, color: '#94a3b8', textAlign: 'center', padding: 12 }}>
-              Integração de e-mail em breve
-            </div>
-            <button style={{
-              width: '100%',
-              padding: '10px',
-              background: '#3b82f6',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 8,
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: 'pointer',
-              marginTop: 8,
-            }}>
-              ✉️ Ver caixa de entrada
-            </button>
           </div>
 
           {/* Pacientes em Acompanhamento */}
