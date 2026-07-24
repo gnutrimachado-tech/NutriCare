@@ -172,6 +172,7 @@ function PrintableLayout({
                   borderRadius: 10,
                   padding: '14px 18px',
                   background: 'rgba(255,255,255,0.55)',
+                  overflow: 'hidden',
                   breakInside: 'avoid',
                   pageBreakInside: 'avoid',
                   minHeight: 120,
@@ -950,6 +951,7 @@ const patientHeaderStyle: React.CSSProperties = {
   borderRadius: 14,
   padding: 20,
   marginBottom: 20,
+  overflow: 'hidden',
 }
 
 const sectionCardStyle: React.CSSProperties = {

@@ -31,7 +31,9 @@ type CircKey =
   | "cintura"
   | "quadril"
   | "braco"
+  | "braco_esquerdo"
   | "coxa"
+  | "coxa_esquerda"
   | "abdomen";
 
 type CalcResult = {
@@ -75,8 +77,10 @@ const CIRC_LABELS: Record<CircKey, string> = {
   pescoco: "Pescoço",
   cintura: "Cintura",
   quadril: "Quadril",
-  braco: "Braço",
-  coxa: "Coxa",
+  braco: "Braço Direito",
+  braco_esquerdo: "Braço Esquerdo",
+  coxa: "Coxa Direita",
+  coxa_esquerda: "Coxa Esquerda",
   abdomen: "Abdômen",
 };
 
@@ -127,7 +131,9 @@ const allCircsInitial: Record<CircKey, string> = {
   cintura: "",
   quadril: "",
   braco: "",
+  braco_esquerdo: "",
   coxa: "",
+  coxa_esquerda: "",
   abdomen: "",
 };
 

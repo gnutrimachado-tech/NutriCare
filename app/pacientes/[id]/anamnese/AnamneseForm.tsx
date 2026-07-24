@@ -40,49 +40,41 @@ const CAMPOS_FIXOS = [
 // ── Campos personalizados GLOBAIS (compartilhados entre todos os pacientes) ──
 const CUSTOM_FIELDS_KEY = "nutricare_campos_personalizados";
 const SELECTION_KEY     = "nutricare_formulario_campos_padrao";
-
-function sanitizeCustomLabel(label: string) {
-  return String(label || "").replace(/\s+/g, " ").trim();
-}
-
-function isValidCustomLabel(label: string, fieldId?: string) {
-  const cleaned = sanitizeCustomLabel(label);
-  if (!cleaned) return false;
-  if (fieldId && cleaned === fieldId) return false;
-  return !/^field_/i.test(cleaned);
-}
+const DELETED_FIELDS_KEY = "nutricare_campos_deletados";
 
 function carregarCamposCustom(): Array<{ id: string; label: string }> {
   if (typeof window === "undefined") return [];
   try {
     const salvo = localStorage.getItem(CUSTOM_FIELDS_KEY);
-    if (!salvo) return [];
-
-    const parsed = JSON.parse(salvo);
-    const sane = Array.isArray(parsed)
-      ? parsed
-          .map((item) => ({
-            id: String(item?.id || ""),
-            label: sanitizeCustomLabel(String(item?.label || "")),
-          }))
-          .filter((item) => item.id.startsWith("field_") && isValidCustomLabel(item.label, item.id))
-      : [];
-
-    if (JSON.stringify(parsed) !== JSON.stringify(sane)) {
-      localStorage.setItem(CUSTOM_FIELDS_KEY, JSON.stringify(sane));
-    }
-
-    return sane;
+    if (salvo) return JSON.parse(salvo);
   } catch { /* ignore */ }
   return [];
 }
 
 function salvarCamposCustom(fields: DynamicField[]) {
-  const customFields = fields
-    .filter((f) => f.id.startsWith("field_") && isValidCustomLabel(f.label, f.id))
-    .map((f) => ({ id: f.id, label: sanitizeCustomLabel(f.label) }));
+  const customFields = fields.filter((f) => f.id.startsWith("field_"));
   try {
-    localStorage.setItem(CUSTOM_FIELDS_KEY, JSON.stringify(customFields));
+    localStorage.setItem(
+      CUSTOM_FIELDS_KEY,
+      JSON.stringify(customFields.map((f) => ({ id: f.id, label: f.label })))
+    );
+  } catch { /* ignore */ }
+}
+
+function carregarCamposDeletados(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const salvo = localStorage.getItem(DELETED_FIELDS_KEY);
+    if (salvo) return new Set(JSON.parse(salvo));
+  } catch { /* ignore */ }
+  return new Set();
+}
+
+function salvarCampoDeletado(key: string) {
+  const deletados = carregarCamposDeletados();
+  deletados.add(key);
+  try {
+    localStorage.setItem(DELETED_FIELDS_KEY, JSON.stringify(Array.from(deletados)));
   } catch { /* ignore */ }
 }
 
@@ -186,13 +178,14 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
         };
       });
 
+      const deletados = carregarCamposDeletados();
       extras.forEach((extra, key) => {
         if (usados.has(key)) return;
-        if (!isValidCustomLabel(extra.label, extra.fieldId)) return;
+        if (deletados.has(key)) return; // não re-adicionar campos apagados pelo nutricionista
         const fieldId = extra.fieldId || genFieldId();
         customFields.push({
           id: fieldId,
-          label: sanitizeCustomLabel(extra.label),
+          label: extra.label,
           value: extra.value,
           editing: false,
         });
@@ -205,12 +198,8 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
 
     const padraoSalvo = carregarPadrao();
     const idsCustom = customSalvos.map((c) => c.id);
-    const idsExtras = Array.from(parsedObservacoes.extras.values())
-      .filter((item) => isValidCustomLabel(item.label, item.fieldId))
-      .map((item) => item.fieldId)
-      .filter((id): id is string => Boolean(id));
-    const idsDisponiveis = new Set([...CAMPOS_FIXOS.map((c) => c.id), ...idsCustom, ...idsExtras]);
-    const selecaoFinal = Array.from(new Set([...padraoSalvo.filter((id) => idsDisponiveis.has(id)), ...idsExtras]));
+    const idsExtras = Array.from(parsedObservacoes.extras.values()).map((item) => item.fieldId).filter((id): id is string => Boolean(id));
+    const selecaoFinal = Array.from(new Set([...padraoSalvo, ...idsCustom, ...idsExtras]));
     setCamposSelecionados(selecaoFinal);
   }, [pacienteId, parsedObservacoes, dados]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -288,8 +277,13 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
 
   const removeField = useCallback((fieldId: string) => {
     setFields((prev) => {
+      const field = prev.find((f) => f.id === fieldId);
       const next = prev.filter((f) => f.id !== fieldId);
       salvarCamposCustom(next);
+      // Registra campo como deletado para não reaparecer do banco de dados
+      if (field) {
+        salvarCampoDeletado(extraKey(field.id, field.label));
+      }
       // Remove também da seleção se estava selecionado
       setCamposSelecionados((sel) => sel.filter((id) => id !== fieldId));
       return next;
@@ -364,8 +358,8 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
   // ── Modal de seleção de campos ──
   function getAllCampos() {
     const dinamicos = fields
-      .filter((f) => f.id.startsWith("field_") && isValidCustomLabel(f.label, f.id))
-      .map((f) => ({ id: f.id, label: sanitizeCustomLabel(f.label) }));
+      .filter((f) => f.label.trim() && f.id.startsWith("field_"))
+      .map((f) => ({ id: f.id, label: f.label }));
     return [...CAMPOS_FIXOS, ...dinamicos];
   }
 
@@ -384,31 +378,25 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
   }
 
   async function handleEnviarFormulario() {
-    const camposValidos = camposSelecionados.filter((id) => {
-      if (CAMPOS_FIXOS.some((c) => c.id === id)) return true;
-      const dinamico = fields.find((f) => f.id === id);
-      return Boolean(dinamico && isValidCustomLabel(dinamico.label, dinamico.id));
-    });
-
-    if (camposValidos.length === 0) {
-      alert("Selecione pelo menos um campo válido para enviar.");
+    if (camposSelecionados.length === 0) {
+      alert("Selecione pelo menos um campo para enviar.");
       return;
     }
 
     // Salva seleção atual como padrão
-    try { localStorage.setItem(SELECTION_KEY, JSON.stringify(camposValidos)); } catch { /* ignore */ }
+    try { localStorage.setItem(SELECTION_KEY, JSON.stringify(camposSelecionados)); } catch { /* ignore */ }
 
     // ── FIX PRINCIPAL: Para campos personalizados (field_...) envia {key, label}
     //    Para campos fixos, envia só o ID (pois o label é conhecido pelo frontend)
-    const camposComLabels = camposValidos.map((id) => {
+    const camposComLabels = camposSelecionados.map((id) => {
       const fixo = CAMPOS_FIXOS.find((c) => c.id === id);
       if (fixo) return id; // campo fixo: envia só o ID
       const dinamico = fields.find((f) => f.id === id);
-      if (dinamico && isValidCustomLabel(dinamico.label, dinamico.id)) {
-        return JSON.stringify({ key: id, label: sanitizeCustomLabel(dinamico.label) });
+      if (dinamico && dinamico.label.trim()) {
+        return JSON.stringify({ key: id, label: dinamico.label.trim() });
       }
-      return null;
-    }).filter((campo): campo is string => Boolean(campo));
+      return id; // fallback
+    });
 
     setEnvioStatus("loading");
     setEnvioMsg("");
@@ -441,7 +429,7 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
         action={salvarAnamnese.bind(null, pacienteId)}
         onSubmit={validarFormulario}
         onInput={handleFormInput}
-        style={{ background: "white", padding: "30px", borderRadius: "12px", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+        style={{ background: "white", padding: "30px", borderRadius: "12px", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", overflow: "hidden" }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "10px" }}>
           <h2 style={{ margin: 0 }}>Dados da Anamnese</h2>
