@@ -126,8 +126,19 @@ const MICRO_KEY: Record<string, keyof TBCAFood> = {
 }
 
 // ==================== NUMBER FORMATTING ====================
+function roundTo(value: number, decimals: number): number {
+  const numeric = Number.isFinite(value) ? value : 0
+  const factor = 10 ** decimals
+  return Math.round(numeric * factor) / factor
+}
+
 function fmtNum(n: number): string {
-  return n.toFixed(1).replace('.', ',')
+  return roundTo(n, 2).toFixed(2).replace('.', ',')
+}
+
+function fmtQty(n: number): string {
+  const numeric = roundTo(n, 5)
+  return numeric.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 5 })
 }
 
 // ==================== TYPES ====================
@@ -169,13 +180,14 @@ interface Meal {
 
 // ==================== HELPER: calculate macros from TBCA ====================
 function calcMacros(food: TBCAFood, qty: number, unit: string) {
-  const grams = qty * (UNIT_FACTORS[unit] || 1)
+  const safeQty = roundTo(qty, 5)
+  const grams = roundTo(safeQty * (UNIT_FACTORS[unit] || 1), 5)
   const factor = grams / 100
   return {
-    prot: Math.round(food.p * factor * 10) / 10,
-    carb: Math.round(food.c * factor * 10) / 10,
-    fat: Math.round(food.l * factor * 10) / 10,
-    kcal: Math.round(food.k * factor),
+    prot: roundTo(food.p * factor, 2),
+    carb: roundTo(food.c * factor, 2),
+    fat: roundTo(food.l * factor, 2),
+    kcal: roundTo(food.k * factor, 2),
     baseGrams: grams,
   }
 }
@@ -741,7 +753,7 @@ export default function PlanoAlimentarLayout({
       if (!existing) return m
       const totalGrams = existing.baseGrams
       const newFactor = UNIT_FACTORS[unit] || 1
-      const newQty = Math.round((totalGrams / newFactor) * 10) / 10
+      const newQty = roundTo(totalGrams / newFactor, 5)
       return {
         ...m,
         foods: m.foods.map((f) => (f.id === foodId ? { ...f, unit, qty: newQty } : f)),
@@ -855,7 +867,7 @@ export default function PlanoAlimentarLayout({
         {/* Summary Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 18 }}>
           {[
-            { value: totalKcal.toLocaleString('pt-BR'), sub: 'kcal', label: 'Calorias Totais', bg: 'linear-gradient(135deg, #fc5c65, #eb3b5a)' },
+            { value: fmtNum(totalKcal), sub: 'kcal', label: 'Calorias Totais', bg: 'linear-gradient(135deg, #fc5c65, #eb3b5a)' },
             { value: fmtNum(totals.prot), sub: 'g', label: 'Proteínas', bg: 'linear-gradient(135deg, #45aaf2, #2d98da)' },
             { value: fmtNum(totals.carb), sub: 'g', label: 'Carboidratos', bg: 'linear-gradient(135deg, #26de81, #20bf6b)' },
             { value: fmtNum(totals.fat), sub: 'g', label: 'Gorduras', bg: 'linear-gradient(135deg, #fed330, #f7b731)' },
@@ -1133,7 +1145,7 @@ export default function PlanoAlimentarLayout({
               <div style={{ position: 'relative', width: 170, height: 170, margin: '0 auto 10px' }}>
                 <PieChart prot={strat.prot} carb={strat.carb} fat={strat.fat} />
                 <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
-                  <div style={{ fontSize: 24, fontWeight: 800, color: '#1a365d' }}>{totalKcal.toLocaleString('pt-BR')}</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: '#1a365d' }}>{fmtNum(totalKcal)}</div>
                   <div style={{ fontSize: 9, color: '#a0aec0' }}>kcal totais</div>
                 </div>
               </div>
@@ -1155,7 +1167,7 @@ export default function PlanoAlimentarLayout({
               <div style={cardTitleStyle}>🎯 Progresso vs Estratégia</div>
               <div style={{ textAlign: 'center', marginBottom: 8 }}>
                 <span style={{ display: 'inline-block', background: '#ebf8ff', color: '#2b6cb0', fontSize: 10, fontWeight: 700, padding: '4px 12px', borderRadius: 20 }}>
-                  {strat.name} — Meta: {totalKcal.toLocaleString('pt-BR')} kcal
+                  {strat.name} — Meta: {fmtNum(totalKcal)} kcal
                 </span>
               </div>
               {[
@@ -1471,17 +1483,17 @@ function FoodRow({
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <input
               type="text"
-              inputMode="numeric"
-              value={food.qty || ''}
+              inputMode="decimal"
+              value={food.qty ? fmtQty(food.qty) : ''}
               placeholder="0"
-              maxLength={4}
+              maxLength={12}
               onChange={(e) => {
                 const v = e.target.value.replace(/[^\d.,]/g, '')
-                const n = parseFloat(v.replace(',', '.')) || 0
-                onUpdateQty(Math.min(n, 9999))
+                const n = roundTo(parseFloat(v.replace(',', '.')) || 0, 5)
+                onUpdateQty(Math.min(n, 99999.99999))
               }}
               style={{
-                width: 50,
+                width: 84,
                 padding: '5px 6px',
                 border: '1.5px solid #e2e8f0',
                 borderRadius: 8,
@@ -1542,15 +1554,8 @@ function FoodRow({
               value={sub.name}
               onChange={(name) => onUpdateSub(sub.id, { name })}
               onSelect={(tbcaFood) => {
-                const grams = sub.qty * (UNIT_FACTORS[sub.unit] || 1)
-                const factor = grams / 100
-                onUpdateSub(sub.id, {
-                  name: tbcaFood.n,
-                  prot: Math.round(tbcaFood.p * factor * 10) / 10,
-                  carb: Math.round(tbcaFood.c * factor * 10) / 10,
-                  fat: Math.round(tbcaFood.l * factor * 10) / 10,
-                  kcal: Math.round(tbcaFood.k * factor),
-                })
+                const { baseGrams: _baseGrams, ...macros } = calcMacros(tbcaFood, sub.qty, sub.unit)
+                onUpdateSub(sub.id, { name: tbcaFood.n, ...macros })
               }}
               style={{ minWidth: 120 }}
             />
@@ -1559,29 +1564,22 @@ function FoodRow({
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <input
                 type="text"
-                inputMode="numeric"
-                value={sub.qty || ''}
+                inputMode="decimal"
+                value={sub.qty ? fmtQty(sub.qty) : ''}
                 placeholder="0"
                 onChange={(e) => {
                   const v = e.target.value.replace(/[^\d.,]/g, '')
-                  const qty = parseFloat(v.replace(',', '.')) || 0
+                  const qty = roundTo(parseFloat(v.replace(',', '.')) || 0, 5)
                   const tbcaFood = TBCA_FOODS.find((t) => t.n === sub.name)
                   if (tbcaFood) {
-                    const grams = qty * (UNIT_FACTORS[sub.unit] || 1)
-                    const factor = grams / 100
-                    onUpdateSub(sub.id, {
-                      qty,
-                      prot: Math.round(tbcaFood.p * factor * 10) / 10,
-                      carb: Math.round(tbcaFood.c * factor * 10) / 10,
-                      fat: Math.round(tbcaFood.l * factor * 10) / 10,
-                      kcal: Math.round(tbcaFood.k * factor),
-                    })
+                    const { baseGrams: _baseGrams, ...macros } = calcMacros(tbcaFood, qty, sub.unit)
+                    onUpdateSub(sub.id, { qty, ...macros })
                   } else {
                     onUpdateSub(sub.id, { qty })
                   }
                 }}
                 style={{
-                  width: 50,
+                  width: 84,
                   padding: '5px 6px',
                   border: '1.5px solid #e2e8f0',
                   borderRadius: 8,
@@ -1596,15 +1594,8 @@ function FoodRow({
                   const newUnit = e.target.value
                   const tbcaFood = TBCA_FOODS.find((t) => t.n === sub.name)
                   if (tbcaFood) {
-                    const grams = sub.qty * (UNIT_FACTORS[newUnit] || 1)
-                    const factor = grams / 100
-                    onUpdateSub(sub.id, {
-                      unit: newUnit,
-                      prot: Math.round(tbcaFood.p * factor * 10) / 10,
-                      carb: Math.round(tbcaFood.c * factor * 10) / 10,
-                      fat: Math.round(tbcaFood.l * factor * 10) / 10,
-                      kcal: Math.round(tbcaFood.k * factor),
-                    })
+                    const { baseGrams: _baseGrams, ...macros } = calcMacros(tbcaFood, sub.qty, newUnit)
+                    onUpdateSub(sub.id, { unit: newUnit, ...macros })
                   } else {
                     onUpdateSub(sub.id, { unit: newUnit })
                   }

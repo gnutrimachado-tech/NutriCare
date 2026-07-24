@@ -558,56 +558,43 @@ function drawFooter(doc: LayoutDoc, page: PDFPage) {
   const footerY = 56;
   const nomeBase = (doc.nutricionistaNome || "").trim();
   const crnRodape = (doc.nutricionistaCrn || CRN_LABEL).trim();
+  const labelText = "Nutricionista:";
+  const labelSize = 9;
+  const scriptSize = labelSize + 2;
+  const labelY = footerY + 24;
+  const crnOffsetY = 11.34; // ~4 mm
+  const labelWidth = doc.fontRegular.widthOfTextAtSize(labelText, labelSize);
+  const nameX = PAGE_MARGIN_X + labelWidth + 10;
 
-  // "Nutricionista" escrito pequeno (fonte regular)
-  const nutriLabel = "Nutricionista";
-  const labelSize = 8;
-  const labelWidth = doc.fontRegular.widthOfTextAtSize(nutriLabel, labelSize);
-
-  page.drawText(nutriLabel, {
+  page.drawText(labelText, {
     x: PAGE_MARGIN_X,
-    y: footerY + 28,
+    y: labelY,
     size: labelSize,
     font: doc.fontRegular,
     color: rgb(0.35, 0.35, 0.35),
   });
 
-  // Nome do nutricionista em destaque (GreatVibes se disponível, senão bold)
   if (nomeBase) {
     const signatureFont = doc.fontScript || doc.fontBold;
-    const signatureSize = doc.fontScript ? 18 : 13;
-    const signatureWidth = Math.min(
-      signatureFont.widthOfTextAtSize(nomeBase, signatureSize),
-      PAGE_WIDTH - PAGE_MARGIN_X * 2 - 70
-    );
-
     page.drawText(nomeBase, {
-      x: PAGE_MARGIN_X,
-      y: footerY + 12,
-      size: signatureSize,
+      x: nameX,
+      y: labelY - 2,
+      size: scriptSize,
       font: signatureFont,
       color: rgb(0.12, 0.12, 0.12),
     });
-
-    page.drawLine({
-      start: { x: PAGE_MARGIN_X, y: footerY + 10 },
-      end: { x: PAGE_MARGIN_X + Math.max(signatureWidth, labelWidth, 90), y: footerY + 10 },
-      thickness: 0.8,
-      color: rgb(0.2, 0.2, 0.2),
-    });
   }
 
-  // CRN com fonte GreatVibes (script) se disponível, senão regular
-  const crnFont = doc.fontScript || doc.fontRegular;
-  const crnSize = doc.fontScript ? 12 : 9;
-
-  page.drawText(crnRodape, {
-    x: PAGE_MARGIN_X,
-    y: footerY - 2,
-    size: crnSize,
-    font: crnFont,
-    color: rgb(0.25, 0.25, 0.25),
-  });
+  if (crnRodape) {
+    const crnFont = doc.fontScript || doc.fontRegular;
+    page.drawText(crnRodape, {
+      x: nameX,
+      y: labelY - crnOffsetY,
+      size: scriptSize,
+      font: crnFont,
+      color: rgb(0.25, 0.25, 0.25),
+    });
+  }
 
   if (doc.logo) {
     const targetWidth = 42;
@@ -1524,7 +1511,7 @@ export async function POST(request: Request) {
 <body style="margin:0;padding:24px;background:#eef3f8;font-family:'Segoe UI',Arial,sans-serif;">
   <div style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #dbe3ec;">
     <div style="padding:24px 28px;background:linear-gradient(180deg, #3f6faa 0%, #265d99 45%, #183865 100%);color:#ffffff;text-align:center;">
-      <img src="${logoUrl}" alt="NutriCare" style="display:block;margin:0 auto 10px;max-width:200px;height:auto;" />
+      <img src="${logoUrl}" alt="NutriCare" style="display:block;margin:0 auto 10px;max-width:160px;height:auto;" />
       <div style="font-size:16px;font-weight:600;margin-top:4px;">Plano alimentar enviado para download</div>
       <div style="font-size:13px;line-height:1.7;margin-top:8px;color:#dbe8f7;">
         Paciente: ${escapeHtml(paciente.nome || nomePaciente)}

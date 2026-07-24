@@ -21,15 +21,28 @@ const CAMPO_LABELS: Record<string, string> = {
 
 const NUMERICOS = ["peso", "altura", "percentual_gordura", "massa_muscular", "massa_adiposa", "agua_corporal"];
 
+function sanitizeFieldLabel(value: string) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function getFieldLabel(fieldKey: string, candidate: string) {
+  if (CAMPO_LABELS[fieldKey]) return CAMPO_LABELS[fieldKey];
+  const cleaned = sanitizeFieldLabel(candidate);
+  if (fieldKey.startsWith("field_")) {
+    if (cleaned && cleaned !== fieldKey && !/^field_/i.test(cleaned)) return cleaned;
+    return "Pergunta personalizada";
+  }
+  return cleaned || fieldKey;
+}
+
 /** Resolve um campo salvo no banco (pode ser plain key ou JSON {key, label}) */
 function resolveCampo(campo: string): { fieldKey: string; label: string } {
   try {
     const parsed = JSON.parse(campo);
-    const fieldKey = String(parsed.key  ?? campo);
-    const label    = String(parsed.label ?? CAMPO_LABELS[fieldKey] ?? fieldKey);
-    return { fieldKey, label };
+    const fieldKey = String(parsed.key ?? campo);
+    return { fieldKey, label: getFieldLabel(fieldKey, String(parsed.label ?? fieldKey)) };
   } catch {
-    return { fieldKey: campo, label: CAMPO_LABELS[campo] ?? campo };
+    return { fieldKey: campo, label: getFieldLabel(campo, campo) };
   }
 }
 
@@ -176,13 +189,13 @@ export default function FormularioPacientePage() {
           </div>
 
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
-            {campos.map((campo) => {
+            {campos.map((campo, index) => {
               // ── FIX: resolve label mesmo para campo personalizado (field_...) ──
               const { fieldKey, label } = resolveCampo(campo);
               const isNumerico = NUMERICOS.includes(fieldKey);
 
               return (
-                <div key={fieldKey}>
+                <div key={`${fieldKey}-${index}`}>
                   <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
                     {label}
                   </label>

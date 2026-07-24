@@ -29,12 +29,21 @@ function toDecimal(valor: unknown): number | null {
   return Number.isNaN(numero) ? null : numero;
 }
 
+function sanitizeCustomLabel(value: string): string {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function isValidCustomLabel(label: string, fieldKey?: string): boolean {
+  const cleaned = sanitizeCustomLabel(label);
+  if (!cleaned) return false;
+  if (fieldKey && cleaned === fieldKey) return false;
+  return !/^field_/i.test(cleaned);
+}
+
 function normalizeLabel(value: string): string {
-  return value
+  return sanitizeCustomLabel(value)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
     .toLowerCase();
 }
 
@@ -94,9 +103,9 @@ function parseObservacoes(rawValue: unknown): {
 function buildObservacoes(baseObservacoes: string, extras: Iterable<CustomAnswer>): string | null {
   const base = String(baseObservacoes || "").trim();
   const extrasLines = Array.from(extras)
-    .filter((item) => item.label.trim() && item.value.trim())
+    .filter((item) => isValidCustomLabel(item.label, item.fieldKey) && item.value.trim())
     .map((item) => {
-      const label = item.label.trim();
+      const label = sanitizeCustomLabel(item.label);
       const value = item.value.trim();
       if (item.fieldKey) return `[[${item.fieldKey}]] ${label}: ${value}`;
       return `${label}: ${value}`;
@@ -115,12 +124,13 @@ function buildObservacoes(baseObservacoes: string, extras: Iterable<CustomAnswer
 function resolveCampo(campo: string): { fieldKey: string; label: string } {
   try {
     const parsed = JSON.parse(campo);
+    const fieldKey = String(parsed.key ?? campo);
     return {
-      fieldKey: String(parsed.key ?? campo),
-      label: String(parsed.label ?? campo),
+      fieldKey,
+      label: sanitizeCustomLabel(String(parsed.label ?? fieldKey)),
     };
   } catch {
-    return { fieldKey: campo, label: campo };
+    return { fieldKey: campo, label: sanitizeCustomLabel(campo) };
   }
 }
 
@@ -161,7 +171,12 @@ export async function POST(request: Request) {
     const extrasMap = new Map<string, CustomAnswer>(observacoesSalvas.extras);
     let observacoesFoiEnviada = false;
 
-    for (const campo of formulario.campos) {
+    const camposValidos = formulario.campos.filter((campo) => {
+      const { fieldKey, label } = resolveCampo(campo);
+      return COLUNAS_FIXAS.has(fieldKey) || (fieldKey.startsWith("field_") && isValidCustomLabel(label, fieldKey));
+    });
+
+    for (const campo of camposValidos) {
       const { fieldKey, label } = resolveCampo(campo);
       const valor = respostasSeguras[fieldKey];
 
@@ -177,11 +192,12 @@ export async function POST(request: Request) {
           observacoesFoiEnviada = true;
         }
       } else if (fieldKey.startsWith("field_")) {
+        if (!isValidCustomLabel(label, fieldKey)) continue;
         const texto = valor == null ? "" : String(valor).trim();
         if (texto) {
           extrasMap.set(extraKey(fieldKey, label), {
             fieldKey,
-            label: label.trim(),
+            label: sanitizeCustomLabel(label),
             value: texto,
           });
         }
@@ -245,8 +261,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Link expirado." }, { status: 410 });
   }
 
+  const camposValidos = formulario.campos.filter((campo) => {
+    const { fieldKey, label } = resolveCampo(campo);
+    return COLUNAS_FIXAS.has(fieldKey) || (fieldKey.startsWith("field_") && isValidCustomLabel(label, fieldKey));
+  });
+
   return NextResponse.json({
-    campos: formulario.campos,
+    campos: camposValidos,
     pacienteNome: formulario.pacientes.nome,
     status: formulario.status,
   });

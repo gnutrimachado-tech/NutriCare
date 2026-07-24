@@ -70,14 +70,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Token de confirmação ausente" }, { status: 400 });
     }
 
-    const baseUrl =
-      process.env.NEXTAUTH_URL ||
-      process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : "http://localhost:3000";
+    const originHeader = req.headers.get("origin") || req.headers.get("referer") || "";
+    let originHost = "";
+    try {
+      if (originHeader) originHost = new URL(originHeader).origin;
+    } catch { /* ignore */ }
 
+    const rawBase =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.NEXTAUTH_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+      originHost ||
+      "http://localhost:3000";
+
+    const baseUrl = rawBase.replace(/\/+$/, "");
     const urlConfirmar = `${baseUrl}/api/agendamentos/confirmar?token=${token}&acao=confirmar`;
     const urlRecusar = `${baseUrl}/api/agendamentos/confirmar?token=${token}&acao=recusar`;
+    const logoUrl = `${baseUrl}/logo-nutricare.png`;
 
     const dataFormatada = new Date(agendamento.data_agendamento).toLocaleDateString("pt-BR", {
       timeZone: "UTC",
@@ -109,10 +118,10 @@ export async function POST(req: NextRequest) {
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:24px;background:#f0f4f8;font-family:'Segoe UI',Arial,sans-serif;">
+<body style="margin:0;padding:24px;background:#eef3f8;font-family:'Segoe UI',Arial,sans-serif;">
   <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #dbe3ec;">
-    <div style="padding:28px 32px;background:linear-gradient(135deg,#1e5fa8 0%,#183865 100%);color:#fff;">
-      <div style="font-size:22px;font-weight:700;margin-bottom:4px;">NutriCare</div>
+    <div style="padding:28px 32px;background:linear-gradient(180deg,#3f6faa 0%,#265d99 45%,#183865 100%);color:#fff;text-align:center;">
+      <img src="${logoUrl}" alt="NutriCare" style="display:block;margin:0 auto 10px;max-width:160px;height:auto;" />
       <div style="font-size:16px;font-weight:600;">Confirmação de Consulta</div>
     </div>
 
