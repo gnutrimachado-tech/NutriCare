@@ -1567,9 +1567,10 @@ function FoodRow({
                 inputMode="numeric"
                 value={sub.qty || ''}
                 placeholder="0"
+                maxLength={4}
                 onChange={(e) => {
                   const v = e.target.value.replace(/[^\d.,]/g, '')
-                  const qty = parseFloat(v.replace(',', '.')) || 0
+                  const qty = Math.min(parseFloat(v.replace(',', '.')) || 0, 9999)
                   const tbcaFood = TBCA_FOODS.find((t) => t.n === sub.name)
                   if (tbcaFood) {
                     const grams = qty * (UNIT_FACTORS[sub.unit] || 1)
