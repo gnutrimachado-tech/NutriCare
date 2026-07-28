@@ -37,7 +37,13 @@ type CircKey =
   | "axilar_media"
   | "supra_espinhal"
   | "panturrilha"
-  | "biceps";
+  | "biceps"
+  | "biceps_direito"
+  | "biceps_esquerdo"
+  | "coxa_direita"
+  | "coxa_esquerda"
+  | "panturrilha_direita"
+  | "panturrilha_esquerda";
 
 type CalcResult = {
   bodyFatPct: number | null;
@@ -88,7 +94,30 @@ const CIRC_LABELS: Record<CircKey, string> = {
   supra_espinhal: "Supra espinhal",
   panturrilha: "Panturrilha",
   biceps: "Bíceps",
+  biceps_direito: "Bíceps direito",
+  biceps_esquerdo: "Bíceps esquerdo",
+  coxa_direita: "Coxa direita",
+  coxa_esquerda: "Coxa esquerda",
+  panturrilha_direita: "Panturrilha direita",
+  panturrilha_esquerda: "Panturrilha esquerda",
 };
+
+const VISIBLE_CIRC_FIELDS: CircKey[] = [
+  "pescoco",
+  "cintura",
+  "quadril",
+  "abdomen",
+  "peitoral",
+  "axilar_media",
+  "supra_espinhal",
+  "biceps",
+  "biceps_direito",
+  "biceps_esquerdo",
+  "coxa_direita",
+  "coxa_esquerda",
+  "panturrilha_direita",
+  "panturrilha_esquerda",
+];
 
 const DOBRAS_POR_SEXO: Record<SexoPaciente, DobraKey[]> = {
   Masculino: [
@@ -144,6 +173,12 @@ const allCircsInitial: Record<CircKey, string> = {
   supra_espinhal: "",
   panturrilha: "",
   biceps: "",
+  biceps_direito: "",
+  biceps_esquerdo: "",
+  coxa_direita: "",
+  coxa_esquerda: "",
+  panturrilha_direita: "",
+  panturrilha_esquerda: "",
 };
 
 function parsePtNumber(value: string) {
@@ -762,11 +797,12 @@ export default function AntropometriaLayout({
 
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [voiceFeedbackEnabled, setVoiceFeedbackEnabled] = useState(true);
-  const [voiceStatus, setVoiceStatus] = useState("Pronto para ditado");
+  const [voiceStatus, setVoiceStatus] = useState("");
   const [voiceLastHeard, setVoiceLastHeard] = useState("");
   const [highlightedField, setHighlightedField] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
   const highlightTimeoutRef = useRef<number | null>(null);
+  const voiceEnabledRef = useRef(false);
 
   function normalizeSpeechText(value: string) {
     return value
@@ -794,6 +830,10 @@ export default function AntropometriaLayout({
     if (highlightTimeoutRef.current) window.clearTimeout(highlightTimeoutRef.current);
     highlightTimeoutRef.current = window.setTimeout(() => setHighlightedField(null), 1500);
   }
+
+  useEffect(() => {
+    voiceEnabledRef.current = voiceEnabled;
+  }, [voiceEnabled]);
 
   function beepSuccess() {
     try {
@@ -844,14 +884,17 @@ export default function AntropometriaLayout({
       { type: "circ", key: "pescoco", label: "Pescoço", aliases: ["pescoco", "pescoço"] },
       { type: "circ", key: "cintura", label: "Cintura", aliases: ["cintura"] },
       { type: "circ", key: "quadril", label: "Quadril", aliases: ["quadril"] },
-      { type: "circ", key: "braco", label: "Braço", aliases: ["braco", "braço", "braco direito", "braço direito", "braco esquerdo", "braço esquerdo"] },
-      { type: "circ", key: "coxa", label: "Coxa", aliases: ["coxa direita", "coxa esquerdo", "coxa esquerda", "coxa"] },
       { type: "circ", key: "abdomen", label: "Abdômen", aliases: ["abdomen", "abdominal"] },
       { type: "circ", key: "peitoral", label: "Peitoral", aliases: ["peitoral"] },
       { type: "circ", key: "axilar_media", label: "Axilar média", aliases: ["axilar media", "axilar média"] },
       { type: "circ", key: "supra_espinhal", label: "Supra espinhal", aliases: ["supra espinhal", "supraespinhal"] },
-      { type: "circ", key: "panturrilha", label: "Panturrilha", aliases: ["panturrilha direita", "panturrilha esquerda", "panturrilha"] },
+      { type: "circ", key: "biceps_direito", label: "Bíceps direito", aliases: ["biceps direito", "bíceps direito"] },
+      { type: "circ", key: "biceps_esquerdo", label: "Bíceps esquerdo", aliases: ["biceps esquerdo", "bíceps esquerdo", "biceps esquerdo", "bíceps esquerdo", "biceps esquerda", "bíceps esquerda"] },
       { type: "circ", key: "biceps", label: "Bíceps", aliases: ["biceps", "bíceps"] },
+      { type: "circ", key: "coxa_direita", label: "Coxa direita", aliases: ["coxa direita"] },
+      { type: "circ", key: "coxa_esquerda", label: "Coxa esquerda", aliases: ["coxa esquerda", "coxa esquerdo"] },
+      { type: "circ", key: "panturrilha_direita", label: "Panturrilha direita", aliases: ["panturrilha direita"] },
+      { type: "circ", key: "panturrilha_esquerda", label: "Panturrilha esquerda", aliases: ["panturrilha esquerda", "panturrilha esquerdo"] },
     ];
 
     for (const item of aliases) {
@@ -896,19 +939,36 @@ export default function AntropometriaLayout({
       recognition.stop();
       recognitionRef.current = null;
     }
+    voiceEnabledRef.current = false;
     setVoiceEnabled(false);
     if (reason) setVoiceStatus(reason);
   }
 
-  function toggleVoiceRecognition() {
-    if (voiceEnabled) {
-      stopVoiceRecognition("Ditado desativado");
+  async function toggleVoiceRecognition() {
+    if (voiceEnabledRef.current) {
+      stopVoiceRecognition();
       return;
     }
 
-    const SpeechRecognitionCtor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SpeechRecognitionCtor =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognitionCtor) {
-      setVoiceStatus("Seu navegador não suporta reconhecimento de voz");
+      setVoiceStatus("Seu navegador não suporta reconhecimento de voz. No Opera, confirme se o site está em HTTPS e se a permissão do microfone foi liberada.");
+      return;
+    }
+
+    if (!window.isSecureContext) {
+      setVoiceStatus("O registro por voz precisa de HTTPS ou localhost para funcionar no navegador.");
+      return;
+    }
+
+    try {
+      if (navigator.mediaDevices?.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    } catch {
+      setVoiceStatus("Não foi possível acessar o microfone. Libere a permissão do Opera para este site e teste novamente.");
       return;
     }
 
@@ -929,16 +989,24 @@ export default function AntropometriaLayout({
 
     recognition.onerror = (event: any) => {
       const error = typeof event?.error === "string" ? event.error : "erro desconhecido";
-      setVoiceStatus(`Falha no ditado: ${error}`);
+      const mappedError =
+        error === "not-allowed"
+          ? "Permissão de microfone bloqueada no navegador"
+          : error === "audio-capture"
+          ? "Nenhum microfone foi encontrado pelo navegador"
+          : error === "network"
+          ? "Falha de rede no reconhecimento de voz"
+          : `Falha no registro por voz: ${error}`;
+      setVoiceStatus(mappedError);
+      voiceEnabledRef.current = false;
       setVoiceEnabled(false);
       recognitionRef.current = null;
     };
 
     recognition.onend = () => {
-      if (recognitionRef.current === recognition && voiceEnabled) {
+      if (recognitionRef.current === recognition && voiceEnabledRef.current) {
         try {
           recognition.start();
-          setVoiceStatus("Ditado ativo");
           return;
         } catch {
           // ignore restart errors
@@ -946,18 +1014,22 @@ export default function AntropometriaLayout({
       }
       if (recognitionRef.current === recognition) {
         recognitionRef.current = null;
+        voiceEnabledRef.current = false;
         setVoiceEnabled(false);
       }
     };
 
     recognitionRef.current = recognition;
+    voiceEnabledRef.current = true;
     try {
       recognition.start();
       setVoiceEnabled(true);
-      setVoiceStatus("Ditado ativo");
+      setVoiceStatus("");
     } catch {
-      setVoiceStatus("Não foi possível iniciar o ditado");
+      setVoiceStatus("Não foi possível iniciar o registro por voz.");
       recognitionRef.current = null;
+      voiceEnabledRef.current = false;
+      setVoiceEnabled(false);
     }
   }
 
@@ -1010,7 +1082,7 @@ export default function AntropometriaLayout({
                 ...(voiceEnabled ? voiceButtonActiveStyle : voiceButtonIdleStyle),
               }}
             >
-              {voiceEnabled ? "● REC" : "🎤 Ativar ditado"}
+              {voiceEnabled ? "● Registro por voz ativo" : "🎤 Ativar registro por voz"}
             </button>
             <label style={voiceToggleLabelStyle}>
               <input
@@ -1020,8 +1092,7 @@ export default function AntropometriaLayout({
               />
               Confirmar por voz
             </label>
-            <div style={voiceStatusStyle}>{voiceStatus}</div>
-            <div style={voiceHintStyle}>Ex.: “Braço direito 33 centímetros” ou “Prega tricipital 12 milímetros”.</div>
+            {voiceStatus ? <div style={voiceStatusStyle}>{voiceStatus}</div> : null}
             {voiceLastHeard ? <div style={voiceTranscriptStyle}>Último comando: {voiceLastHeard}</div> : null}
           </div>
 
@@ -1118,7 +1189,7 @@ export default function AntropometriaLayout({
             </div>
 
             <div style={{ marginTop: 10 }}>
-              {(Object.keys(CIRC_LABELS) as CircKey[]).map((key) => {
+              {VISIBLE_CIRC_FIELDS.map((key) => {
                 const required = requiredCircs.includes(key);
 
                 return (
@@ -1138,7 +1209,7 @@ export default function AntropometriaLayout({
                       placeholder="0,0"
                       value={circunferencias[key]}
                       onChange={(e) => onChangeCirc(key, e.target.value)}
-                      style={getVoiceInputStyle(`dobra:${key}`)}
+                      style={getVoiceInputStyle(`circ:${key}`)}
                     />
                   </div>
                 );
