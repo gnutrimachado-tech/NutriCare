@@ -16,7 +16,7 @@ type Props = {
 type DobraKey =
   | "peitoral"
   | "axilar_media"
-  | "triceps"
+  | "tricipital"
   | "subescapular"
   | "abdomen"
   | "supra_iliaca"
@@ -31,10 +31,13 @@ type CircKey =
   | "cintura"
   | "quadril"
   | "braco"
-  | "braco_esquerdo"
   | "coxa"
-  | "coxa_esquerda"
-  | "abdomen";
+  | "abdomen"
+  | "peitoral"
+  | "axilar_media"
+  | "supra_espinhal"
+  | "panturrilha"
+  | "biceps";
 
 type CalcResult = {
   bodyFatPct: number | null;
@@ -62,7 +65,7 @@ type ProtocolDef = {
 const DOBRAS_LABELS: Record<DobraKey, string> = {
   peitoral: "Peitoral",
   axilar_media: "Axilar média",
-  triceps: "Tríceps",
+  tricipital: "Tricipital",
   subescapular: "Subescapular",
   abdomen: "Abdômen",
   supra_iliaca: "Supra ilíaca",
@@ -77,18 +80,21 @@ const CIRC_LABELS: Record<CircKey, string> = {
   pescoco: "Pescoço",
   cintura: "Cintura",
   quadril: "Quadril",
-  braco: "Braço Direito",
-  braco_esquerdo: "Braço Esquerdo",
-  coxa: "Coxa Direita",
-  coxa_esquerda: "Coxa Esquerda",
+  braco: "Braço",
+  coxa: "Coxa",
   abdomen: "Abdômen",
+  peitoral: "Peitoral",
+  axilar_media: "Axilar média",
+  supra_espinhal: "Supra espinhal",
+  panturrilha: "Panturrilha",
+  biceps: "Bíceps",
 };
 
 const DOBRAS_POR_SEXO: Record<SexoPaciente, DobraKey[]> = {
   Masculino: [
     "peitoral",
     "axilar_media",
-    "triceps",
+    "tricipital",
     "subescapular",
     "abdomen",
     "supra_iliaca",
@@ -100,7 +106,7 @@ const DOBRAS_POR_SEXO: Record<SexoPaciente, DobraKey[]> = {
   Feminino: [
     "peitoral",
     "axilar_media",
-    "triceps",
+    "tricipital",
     "subescapular",
     "abdomen",
     "supra_iliaca",
@@ -115,7 +121,7 @@ const DOBRAS_POR_SEXO: Record<SexoPaciente, DobraKey[]> = {
 const allDobrasInitial: Record<DobraKey, string> = {
   peitoral: "",
   axilar_media: "",
-  triceps: "",
+  tricipital: "",
   subescapular: "",
   abdomen: "",
   supra_iliaca: "",
@@ -131,10 +137,13 @@ const allCircsInitial: Record<CircKey, string> = {
   cintura: "",
   quadril: "",
   braco: "",
-  braco_esquerdo: "",
   coxa: "",
-  coxa_esquerda: "",
   abdomen: "",
+  peitoral: "",
+  axilar_media: "",
+  supra_espinhal: "",
+  panturrilha: "",
+  biceps: "",
 };
 
 function parsePtNumber(value: string) {
@@ -178,10 +187,10 @@ const PROTOCOLS: ProtocolDef[] = [
     id: "f-durnin-womersley-1974",
     label: "Durnin e Womersley 1974",
     sexo: "Feminino",
-    requiredDobras: ["triceps", "biceps", "subescapular", "supra_iliaca"],
+    requiredDobras: ["tricipital", "biceps", "subescapular", "supra_iliaca"],
     calculate: ({ dobras }) => {
       const s = sumKeys(
-        ["triceps", "biceps", "subescapular", "supra_iliaca"],
+        ["tricipital", "biceps", "subescapular", "supra_iliaca"],
         dobras
       );
       const density = 1.1549 - 0.0678 * log10Safe(s);
@@ -222,7 +231,7 @@ const PROTOCOLS: ProtocolDef[] = [
     label: "Withers et al. 1987",
     sexo: "Feminino",
     requiredDobras: [
-      "triceps",
+      "tricipital",
       "subescapular",
       "biceps",
       "supra_espinhal",
@@ -233,7 +242,7 @@ const PROTOCOLS: ProtocolDef[] = [
     calculate: ({ dobras }) => {
       const s = sumKeys(
         [
-          "triceps",
+          "tricipital",
           "subescapular",
           "biceps",
           "supra_espinhal",
@@ -276,7 +285,7 @@ const PROTOCOLS: ProtocolDef[] = [
     requiredDobras: [
       "peitoral",
       "axilar_media",
-      "triceps",
+      "tricipital",
       "subescapular",
       "abdomen",
       "supra_iliaca",
@@ -288,7 +297,7 @@ const PROTOCOLS: ProtocolDef[] = [
         [
           "peitoral",
           "axilar_media",
-          "triceps",
+          "tricipital",
           "subescapular",
           "abdomen",
           "supra_iliaca",
@@ -313,10 +322,10 @@ const PROTOCOLS: ProtocolDef[] = [
     id: "f-jackson-pollock-1985-4d",
     label: "Jackson e Pollock 1985 (4 dobras)",
     sexo: "Feminino",
-    requiredDobras: ["abdomen", "triceps", "coxa", "supra_iliaca"],
+    requiredDobras: ["abdomen", "tricipital", "coxa", "supra_iliaca"],
     needsAge: true,
     calculate: ({ dobras, idade }) => {
-      const s = sumKeys(["abdomen", "triceps", "coxa", "supra_iliaca"], dobras);
+      const s = sumKeys(["abdomen", "tricipital", "coxa", "supra_iliaca"], dobras);
       const bodyFatPct =
         0.29669 * s - 0.00043 * (s * s) + 0.02963 * idade + 1.4072;
       const density = bodyFatToDensitySiri(bodyFatPct);
@@ -356,7 +365,7 @@ const PROTOCOLS: ProtocolDef[] = [
     requiredDobras: [
       "peitoral",
       "axilar_media",
-      "triceps",
+      "tricipital",
       "subescapular",
       "abdomen",
       "supra_iliaca",
@@ -368,7 +377,7 @@ const PROTOCOLS: ProtocolDef[] = [
         [
           "peitoral",
           "axilar_media",
-          "triceps",
+          "tricipital",
           "subescapular",
           "abdomen",
           "supra_iliaca",
@@ -394,14 +403,14 @@ const PROTOCOLS: ProtocolDef[] = [
     label: "Withers et al. 1987",
     sexo: "Masculino",
     requiredDobras: [
-      "triceps",
+      "tricipital",
       "subescapular",
       "supra_espinhal",
       "panturrilha",
     ],
     calculate: ({ dobras }) => {
       const s = sumKeys(
-        ["triceps", "subescapular", "supra_espinhal", "panturrilha"],
+        ["tricipital", "subescapular", "supra_espinhal", "panturrilha"],
         dobras
       );
       const density = 1.17484 - 0.07229 * log10Safe(s);
@@ -416,9 +425,9 @@ const PROTOCOLS: ProtocolDef[] = [
     id: "m-guedes-1985",
     label: "Guedes 1985",
     sexo: "Masculino",
-    requiredDobras: ["triceps", "supra_iliaca", "abdomen"],
+    requiredDobras: ["tricipital", "supra_iliaca", "abdomen"],
     calculate: ({ dobras }) => {
-      const s = sumKeys(["triceps", "supra_iliaca", "abdomen"], dobras);
+      const s = sumKeys(["tricipital", "supra_iliaca", "abdomen"], dobras);
       const density = 1.1714 - 0.0671 * log10Safe(s);
       return {
         density,
@@ -431,11 +440,11 @@ const PROTOCOLS: ProtocolDef[] = [
     id: "m-petroski-1995",
     label: "Petroski 1995",
     sexo: "Masculino",
-    requiredDobras: ["subescapular", "triceps", "supra_iliaca", "panturrilha"],
+    requiredDobras: ["subescapular", "tricipital", "supra_iliaca", "panturrilha"],
     needsAge: true,
     calculate: ({ dobras, idade }) => {
       const s = sumKeys(
-        ["subescapular", "triceps", "supra_iliaca", "panturrilha"],
+        ["subescapular", "tricipital", "supra_iliaca", "panturrilha"],
         dobras
       );
 
@@ -456,10 +465,10 @@ const PROTOCOLS: ProtocolDef[] = [
     id: "m-durnin-womersley-1974",
     label: "Durnin e Womersley 1974",
     sexo: "Masculino",
-    requiredDobras: ["triceps", "biceps", "subescapular", "supra_iliaca"],
+    requiredDobras: ["tricipital", "biceps", "subescapular", "supra_iliaca"],
     calculate: ({ dobras }) => {
       const s = sumKeys(
-        ["triceps", "biceps", "subescapular", "supra_iliaca"],
+        ["tricipital", "biceps", "subescapular", "supra_iliaca"],
         dobras
       );
       const density = 1.162 - 0.063 * log10Safe(s);
@@ -475,10 +484,10 @@ const PROTOCOLS: ProtocolDef[] = [
     id: "m-faulkner-1968",
     label: "Faulkner 1968",
     sexo: "Masculino",
-    requiredDobras: ["triceps", "biceps", "subescapular", "supra_iliaca"],
+    requiredDobras: ["tricipital", "biceps", "subescapular", "supra_iliaca"],
     calculate: ({ dobras }) => {
       const s = sumKeys(
-        ["triceps", "biceps", "subescapular", "supra_iliaca"],
+        ["tricipital", "biceps", "subescapular", "supra_iliaca"],
         dobras
       );
       const density = 1.1549 - 0.0678 * log10Safe(s);
@@ -543,6 +552,16 @@ export default function AntropometriaLayout({
     [effectiveProtocolId, protocolosDisponiveis]
   );
 
+  useEffect(() => {
+    setDobras((prev) => {
+      const legacyValue = (prev as Record<string, string>).triceps;
+      if (prev.tricipital || !legacyValue) return prev;
+      const next = { ...prev, tricipital: legacyValue } as Record<string, string>;
+      delete next.triceps;
+      return next as Record<DobraKey, string>;
+    });
+  }, []);
+
   const dobrasNum = useMemo(() => {
     const out = {} as Record<DobraKey, number>;
     (Object.keys(dobras) as DobraKey[]).forEach((key) => {
@@ -578,7 +597,12 @@ export default function AntropometriaLayout({
           const s = JSON.parse(raw);
           if (typeof s.protocolId === "string") setProtocolId(s.protocolId);
           if (s.dobras && typeof s.dobras === "object") {
-            setDobras((prev) => ({ ...prev, ...s.dobras }));
+            const dobrasSalvas = { ...(s.dobras as Record<string, string>) };
+            if (!dobrasSalvas.tricipital && dobrasSalvas.triceps) {
+              dobrasSalvas.tricipital = dobrasSalvas.triceps;
+            }
+            delete dobrasSalvas.triceps;
+            setDobras((prev) => ({ ...prev, ...(dobrasSalvas as Partial<Record<DobraKey, string>>) }));
           }
           if (s.circunferencias && typeof s.circunferencias === "object") {
             setCircunferencias((prev) => ({ ...prev, ...s.circunferencias }));
@@ -598,7 +622,7 @@ export default function AntropometriaLayout({
     try {
       window.localStorage.setItem(
         `nutricare:antro:${pacienteId}`,
-        JSON.stringify({ protocolId, dobras, circunferencias })
+        JSON.stringify({ protocolId, dobras: { ...dobras, tricipital: dobras.tricipital }, circunferencias })
       );
     } catch {
       // ignore
@@ -736,10 +760,234 @@ export default function AntropometriaLayout({
     }));
   }
 
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [voiceFeedbackEnabled, setVoiceFeedbackEnabled] = useState(true);
+  const [voiceStatus, setVoiceStatus] = useState("Pronto para ditado");
+  const [voiceLastHeard, setVoiceLastHeard] = useState("");
+  const [highlightedField, setHighlightedField] = useState<string | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const highlightTimeoutRef = useRef<number | null>(null);
+
+  function normalizeSpeechText(value: string) {
+    return value
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9.,%\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function extractSpokenValue(value: string) {
+    const match = value.match(/(\d+(?:[.,]\d+)?)/);
+    return match ? normalizeDecimalInput(match[1]) : "";
+  }
+
+  function detectMeasurementType(text: string) {
+    if (/(dobra|prega|cutanea|cutanea|milimetro|milimetros|mm)/.test(text)) return "dobra" as const;
+    if (/(circunferencia|circunferência|perimetro|perímetro|centimetro|centímetro|centimetros|centímetros|cm)/.test(text)) return "circ" as const;
+    return null;
+  }
+
+  function highlightVoiceField(fieldId: string) {
+    setHighlightedField(fieldId);
+    if (highlightTimeoutRef.current) window.clearTimeout(highlightTimeoutRef.current);
+    highlightTimeoutRef.current = window.setTimeout(() => setHighlightedField(null), 1500);
+  }
+
+  function beepSuccess() {
+    try {
+      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const audioCtx = new AudioCtx();
+      const oscillator = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.value = 880;
+      gain.gain.value = 0.03;
+      oscillator.connect(gain);
+      gain.connect(audioCtx.destination);
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.08);
+    } catch {
+      // ignore
+    }
+  }
+
+  function speakConfirmation(message: string) {
+    if (!voiceFeedbackEnabled || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(message);
+    utterance.lang = "pt-BR";
+    utterance.rate = 1;
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function parseVoiceCommand(rawText: string): { type: "dobra" | "circ"; key: DobraKey | CircKey; label: string; value: string; unit: "mm" | "cm" } | null {
+    const normalized = normalizeSpeechText(rawText);
+    const value = extractSpokenValue(normalized);
+    if (!value) return null;
+
+    const explicitType = detectMeasurementType(normalized);
+    const aliases: Array<{ type: "dobra" | "circ"; key: any; label: string; aliases: string[] }> = [
+      { type: "dobra", key: "tricipital", label: "Tricipital", aliases: ["tricipital", "prega tricipital", "dobra tricipital", "triceps"] },
+      { type: "dobra", key: "subescapular", label: "Subescapular", aliases: ["subescapular", "prega subescapular", "dobra subescapular"] },
+      { type: "dobra", key: "supra_iliaca", label: "Supra ilíaca", aliases: ["supra iliaca", "suprailiaca", "supra iliaca", "supra ilíaca", "suprailiaca"] },
+      { type: "dobra", key: "supra_espinhal", label: "Supra espinhal", aliases: ["supra espinhal", "supraespinhal"] },
+      { type: "dobra", key: "axilar_media", label: "Axilar média", aliases: ["axilar media", "axilar média"] },
+      { type: "dobra", key: "peitoral", label: "Peitoral", aliases: ["peitoral"] },
+      { type: "dobra", key: "abdomen", label: "Abdômen", aliases: ["abdomen", "abdominal"] },
+      { type: "dobra", key: "coxa", label: "Coxa", aliases: ["coxa"] },
+      { type: "dobra", key: "panturrilha", label: "Panturrilha", aliases: ["panturrilha"] },
+      { type: "dobra", key: "biceps", label: "Bíceps", aliases: ["biceps", "bíceps"] },
+      { type: "dobra", key: "coxa_proximal", label: "Coxa proximal", aliases: ["coxa proximal"] },
+      { type: "circ", key: "pescoco", label: "Pescoço", aliases: ["pescoco", "pescoço"] },
+      { type: "circ", key: "cintura", label: "Cintura", aliases: ["cintura"] },
+      { type: "circ", key: "quadril", label: "Quadril", aliases: ["quadril"] },
+      { type: "circ", key: "braco", label: "Braço", aliases: ["braco", "braço", "braco direito", "braço direito", "braco esquerdo", "braço esquerdo"] },
+      { type: "circ", key: "coxa", label: "Coxa", aliases: ["coxa direita", "coxa esquerdo", "coxa esquerda", "coxa"] },
+      { type: "circ", key: "abdomen", label: "Abdômen", aliases: ["abdomen", "abdominal"] },
+      { type: "circ", key: "peitoral", label: "Peitoral", aliases: ["peitoral"] },
+      { type: "circ", key: "axilar_media", label: "Axilar média", aliases: ["axilar media", "axilar média"] },
+      { type: "circ", key: "supra_espinhal", label: "Supra espinhal", aliases: ["supra espinhal", "supraespinhal"] },
+      { type: "circ", key: "panturrilha", label: "Panturrilha", aliases: ["panturrilha direita", "panturrilha esquerda", "panturrilha"] },
+      { type: "circ", key: "biceps", label: "Bíceps", aliases: ["biceps", "bíceps"] },
+    ];
+
+    for (const item of aliases) {
+      if (explicitType && item.type !== explicitType) continue;
+      if (item.aliases.some((alias) => normalized.includes(normalizeSpeechText(alias)))) {
+        const unit = item.type === "dobra" ? "mm" : "cm";
+        return { type: item.type, key: item.key, label: item.label, value, unit };
+      }
+    }
+
+    return null;
+  }
+
+  function applyVoiceCommand(rawText: string) {
+    const parsed = parseVoiceCommand(rawText);
+    setVoiceLastHeard(rawText);
+    if (!parsed) {
+      setVoiceStatus(`Não entendi: ${rawText}`);
+      return;
+    }
+
+    if (parsed.type === "dobra") {
+      onChangeDobra(parsed.key as DobraKey, parsed.value);
+      highlightVoiceField(`dobra:${String(parsed.key)}`);
+    } else {
+      onChangeCirc(parsed.key as CircKey, parsed.value);
+      highlightVoiceField(`circ:${String(parsed.key)}`);
+    }
+
+    beepSuccess();
+    const prettyValue = parsed.value.replace(".", ",");
+    setVoiceStatus(`${parsed.label} registrado(a): ${prettyValue} ${parsed.unit}`);
+    speakConfirmation(`${prettyValue} ${parsed.unit === "mm" ? "milímetros" : "centímetros"} registrado em ${parsed.label}`);
+  }
+
+  function stopVoiceRecognition(reason?: string) {
+    const recognition = recognitionRef.current;
+    if (recognition) {
+      recognition.onresult = null;
+      recognition.onend = null;
+      recognition.onerror = null;
+      recognition.stop();
+      recognitionRef.current = null;
+    }
+    setVoiceEnabled(false);
+    if (reason) setVoiceStatus(reason);
+  }
+
+  function toggleVoiceRecognition() {
+    if (voiceEnabled) {
+      stopVoiceRecognition("Ditado desativado");
+      return;
+    }
+
+    const SpeechRecognitionCtor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognitionCtor) {
+      setVoiceStatus("Seu navegador não suporta reconhecimento de voz");
+      return;
+    }
+
+    const recognition = new SpeechRecognitionCtor();
+    recognition.lang = "pt-BR";
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        .slice(event.resultIndex)
+        .map((result: any) => result[0]?.transcript || "")
+        .join(" ")
+        .trim();
+      if (transcript) applyVoiceCommand(transcript);
+    };
+
+    recognition.onerror = (event: any) => {
+      const error = typeof event?.error === "string" ? event.error : "erro desconhecido";
+      setVoiceStatus(`Falha no ditado: ${error}`);
+      setVoiceEnabled(false);
+      recognitionRef.current = null;
+    };
+
+    recognition.onend = () => {
+      if (recognitionRef.current === recognition && voiceEnabled) {
+        try {
+          recognition.start();
+          setVoiceStatus("Ditado ativo");
+          return;
+        } catch {
+          // ignore restart errors
+        }
+      }
+      if (recognitionRef.current === recognition) {
+        recognitionRef.current = null;
+        setVoiceEnabled(false);
+      }
+    };
+
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+      setVoiceEnabled(true);
+      setVoiceStatus("Ditado ativo");
+    } catch {
+      setVoiceStatus("Não foi possível iniciar o ditado");
+      recognitionRef.current = null;
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current) window.clearTimeout(highlightTimeoutRef.current);
+      stopVoiceRecognition();
+    };
+  }, []);
+
+  function getVoiceInputStyle(fieldId: string): React.CSSProperties {
+    return highlightedField === fieldId
+      ? {
+          ...smallInputStyle,
+          border: "2px solid #16a34a",
+          boxShadow: "0 0 0 4px rgba(22, 163, 74, 0.18)",
+          background: "#f0fdf4",
+        }
+      : smallInputStyle;
+  }
+
   const protocolosSexo = DOBRAS_POR_SEXO[sexoPaciente];
 
   return (
     <div style={pageStyle}>
+      <style>{`@keyframes nutriVoicePulse {
+        0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.45); }
+        70% { transform: scale(1.03); box-shadow: 0 0 0 14px rgba(220, 38, 38, 0); }
+        100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+      }`}</style>
       <div style={mainCardStyle}>
         <div style={topCardStyle}>
           <div style={headerBlockStyle}>
@@ -751,6 +999,30 @@ export default function AntropometriaLayout({
                 Sexo do paciente: <strong>{sexoPaciente}</strong>
               </p>
             </div>
+          </div>
+
+          <div style={voiceCardStyle}>
+            <button
+              type="button"
+              onClick={toggleVoiceRecognition}
+              style={{
+                ...voiceButtonStyle,
+                ...(voiceEnabled ? voiceButtonActiveStyle : voiceButtonIdleStyle),
+              }}
+            >
+              {voiceEnabled ? "● REC" : "🎤 Ativar ditado"}
+            </button>
+            <label style={voiceToggleLabelStyle}>
+              <input
+                type="checkbox"
+                checked={voiceFeedbackEnabled}
+                onChange={(e) => setVoiceFeedbackEnabled(e.target.checked)}
+              />
+              Confirmar por voz
+            </label>
+            <div style={voiceStatusStyle}>{voiceStatus}</div>
+            <div style={voiceHintStyle}>Ex.: “Braço direito 33 centímetros” ou “Prega tricipital 12 milímetros”.</div>
+            {voiceLastHeard ? <div style={voiceTranscriptStyle}>Último comando: {voiceLastHeard}</div> : null}
           </div>
 
           <div style={selectWrapStyle}>
@@ -802,7 +1074,7 @@ export default function AntropometriaLayout({
                       placeholder="0,0"
                       value={dobras[key]}
                       onChange={(e) => onChangeDobra(key, e.target.value)}
-                      style={smallInputStyle}
+                      style={getVoiceInputStyle(`dobra:${key}`)}
                     />
                   </div>
                 ))
@@ -866,7 +1138,7 @@ export default function AntropometriaLayout({
                       placeholder="0,0"
                       value={circunferencias[key]}
                       onChange={(e) => onChangeCirc(key, e.target.value)}
-                      style={smallInputStyle}
+                      style={getVoiceInputStyle(`dobra:${key}`)}
                     />
                   </div>
                 );
@@ -1243,6 +1515,74 @@ const tinyTextStyle: React.CSSProperties = {
   margin: "6px 0 0 0",
   fontSize: 12,
   color: "#8b5cf6",
+};
+
+const voiceCardStyle: React.CSSProperties = {
+  minWidth: 280,
+  flex: 1,
+  maxWidth: 420,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
+  padding: "6px 0",
+};
+
+const voiceButtonStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "14px 18px",
+  borderRadius: 999,
+  border: "none",
+  color: "#fff",
+  fontSize: 16,
+  fontWeight: 800,
+  cursor: "pointer",
+  transition: "all 0.2s ease",
+};
+
+const voiceButtonIdleStyle: React.CSSProperties = {
+  background: "linear-gradient(135deg, #dc2626, #ef4444)",
+  boxShadow: "0 12px 24px rgba(220, 38, 38, 0.22)",
+};
+
+const voiceButtonActiveStyle: React.CSSProperties = {
+  background: "linear-gradient(135deg, #991b1b, #ef4444)",
+  animation: "nutriVoicePulse 1.2s infinite",
+};
+
+const voiceStatusStyle: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 700,
+  color: "#111827",
+  textAlign: "center",
+};
+
+const voiceHintStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "#6b7280",
+  textAlign: "center",
+  lineHeight: 1.5,
+};
+
+const voiceTranscriptStyle: React.CSSProperties = {
+  width: "100%",
+  fontSize: 12,
+  color: "#475569",
+  textAlign: "center",
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+  borderRadius: 12,
+  padding: "8px 10px",
+};
+
+const voiceToggleLabelStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  fontSize: 12,
+  color: "#475569",
+  fontWeight: 600,
 };
 
 const selectWrapStyle: React.CSSProperties = {
