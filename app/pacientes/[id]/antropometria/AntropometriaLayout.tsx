@@ -1,7 +1,17 @@
 "use client";
 
-import React, { useMemo, useState, useEffect, useRef } from "react";
+import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { sincronizarAntropometria } from "../anamnese/actions";
+import {
+  classificarAgua,
+  classificarIMME,
+  classificarIMG,
+  calcularIMME,
+  calcularIMG,
+  calcularFFMI,
+  FRACAO_MUSCULO_ESQUELETICO,
+  type Sexo as SexoBC,
+} from "@/lib/bodyComposition";
 
 type SexoPaciente = "Masculino" | "Feminino";
 
@@ -795,271 +805,99 @@ export default function AntropometriaLayout({
     }));
   }
 
-  const [voiceEnabled, setVoiceEnabled] = useState(false);
-  const [voiceFeedbackEnabled, setVoiceFeedbackEnabled] = useState(true);
-  const [voiceStatus, setVoiceStatus] = useState("");
-  const [voiceLastHeard, setVoiceLastHeard] = useState("");
-  const [highlightedField, setHighlightedField] = useState<string | null>(null);
-  const recognitionRef = useRef<any>(null);
-  const highlightTimeoutRef = useRef<number | null>(null);
-  const voiceEnabledRef = useRef(false);
+    // =================== IMME / IMG / FFMI / % de agua ===================
+  const sexoCodigo: SexoBC = sexoPaciente === "Feminino" ? "F" : "M";
+  const massaMuscularEsqueleticaKg =
+    result.massaMuscular !== null
+      ? Math.max(0, result.massaMuscular * FRACAO_MUSCULO_ESQUELETICO)
+      : null;
+  const immeVal: number =
+    massaMuscularEsqueleticaKg !== null && alturaCm > 0
+      ? calcularIMME(massaMuscularEsqueleticaKg, alturaCm) : 0;
+  const imgVal: number =
+    result.massaAdiposa !== null && alturaCm > 0
+      ? calcularIMG(result.massaAdiposa, alturaCm) : 0;
+  const ffmiVal: number =
+    result.massaMuscular !== null && alturaCm > 0
+      ? calcularFFMI(result.massaMuscular, alturaCm) : 0;
+  const immeClass = immeVal > 0 ? classificarIMME(immeVal, sexoCodigo, idade) : null;
+  const imgClass  = imgVal  > 0 ? classificarIMG(imgVal,  sexoCodigo, idade) : null;
+  const aguaClass =
+    aguaCorporalPct !== null ? classificarAgua(aguaCorporalPct, sexoCodigo) : null;
 
-  function normalizeSpeechText(value: string) {
-    return value
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
-      .toLowerCase()
-      .replace(/[^a-z0-9.,%\s]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
+  // =================== BOTOES: Enviar / Download PDF ====================
+  const [avaliacaoMsg, setAvaliacaoMsg] = useState<string | null>(null);
+  const [envBusy, setEnvBusy] = useState(false);
+  const [downBusy, setDownBusy] = useState(false);
+
+  function classifPill(c: { cor: "verde" | "amarelo" }) {
+    return {
+      ...avaliacaoPillBaseStyle,
+      backgroundColor: c.cor === "verde" ? "#ecfdf5" : "#fff7ed",
+      color: c.cor === "verde" ? "#16a34a" : "#d97706",
+      alignSelf: "flex-start", marginTop: 4,
+    } as React.CSSProperties;
   }
 
-  function extractSpokenValue(value: string) {
-    const match = value.match(/(\d+(?:[.,]\d+)?)/);
-    return match ? normalizeDecimalInput(match[1]) : "";
-  }
-
-  function detectMeasurementType(text: string) {
-    if (/(dobra|prega|cutanea|cutanea|milimetro|milimetros|mm)/.test(text)) return "dobra" as const;
-    if (/(circunferencia|circunferência|perimetro|perímetro|centimetro|centímetro|centimetros|centímetros|cm)/.test(text)) return "circ" as const;
-    return null;
-  }
-
-  function highlightVoiceField(fieldId: string) {
-    setHighlightedField(fieldId);
-    if (highlightTimeoutRef.current) window.clearTimeout(highlightTimeoutRef.current);
-    highlightTimeoutRef.current = window.setTimeout(() => setHighlightedField(null), 1500);
-  }
-
-  useEffect(() => {
-    voiceEnabledRef.current = voiceEnabled;
-  }, [voiceEnabled]);
-
-  function beepSuccess() {
+  const enviarAvaliacao = useCallback(async () => {
+    if (!pacienteId) return;
+    if (!result.bodyFatPct) { setAvaliacaoMsg("Calcule o % de gordura antes de enviar."); return; }
+    setAvaliacaoMsg(null); setEnvBusy(true);
     try {
-      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const audioCtx = new AudioCtx();
-      const oscillator = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.value = 880;
-      gain.gain.value = 0.03;
-      oscillator.connect(gain);
-      gain.connect(audioCtx.destination);
-      oscillator.start();
-      oscillator.stop(audioCtx.currentTime + 0.08);
-    } catch {
-      // ignore
-    }
-  }
+      const r = await fetch("/api/avaliacao-fisica/enviar", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pacienteId, sex: sexoCodigo, idade, alturaCm, pesoKg,
+          bodyFatPct: result.bodyFatPct,
+          massaMuscularKg: result.massaMuscular,
+          massaAdiposaKg: result.massaAdiposa,
+          aguaPct: aguaCorporalPct,
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j?.ok === false) throw new Error(j?.erro ?? `Erro HTTP ${r.status}`);
+      setAvaliacaoMsg("Avaliação enviada ao paciente.");
+    } catch (e: any) { setAvaliacaoMsg("Erro ao enviar: " + (e?.message ?? e)); }
+    finally { setEnvBusy(false); }
+  }, [pacienteId, sexoCodigo, idade, alturaCm, pesoKg, result.bodyFatPct, result.massaMuscular, result.massaAdiposa, aguaCorporalPct]);
 
-  function speakConfirmation(message: string) {
-    if (!voiceFeedbackEnabled || !("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(message);
-    utterance.lang = "pt-BR";
-    utterance.rate = 1;
-    window.speechSynthesis.speak(utterance);
-  }
-
-  function parseVoiceCommand(rawText: string): { type: "dobra" | "circ"; key: DobraKey | CircKey; label: string; value: string; unit: "mm" | "cm" } | null {
-    const normalized = normalizeSpeechText(rawText);
-    const value = extractSpokenValue(normalized);
-    if (!value) return null;
-
-    const explicitType = detectMeasurementType(normalized);
-    const aliases: Array<{ type: "dobra" | "circ"; key: any; label: string; aliases: string[] }> = [
-      { type: "dobra", key: "tricipital", label: "Tricipital", aliases: ["tricipital", "prega tricipital", "dobra tricipital", "triceps"] },
-      { type: "dobra", key: "subescapular", label: "Subescapular", aliases: ["subescapular", "prega subescapular", "dobra subescapular"] },
-      { type: "dobra", key: "supra_iliaca", label: "Supra ilíaca", aliases: ["supra iliaca", "suprailiaca", "supra iliaca", "supra ilíaca", "suprailiaca"] },
-      { type: "dobra", key: "supra_espinhal", label: "Supra espinhal", aliases: ["supra espinhal", "supraespinhal"] },
-      { type: "dobra", key: "axilar_media", label: "Axilar média", aliases: ["axilar media", "axilar média"] },
-      { type: "dobra", key: "peitoral", label: "Peitoral", aliases: ["peitoral"] },
-      { type: "dobra", key: "abdomen", label: "Abdômen", aliases: ["abdomen", "abdominal"] },
-      { type: "dobra", key: "coxa", label: "Coxa", aliases: ["coxa"] },
-      { type: "dobra", key: "panturrilha", label: "Panturrilha", aliases: ["panturrilha"] },
-      { type: "dobra", key: "biceps", label: "Bíceps", aliases: ["biceps", "bíceps"] },
-      { type: "dobra", key: "coxa_proximal", label: "Coxa proximal", aliases: ["coxa proximal"] },
-      { type: "circ", key: "pescoco", label: "Pescoço", aliases: ["pescoco", "pescoço"] },
-      { type: "circ", key: "cintura", label: "Cintura", aliases: ["cintura"] },
-      { type: "circ", key: "quadril", label: "Quadril", aliases: ["quadril"] },
-      { type: "circ", key: "abdomen", label: "Abdômen", aliases: ["abdomen", "abdominal"] },
-      { type: "circ", key: "peitoral", label: "Peitoral", aliases: ["peitoral"] },
-      { type: "circ", key: "axilar_media", label: "Axilar média", aliases: ["axilar media", "axilar média"] },
-      { type: "circ", key: "supra_espinhal", label: "Supra espinhal", aliases: ["supra espinhal", "supraespinhal"] },
-      { type: "circ", key: "biceps_direito", label: "Bíceps direito", aliases: ["biceps direito", "bíceps direito"] },
-      { type: "circ", key: "biceps_esquerdo", label: "Bíceps esquerdo", aliases: ["biceps esquerdo", "bíceps esquerdo", "biceps esquerdo", "bíceps esquerdo", "biceps esquerda", "bíceps esquerda"] },
-      { type: "circ", key: "biceps", label: "Bíceps", aliases: ["biceps", "bíceps"] },
-      { type: "circ", key: "coxa_direita", label: "Coxa direita", aliases: ["coxa direita"] },
-      { type: "circ", key: "coxa_esquerda", label: "Coxa esquerda", aliases: ["coxa esquerda", "coxa esquerdo"] },
-      { type: "circ", key: "panturrilha_direita", label: "Panturrilha direita", aliases: ["panturrilha direita"] },
-      { type: "circ", key: "panturrilha_esquerda", label: "Panturrilha esquerda", aliases: ["panturrilha esquerda", "panturrilha esquerdo"] },
-    ];
-
-    for (const item of aliases) {
-      if (explicitType && item.type !== explicitType) continue;
-      if (item.aliases.some((alias) => normalized.includes(normalizeSpeechText(alias)))) {
-        const unit = item.type === "dobra" ? "mm" : "cm";
-        return { type: item.type, key: item.key, label: item.label, value, unit };
-      }
-    }
-
-    return null;
-  }
-
-  function applyVoiceCommand(rawText: string) {
-    const parsed = parseVoiceCommand(rawText);
-    setVoiceLastHeard(rawText);
-    if (!parsed) {
-      setVoiceStatus(`Não entendi: ${rawText}`);
-      return;
-    }
-
-    if (parsed.type === "dobra") {
-      onChangeDobra(parsed.key as DobraKey, parsed.value);
-      highlightVoiceField(`dobra:${String(parsed.key)}`);
-    } else {
-      onChangeCirc(parsed.key as CircKey, parsed.value);
-      highlightVoiceField(`circ:${String(parsed.key)}`);
-    }
-
-    beepSuccess();
-    const prettyValue = parsed.value.replace(".", ",");
-    setVoiceStatus(`${parsed.label} registrado(a): ${prettyValue} ${parsed.unit}`);
-    speakConfirmation(`${prettyValue} ${parsed.unit === "mm" ? "milímetros" : "centímetros"} registrado em ${parsed.label}`);
-  }
-
-  function stopVoiceRecognition(reason?: string) {
-    const recognition = recognitionRef.current;
-    if (recognition) {
-      recognition.onresult = null;
-      recognition.onend = null;
-      recognition.onerror = null;
-      recognition.stop();
-      recognitionRef.current = null;
-    }
-    voiceEnabledRef.current = false;
-    setVoiceEnabled(false);
-    if (reason) setVoiceStatus(reason);
-  }
-
-  async function toggleVoiceRecognition() {
-    if (voiceEnabledRef.current) {
-      stopVoiceRecognition();
-      return;
-    }
-
-    const SpeechRecognitionCtor =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognitionCtor) {
-      setVoiceStatus("Seu navegador não suporta reconhecimento de voz. No Opera, confirme se o site está em HTTPS e se a permissão do microfone foi liberada.");
-      return;
-    }
-
-    if (!window.isSecureContext) {
-      setVoiceStatus("O registro por voz precisa de HTTPS ou localhost para funcionar no navegador.");
-      return;
-    }
-
+  const downloadAvaliacao = useCallback(async () => {
+    if (!pacienteId) return;
+    if (!result.bodyFatPct) { setAvaliacaoMsg("Calcule o % de gordura antes de baixar."); return; }
+    setAvaliacaoMsg(null); setDownBusy(true);
     try {
-      if (navigator.mediaDevices?.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach((track) => track.stop());
+      const r = await fetch("/api/avaliacao-fisica/download", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pacienteId, sex: sexoCodigo, idade, alturaCm, pesoKg,
+          bodyFatPct: result.bodyFatPct,
+          massaMuscularKg: result.massaMuscular,
+          massaAdiposaKg: result.massaAdiposa,
+          aguaPct: aguaCorporalPct,
+        }),
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j?.erro ?? `Erro HTTP ${r.status}`);
       }
-    } catch {
-      setVoiceStatus("Não foi possível acessar o microfone. Libere a permissão do Opera para este site e teste novamente.");
-      return;
-    }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `avaliacao-${String(pacienteId)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) { setAvaliacaoMsg("Erro ao baixar: " + (e?.message ?? e)); }
+    finally { setDownBusy(false); }
+  }, [pacienteId, sexoCodigo, idade, alturaCm, pesoKg, result.bodyFatPct, result.massaMuscular, result.massaAdiposa, aguaCorporalPct]);
 
-    const recognition = new SpeechRecognitionCtor();
-    recognition.lang = "pt-BR";
-    recognition.continuous = true;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.onresult = (event: any) => {
-      const transcript = Array.from(event.results)
-        .slice(event.resultIndex)
-        .map((result: any) => result[0]?.transcript || "")
-        .join(" ")
-        .trim();
-      if (transcript) applyVoiceCommand(transcript);
-    };
-
-    recognition.onerror = (event: any) => {
-      const error = typeof event?.error === "string" ? event.error : "erro desconhecido";
-      const mappedError =
-        error === "not-allowed"
-          ? "Permissão de microfone bloqueada no navegador"
-          : error === "audio-capture"
-          ? "Nenhum microfone foi encontrado pelo navegador"
-          : error === "network"
-          ? "Falha de rede no reconhecimento de voz"
-          : `Falha no registro por voz: ${error}`;
-      setVoiceStatus(mappedError);
-      voiceEnabledRef.current = false;
-      setVoiceEnabled(false);
-      recognitionRef.current = null;
-    };
-
-    recognition.onend = () => {
-      if (recognitionRef.current === recognition && voiceEnabledRef.current) {
-        try {
-          recognition.start();
-          return;
-        } catch {
-          // ignore restart errors
-        }
-      }
-      if (recognitionRef.current === recognition) {
-        recognitionRef.current = null;
-        voiceEnabledRef.current = false;
-        setVoiceEnabled(false);
-      }
-    };
-
-    recognitionRef.current = recognition;
-    voiceEnabledRef.current = true;
-    try {
-      recognition.start();
-      setVoiceEnabled(true);
-      setVoiceStatus("");
-    } catch {
-      setVoiceStatus("Não foi possível iniciar o registro por voz.");
-      recognitionRef.current = null;
-      voiceEnabledRef.current = false;
-      setVoiceEnabled(false);
-    }
-  }
-
-  useEffect(() => {
-    return () => {
-      if (highlightTimeoutRef.current) window.clearTimeout(highlightTimeoutRef.current);
-      stopVoiceRecognition();
-    };
-  }, []);
-
-  function getVoiceInputStyle(fieldId: string): React.CSSProperties {
-    return highlightedField === fieldId
-      ? {
-          ...smallInputStyle,
-          border: "2px solid #16a34a",
-          boxShadow: "0 0 0 4px rgba(22, 163, 74, 0.18)",
-          background: "#f0fdf4",
-        }
-      : smallInputStyle;
-  }
-
-  const protocolosSexo = DOBRAS_POR_SEXO[sexoPaciente];
+    const protocolosSexo = DOBRAS_POR_SEXO[sexoPaciente];
 
   return (
     <div style={pageStyle}>
-      <style>{`@keyframes nutriVoicePulse {
-        0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.45); }
-        70% { transform: scale(1.03); box-shadow: 0 0 0 14px rgba(220, 38, 38, 0); }
-        100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
-      }`}</style>
+      
       <div style={mainCardStyle}>
         <div style={topCardStyle}>
           <div style={headerBlockStyle}>
@@ -1071,29 +909,6 @@ export default function AntropometriaLayout({
                 Sexo do paciente: <strong>{sexoPaciente}</strong>
               </p>
             </div>
-          </div>
-
-          <div style={voiceCardStyle}>
-            <button
-              type="button"
-              onClick={toggleVoiceRecognition}
-              style={{
-                ...voiceButtonStyle,
-                ...(voiceEnabled ? voiceButtonActiveStyle : voiceButtonIdleStyle),
-              }}
-            >
-              {voiceEnabled ? "● Registro por voz ativo" : "🎤 Ativar registro por voz"}
-            </button>
-            <label style={voiceToggleLabelStyle}>
-              <input
-                type="checkbox"
-                checked={voiceFeedbackEnabled}
-                onChange={(e) => setVoiceFeedbackEnabled(e.target.checked)}
-              />
-              Confirmar por voz
-            </label>
-            {voiceStatus ? <div style={voiceStatusStyle}>{voiceStatus}</div> : null}
-            {voiceLastHeard ? <div style={voiceTranscriptStyle}>Último comando: {voiceLastHeard}</div> : null}
           </div>
 
           <div style={selectWrapStyle}>
@@ -1145,7 +960,7 @@ export default function AntropometriaLayout({
                       placeholder="0,0"
                       value={dobras[key]}
                       onChange={(e) => onChangeDobra(key, e.target.value)}
-                      style={getVoiceInputStyle(`dobra:${key}`)}
+                      style={smallInputStyle}
                     />
                   </div>
                 ))
@@ -1209,7 +1024,7 @@ export default function AntropometriaLayout({
                       placeholder="0,0"
                       value={circunferencias[key]}
                       onChange={(e) => onChangeCirc(key, e.target.value)}
-                      style={getVoiceInputStyle(`circ:${key}`)}
+                      style={smallInputStyle}
                     />
                   </div>
                 );
@@ -1337,9 +1152,91 @@ export default function AntropometriaLayout({
             </div>
           </div>
 
-          {/* VO2 MAX — Jack Daniels */}
+          {/* VO2 MAX - Jack Daniels */}
           <VO2MaxJackDaniels sexoPaciente={sexoPaciente} pacienteId={pacienteId} />
         </div>
+
+        {/* CARD EXTRAS: IMME / IMG / FFMI / % de agua classificada */}
+        {immeClass && imgClass && aguaClass ? (
+          <div style={avaliacaoExtrasCardStyle}>
+            <div style={headerBlockStyle}>
+              <div style={iconBubblePurple}></div>
+              <div>
+                <h3 style={avaliacaoExtrasTitleStyle}>
+                  Composicao corporal (referencias)
+                </h3>
+                <p style={avaliacaoExtrasSubtitleStyle}>
+                  IMME / IMG / FFMI - conforme tabelas anexas
+                </p>
+              </div>
+            </div>
+
+            <div style={avaliacaoExtrasGridStyle}>
+              <div style={avaliacaoExtraItemStyle}>
+                <span style={avaliacaoExtraRotuloStyle}>IMME (musculo esqueletico)</span>
+                <span style={avaliacaoExtraValorStyle}>{formatPt(immeVal, " kg/m2")}</span>
+                <span style={classifPill(immeClass)}>* {immeClass.label}</span>
+              </div>
+              <div style={avaliacaoExtraItemStyle}>
+                <span style={avaliacaoExtraRotuloStyle}>IMG (indice massa gorda)</span>
+                <span style={avaliacaoExtraValorStyle}>{formatPt(imgVal, " kg/m2")}</span>
+                <span style={classifPill(imgClass)}>* {imgClass.label}</span>
+              </div>
+              <div style={avaliacaoExtraItemStyle}>
+                <span style={avaliacaoExtraRotuloStyle}>FFMI</span>
+                <span style={avaliacaoExtraValorStyle}>{formatPt(ffmiVal, " kg/m2")}</span>
+                <span style={{ ...avaliacaoPillBaseStyle, backgroundColor: "#f5f3ff", color: "#7c3aed" }}>
+                  Massa livre de gordura
+                </span>
+              </div>
+              <div style={avaliacaoExtraItemStyle}>
+                <span style={avaliacaoExtraRotuloStyle}>% de agua (Watson)</span>
+                <span style={avaliacaoExtraValorStyle}>
+                  {aguaCorporalPct !== null ? formatPt(aguaCorporalPct, " %") : "-"}
+                </span>
+                <span style={classifPill(aguaClass)}>* {aguaClass.label}</span>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* BOTOES: Enviar Avaliacao Fisica / Download PDF */}
+        <div style={avaliacaoBotoesWrapStyle}>
+          {avaliacaoMsg ? (
+            <span style={avaliacaoFeedbackStyle}>{avaliacaoMsg}</span>
+          ) : (
+            <span style={avaliacaoFeedbackStyle}>
+              {result.bodyFatPct !== null
+                ? "Pronto para gerar o PDF."
+                : "Preencha e calcule para gerar o PDF."}
+            </span>
+          )}
+
+          <button
+            type="button"
+            onClick={enviarAvaliacao}
+            disabled={envBusy || !result.bodyFatPct}
+            style={{
+              ...avaliacaoBtnPrimary,
+              ...(envBusy || !result.bodyFatPct ? avaliacaoBtnDisabled : {}),
+            }}
+          >
+            {envBusy ? "Enviando..." : "Enviar Avaliacao Fisica"}
+          </button>
+
+          <button
+            type="button"
+            onClick={downloadAvaliacao}
+            disabled={downBusy || !result.bodyFatPct}
+            style={{
+              ...avaliacaoBtnSecondary,
+              ...(downBusy || !result.bodyFatPct ? avaliacaoBtnDisabled : {}),
+            }}
+          >
+            {downBusy ? "Baixando..." : "Download do PDF"}
+          </button>
+        </div>
+
       </div>
     </div>
   );
@@ -1489,6 +1386,47 @@ function normalizeDecimalInput(value: string) {
     .replace(/,(?=.*,)/g, "");
 }
 
+// ==================== AVALIAÇÃO: ESTILOS DOS BOTÕES ====================
+const avaliacaoBotoesWrapStyle: React.CSSProperties = {
+  display: "flex", flexWrap: "wrap", gap: 12, marginTop: 24,
+  alignItems: "center", justifyContent: "flex-end",
+};
+const avaliacaoBtnPrimary: React.CSSProperties = {
+  padding: "12px 20px", borderRadius: 12, border: "none",
+  background: "linear-gradient(135deg, #16a34a, #15803d)",
+  color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer",
+  boxShadow: "0 8px 20px rgba(22, 163, 74, 0.25)",
+};
+const avaliacaoBtnSecondary: React.CSSProperties = {
+  padding: "12px 20px", borderRadius: 12,
+  border: "1px solid #16a34a", background: "#ffffff",
+  color: "#15803d", fontWeight: 700, fontSize: 14, cursor: "pointer",
+};
+const avaliacaoBtnDisabled: React.CSSProperties = { opacity: 0.6, cursor: "not-allowed" };
+const avaliacaoFeedbackStyle: React.CSSProperties = {
+  fontSize: 13, fontWeight: 600, color: "#15803d", marginRight: "auto",
+};
+const avaliacaoExtrasCardStyle: React.CSSProperties = {
+  marginTop: 24, background: "#fff", border: "1px solid #eee7fb",
+  borderRadius: 20, padding: 24,
+  boxShadow: "0 8px 20px rgba(15, 23, 42, 0.04)",
+};
+const avaliacaoExtrasTitleStyle: React.CSSProperties = { margin: 0, fontSize: 18, fontWeight: 800, color: "#111827" };
+const avaliacaoExtrasSubtitleStyle: React.CSSProperties = { margin: "4px 0 0 0", fontSize: 14, color: "#6b7280" };
+const avaliacaoExtrasGridStyle: React.CSSProperties = {
+  display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 14, marginTop: 14,
+};
+const avaliacaoExtraItemStyle: React.CSSProperties = {
+  display: "flex", flexDirection: "column", gap: 4,
+  padding: 16, borderRadius: 16, border: "1px solid #ede9fe", background: "#fff",
+};
+const avaliacaoExtraRotuloStyle: React.CSSProperties = { fontSize: 13, color: "#475569", fontWeight: 600 };
+const avaliacaoExtraValorStyle: React.CSSProperties = { fontSize: 24, fontWeight: 800, color: "#111827" };
+const avaliacaoPillBaseStyle: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", gap: 6,
+  fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 999,
+};
 const pageStyle: React.CSSProperties = {
   width: "100%",
   padding: "20px 0",
@@ -1586,162 +1524,6 @@ const tinyTextStyle: React.CSSProperties = {
   margin: "6px 0 0 0",
   fontSize: 12,
   color: "#8b5cf6",
-};
-
-const voiceCardStyle: React.CSSProperties = {
-  minWidth: 280,
-  flex: 1,
-  maxWidth: 420,
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 8,
-  padding: "6px 0",
-};
-
-const voiceButtonStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "14px 18px",
-  borderRadius: 999,
-  border: "none",
-  color: "#fff",
-  fontSize: 16,
-  fontWeight: 800,
-  cursor: "pointer",
-  transition: "all 0.2s ease",
-};
-
-const voiceButtonIdleStyle: React.CSSProperties = {
-  background: "linear-gradient(135deg, #dc2626, #ef4444)",
-  boxShadow: "0 12px 24px rgba(220, 38, 38, 0.22)",
-};
-
-const voiceButtonActiveStyle: React.CSSProperties = {
-  background: "linear-gradient(135deg, #991b1b, #ef4444)",
-  animation: "nutriVoicePulse 1.2s infinite",
-};
-
-const voiceStatusStyle: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 700,
-  color: "#111827",
-  textAlign: "center",
-};
-
-const voiceHintStyle: React.CSSProperties = {
-  fontSize: 12,
-  color: "#6b7280",
-  textAlign: "center",
-  lineHeight: 1.5,
-};
-
-const voiceTranscriptStyle: React.CSSProperties = {
-  width: "100%",
-  fontSize: 12,
-  color: "#475569",
-  textAlign: "center",
-  background: "#f8fafc",
-  border: "1px solid #e2e8f0",
-  borderRadius: 12,
-  padding: "8px 10px",
-};
-
-const voiceToggleLabelStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  fontSize: 12,
-  color: "#475569",
-  fontWeight: 600,
-};
-
-const selectWrapStyle: React.CSSProperties = {
-  minWidth: 320,
-  flex: 1,
-  maxWidth: 420,
-};
-
-const selectStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "16px 18px",
-  border: "1px solid #e6e8f0",
-  borderRadius: 14,
-  fontSize: 16,
-  outline: "none",
-  background: "#fff",
-  color: "#111827",
-};
-
-const badgeStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  borderRadius: 999,
-  background: "linear-gradient(135deg, #f3e8ff, #ede9fe)",
-  color: "#7c3aed",
-  fontWeight: 700,
-  fontSize: 14,
-};
-
-const listRowStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 14,
-  padding: "12px 14px",
-  border: "1px solid #ede9fe",
-  borderRadius: 14,
-  marginBottom: 12,
-  background: "#fff",
-};
-
-const circRowStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 14,
-  padding: "10px 0",
-  borderBottom: "1px solid #f1f5f9",
-};
-
-const numberBubbleStyle: React.CSSProperties = {
-  width: 28,
-  height: 28,
-  borderRadius: "50%",
-  background: "#7c3aed",
-  color: "#fff",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontWeight: 800,
-  fontSize: 13,
-  flexShrink: 0,
-};
-
-const circIconStyle: React.CSSProperties = {
-  width: 40,
-  height: 40,
-  borderRadius: "50%",
-  background: "#eff6ff",
-  color: "#2563eb",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: 14,
-  fontWeight: 700,
-  flexShrink: 0,
-};
-
-const fieldLabelStyle: React.CSSProperties = {
-  display: "block",
-  color: "#111827",
-  fontSize: 15,
-  fontWeight: 600,
-};
-
-const requiredTextStyle: React.CSSProperties = {
-  display: "block",
-  marginTop: 4,
-  color: "#8b5cf6",
-  fontSize: 12,
-  fontWeight: 600,
 };
 
 const smallInputStyle: React.CSSProperties = {

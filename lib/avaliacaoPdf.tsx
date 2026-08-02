@@ -1,15 +1,10 @@
 // lib/avaliacaoPdf.tsx
-// PDF de Avaliação Física usado tanto no botão "Enviar Avaliação Física"
-// quanto no botão "Download do PDF" — o nutricionista baixa exatamente o
-// mesmo arquivo que será enviado ao paciente.
+// Definição do PDF de Avaliação Física (renderizado por @react-pdf/renderer).
 //
-// Dependência (instalar uma vez no projeto):
-//   npm i @react-pdf/renderer
-//
-// Layout segue o que foi enviado em chat (anexos 1..7): card de composição
-// corporal com 6 indicadores, círculos amarelo/verde + IMME, IMG, FFMI,
-// DOBRAS, CIRCUNFERÊNCIAS, imagem de frente selecionada por sexo+critério,
-// assinatura Great Vibes + CRN.
+// IMPORTANTE: este arquivo é .tsx (e não .ts) propositadamente.
+// Os arquivos "route.ts" do Next.js + Turbopack NÃO aceitam JSX inline -
+// é o bug que apareceu no seu build ("Expected '>', got 'ident'").
+// Aqui o JSX é livre e as rotas chamam este componente via React.createElement.
 
 import {
   Document,
@@ -21,24 +16,17 @@ import {
   Font,
 } from "@react-pdf/renderer";
 
-// Fonte Great Vibes para a assinatura (o usuário já tem em /public/fonts/)
 let greatVibesRegistrada = false;
 function registrarFonteGreatVibes() {
   if (greatVibesRegistrada) return;
   try {
     Font.register({
       family: "GreatVibes",
-      src: "/fonts/GreatVibes-Regular.ttf", // caminho dentro do /public
+      src: "/fonts/GreatVibes-Regular.ttf", // já em /public/fonts no seu repo
     });
     greatVibesRegistrada = true;
   } catch {
-    // Em SSR/Vercel, registar direto por URL absoluta também funciona
-    try {
-      Font.register({
-        family: "GreatVibes",
-        src: "https://fonts.gstatic.com/s/greatvibes/v8/RwQ5lkxO0-L9.woff", // fallback
-      });
-    } catch {}
+    // silencioso - o PDF ainda gera sem a fonte estilizada
   }
 }
 
@@ -79,36 +67,29 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     letterSpacing: 1,
   },
+  separador: {
+    borderTopWidth: 0.5,
+    borderTopColor: "#D9E5DD",
+    marginTop: 6,
+    paddingTop: 6,
+  },
 
-  // Linhas da Composição Corporal
-  linha: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 3,
-  },
-  rotulo: { width: 180, fontSize: 10, color: "#0F3D2E" },
-  valor: { width: 90, fontSize: 10, fontWeight: "bold" },
-  bolinha: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 6,
-  },
+  linha: { flexDirection: "row", alignItems: "center", paddingVertical: 3 },
+  rotulo: { width: 200, fontSize: 10, color: "#0F3D2E" },
+  valor: { width: 100, fontSize: 10, fontWeight: "bold" },
+  bolinha: { width: 10, height: 10, borderRadius: 5, marginRight: 6 },
   textoCor: { fontSize: 10, fontWeight: "bold" },
 
-  // Imagem central
   imagemCentro: {
     alignItems: "center",
     justifyContent: "center",
     marginVertical: 8,
   },
-  imagemFrontal: { width: 220, height: 340, objectFit: "contain" },
+  imagemFrontal: { width: 200, height: 320, objectFit: "contain" },
 
-  // Coluna duplas (cols esquerda/direita)
   cols: { flexDirection: "row", gap: 10 },
   col: { flex: 1 },
 
-  // Tabelas pequenas
   table: { width: "100%" },
   tableRow: {
     flexDirection: "row",
@@ -119,7 +100,6 @@ const styles = StyleSheet.create({
   th: { fontSize: 9, fontWeight: "bold", width: "40%" },
   td: { fontSize: 9, width: "30%" },
 
-  // Rodapé
   footer: {
     marginTop: 20,
     borderTopWidth: 1,
@@ -127,20 +107,9 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     alignItems: "center",
   },
-  assinaturaNome: {
-    fontFamily: "GreatVibes",
-    fontSize: 30,
-    color: "#0F3D2E",
-  },
-  assinaturaLinha: {
-    height: 1,
-    backgroundColor: "#0F3D2E",
-    marginTop: 2,
-  },
-  assinaturaLarguraWrap: {
-    alignItems: "center",
-    marginTop: 6,
-  },
+  assinaturaNome: { fontFamily: "GreatVibes", fontSize: 30, color: "#0F3D2E" },
+  assinaturaLinha: { height: 1, backgroundColor: "#0F3D2E", marginTop: 2 },
+  assinaturaLarguraWrap: { alignItems: "center", marginTop: 6 },
   assinaturaCrn: { fontSize: 10, marginTop: 4 },
 });
 
@@ -150,45 +119,43 @@ const COR_BG: Record<string, string> = {
   vermelho: "#C0392B",
 };
 
+export interface ResumoBodyData {
+  data: string;
+  pesoKg: number;
+  pctAgua: number;
+  massaMagraKg: number;
+  massaGordaKg: number;
+  bfPct: number;
+  imme: number;
+  img: number;
+  ffmi: number;
+  classificacaoAgua: { status: string; cor: "verde" | "amarelo"; label: string };
+  classificacaoImme: { status: string; cor: "verde" | "amarelo"; label: string };
+  classificacaoImg: { status: string; cor: "verde" | "amarelo"; label: string };
+  imagemUrl: string;
+  legendaImagem: string;
+}
+
 export interface AvaliacaoPdfProps {
   paciente: {
     nome: string;
     sexo: "M" | "F";
     idade: number;
-    dataNascimento?: string;
     altura_cm?: number;
   };
-  dados: {
-    data: string;
-    pesoKg: number;
-    alturaM: number;
-    pctAgua: number;
-    massaMagraKg: number;
-    massaGordaKg: number;
-    bfPct: number;
-    massaMuscularEsqueleticaKg: number;
-    massaLivreGorduraKg: number;
-    taxaMetabolicaBasal?: number;
-    imme: number;
-    img: number;
-    ffmi: number;
-    classificacaoAgua: { status: string; cor: "verde" | "amarelo"; label: string };
-    classificacaoImme: { status: string; cor: "verde" | "amarelo"; label: string };
-    classificacaoImg: { status: string; cor: "verde" | "amarelo"; label: string };
-    imagemUrl: string;
-    legendaImagem: string;
-  };
-  circunferencias?: { label: string; antes?: number; atual?: number }[];
-  dobras?: { label: string; antes?: number; atual?: number }[];
+  dados: ResumoBodyData;
+  circunferencias?: { label: string; antes?: number | null; atual?: number | null }[];
+  dobras?: { label: string; antes?: number | null; atual?: number | null }[];
   nutricionista: { nome: string; crn: string; email?: string };
-  logoUrl?: string; // ex: /logo.png servido em /public
+  logoUrl?: string;
 }
 
 export function AvaliacaoPdfDocument(props: AvaliacaoPdfProps) {
   registrarFonteGreatVibes();
   const { paciente, dados, nutricionista, logoUrl = "/logo.png" } = props;
   const c = dados;
-  const fmt = (n?: number, suf = "") => (n == null ? "—" : `${n}${suf}`);
+  const fmt = (n?: number | null, suf = "") =>
+    n == null || !Number.isFinite(n) ? "—" : `${n}${suf}`;
 
   return (
     <Document>
@@ -216,42 +183,40 @@ export function AvaliacaoPdfDocument(props: AvaliacaoPdfProps) {
         <View style={styles.card}>
           <Text style={styles.cardTitulo}>COMPOSIÇÃO CORPORAL</Text>
 
-          <LinhaComp rotulo="Peso Atual" valor={`${c.pesoKg.toFixed(1)} kg`} />
-          <LinhaComp
+          <Linha rotulo="Peso Atual" valor={`${c.pesoKg.toFixed(1)} kg`} />
+          <Linha
             rotulo="% de Água"
             valor={`${c.pctAgua.toFixed(1)}%`}
             cor={c.classificacaoAgua.cor}
             label={c.classificacaoAgua.label}
           />
-          <LinhaComp rotulo="Massa Magra" valor={`${c.massaMagraKg.toFixed(1)} kg`} />
-          <LinhaComp rotulo="Massa Gorda" valor={`${c.massaGordaKg.toFixed(1)} kg`} />
-          <LinhaComp rotulo="% Gordura Corporal" valor={`${c.bfPct.toFixed(1)}%`} />
-          {c.taxaMetabolicaBasal != null && (
-            <LinhaComp rotulo="Taxa Metabólica Basal" valor={`${c.taxaMetabolicaBasal} kcal`} />
-          )}
+          <Linha rotulo="Massa Magra" valor={`${c.massaMagraKg.toFixed(1)} kg`} />
+          <Linha rotulo="Massa Gorda" valor={`${c.massaGordaKg.toFixed(1)} kg`} />
+          <Linha rotulo="% Gordura Corporal" valor={`${c.bfPct.toFixed(1)}%`} />
 
-          {/* Novos (transcritos das tabelas do chat) */}
-          <View style={{ marginTop: 6, paddingTop: 6, borderTopWidth: 0.5, borderTopColor: "#D9E5DD" }}>
-            <LinhaComp
+          <View style={styles.separador}>
+            <Linha
               rotulo="IMME (Músculo Esquelético)"
               valor={`${c.imme.toFixed(2)} kg/m²`}
               cor={c.classificacaoImme.cor}
               label={c.classificacaoImme.label}
             />
-            <LinhaComp
+            <Linha
               rotulo="IMG (Índice Massa Gorda)"
               valor={`${c.img.toFixed(2)} kg/m²`}
               cor={c.classificacaoImg.cor}
               label={c.classificacaoImg.label}
             />
-            <LinhaComp rotulo="FFMI" valor={`${c.ffmi.toFixed(2)} kg/m²`} />
+            <Linha rotulo="FFMI" valor={`${c.ffmi.toFixed(2)} kg/m²`} />
           </View>
         </View>
 
-        {/* Imagem central (frente selecionada por sexo + FFMI + BF%) */}
+        {/* Imagem central selecionada por sexo + FFMI + BF% */}
         <View style={styles.imagemCentro}>
           <PdfImage src={c.imagemUrl} style={styles.imagemFrontal} />
-          <Text style={[styles.dadosCliente, { marginTop: 4 }]}>{c.legendaImagem}</Text>
+          <Text style={[styles.dadosCliente, { marginTop: 4 }]}>
+            {c.legendaImagem}
+          </Text>
         </View>
 
         {/* Circunferências + Dobras lado a lado */}
@@ -301,20 +266,22 @@ export function AvaliacaoPdfDocument(props: AvaliacaoPdfProps) {
           </View>
         </View>
 
-        {/* Rodapé com assinatura Great Vibes */}
+        {/* Rodapé com assinatura */}
         <View style={styles.footer}>
           <Text style={styles.assinaturaNome}>{nutricionista.nome}</Text>
           <View style={styles.assinaturaLarguraWrap}>
             <View style={[styles.assinaturaLinha, { width: 240 }]} />
           </View>
-          <Text style={styles.assinaturaCrn}>Nutricionista · CRN: {nutricionista.crn}</Text>
+          <Text style={styles.assinaturaCrn}>
+            Nutricionista · CRN: {nutricionista.crn}
+          </Text>
         </View>
       </Page>
     </Document>
   );
 }
 
-function LinhaComp(props: {
+function Linha(props: {
   rotulo: string;
   valor: string;
   cor?: "verde" | "amarelo" | "vermelho";

@@ -1,157 +1,174 @@
 // app/api/avaliacao-fisica/enviar/route.ts
-// POST: gera PDF da avaliação com @react-pdf/renderer e envia ao paciente via Brevo.
-// É a mesma rota usada pelo botão "Enviar Avaliação Física" na aba Antropometria.
 //
-// Body esperado (JSON):
-// {
-//   paciente: { nome, email, sexo: "M"|"F", idade, dataNascimento?, altura_cm? },
-//   avaliacao: {
-//     data, pesoKg, alturaM, pctAgua, massaMagraKg, massaGordaKg,
-//     bfPct, massaMuscularEsqueleticaKg, massaLivreGorduraKg,
-//     taxaMetabolicaBasal?, circunferencias?, dobras?
-//   },
-//   nutricionista: { nome, crn, email? }
-// }
+// POST: gera o PDF da Avaliação Física e envia ao paciente via Brevo
+// (mesmo arquivo que o botão "Download do PDF" baixa).
+//
+// Body esperado:
+//   {
+//     pacienteId: string,
+//     sexo: "M" | "F",                // derivado do cadastro
+//     idade: number,
+//     alturaCm: number,
+//     pesoKg: number,
+//     bodyFatPct:  number | null,     // calculado na tela de Antropometria
+//     massaMuscularKg: number | null, // "massa magra" = peso - massa gorda
+//     massaAdiposaKg: number | null,  // = peso * BF%
+//     aguaPct: number | null,         // Watson
+//   }
+//
+// IMPORTANTE: NÃO usa JSX aqui (Turbopack recusa JSX em arquivos .ts),
+// então o componente React é montado via React.createElement.
 
 import { NextRequest, NextResponse } from "next/server";
+import React from "react";
+import { getServerSession } from "next-auth";
+import { prisma } from "@/lib/prisma";
+import { authOptions } from "@/lib/auth";
 import { resumoCompleto } from "@/lib/bodyComposition";
 import { sendBrevoEmail, bufferToBase64 } from "@/lib/brevoEmail";
 
-export const runtime = "nodejs"; // necessário para @react-pdf/renderer
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const erros: string[] = [];
-    if (!body?.paciente?.email) erros.push("paciente.email ausente");
-    if (!body?.paciente?.nome) erros.push("paciente.nome ausente");
-    if (!body?.paciente?.sexo) erros.push("paciente.sexo ausente");
-    if (!body?.avaliacao?.alturaM) erros.push("avaliacao.alturaM ausente");
-    if (!body?.avaliacao?.pesoKg) erros.push("avaliacao.pesoKg ausente");
-    if (erros.length) {
-      return NextResponse.json({ ok: false, erros }, { status: 400 });
+
+    const pacienteId = body?.pacienteId;
+    if (!pacienteId) {
+      return NextResponse.json({ ok: false, erro: "pacienteId ausente" }, { status: 400 });
     }
 
-    const { paciente, avaliacao, nutricionista } = body;
-    const r = resumoCompleto({
-      pesoKg: avaliacao.pesoKg,
-      alturaM: avaliacao.alturaM,
-      idade: paciente.idade ?? avaliacao.idade,
-      sexo: paciente.sexo,
-      pctAgua: avaliacao.pctAgua,
-      massaMagraKg: avaliacao.massaMagraKg,
-      massaGordaKg: avaliacao.massaGordaKg,
-      bfPct: avaliacao.bfPct,
-      massaMuscularEsqueleticaKg: avaliacao.massaMuscularEsqueleticaKg,
-      massaLivreGorduraKg: avaliacao.massaLivreGorduraKg,
+    // 1) Buscar paciente (nome, email, sexo, dt nascimento)
+    const paciente = await prisma.pacientes.findUnique({ where: { id: pacienteId } });
+    if (!paciente) {
+      return NextResponse.json({ ok: false, erro: "Paciente não encontrado" }, { status: 404 });
+    }
+
+    // 2) Buscar nutricionista logado (CRN + nome + email)
+    const session = await getServerSession(authOptions).catch(() => null);
+    const sessionNutri: any = (session as any)?.user ?? {};
+    let nutricionista: { nome: string; crn: string; email?: string } = {
+      nome: sessionNutri?.name || "Nutricionista",
+      crn: sessionNutri?.crn || "—",
+      email: sessionNutri?.email,
+    };
+    if (!sessionNutri?.crn && nutricionista.email) {
+      const nutriRow = await prisma.nutricionistas
+        .findUnique({ where: { email: nutricionista.email } })
+        .catch(() => null);
+      if (nutriRow) {
+        nutricionista = { nome: nutriRow.nome, crn: nutriRow.crn || "—", email: nutriRow.email };
+      }
+    }
+
+    // 3) Montar o resumo (tabelas + seleção de imagem + classificação de água)
+    const resumo = resumoCompleto({
+      pesoKg: Number(body.pesoKg) || 0,
+      alturaCm: Number(body.alturaCm) || 0,
+      idade: Number(body.idade) || 0,
+      sexo: (body.sex === "F" || body.sex === "feminino") ? "F" : "M",
+      pctAgua: Number(body.aguaPct) || 0,
+      massaMagraKg: Number(body.massaMuscularKg) || 0,
+      massaGordaKg: Number(body.massaAdiposaKg) || 0,
+      bfPct: Number(body.bodyFatPct) || 0,
     });
 
-    // Import dinâmico para que a build NÃO falhe se @react-pdf/renderer
-    // ainda não tiver sido instalado. Depois de `npm i @react-pdf/renderer`
-    // o dynamic import passa a funcionar normalmente.
-    // @ts-ignore - resolvido em runtime
+    // 4) Gerar PDF via @react-pdf/renderer
     const mod = await import("@react-pdf/renderer").catch(() => null);
     if (!mod) {
       return NextResponse.json(
-        {
-          ok: false,
-          erro:
-            "@react-pdf/renderer não instalado. Rode: npm i @react-pdf/renderer",
-        },
+        { ok: false, erro: "Instale @react-pdf/renderer (npm i @react-pdf/renderer)" },
         { status: 500 }
       );
     }
     const { renderToBuffer } = mod as any;
 
-    const { AvaliacaoPdfDocument } = await import("@/lib/avaliacaoPdf").catch(
-      () => ({ AvaliacaoPdfDocument: null } as any)
-    );
-    if (!AvaliacaoPdfDocument) {
-      return NextResponse.json(
-        { ok: false, erro: "lib/avaliacaoPdf não encontrada." },
-        { status: 500 }
-      );
+    const pdfMod = await import("@/lib/avaliacaoPdf").catch(() => null as any);
+    if (!pdfMod?.AvaliacaoPdfDocument) {
+      return NextResponse.json({ ok: false, erro: "lib/avaliacaoPdf não encontrada" }, { status: 500 });
     }
+    const { AvaliacaoPdfDocument } = pdfMod;
 
     const legendaImagem =
-      r.imagem.codigo === 3
+      resumo.imagem.codigo === 3
         ? "Excelente composição corporal"
-        : r.imagem.codigo === 1
+        : resumo.imagem.codigo === 1
         ? "Composição corporal equilibrada"
         : "Atenção: reavalie massa muscular e/ou gordura corporal";
 
-    const doc = (
-      <AvaliacaoPdfDocument
-        paciente={paciente}
-        dados={{
-          data: avaliacao.data ?? new Date().toLocaleDateString("pt-BR"),
-          pesoKg: avaliacao.pesoKg,
-          alturaM: avaliacao.alturaM,
-          pctAgua: r.pctAgua,
-          massaMagraKg: avaliacao.massaMagraKg,
-          massaGordaKg: avaliacao.massaGordaKg,
-          bfPct: r.bfPct,
-          massaMuscularEsqueleticaKg: avaliacao.massaMuscularEsqueleticaKg,
-          massaLivreGorduraKg: avaliacao.massaLivreGorduraKg,
-          taxaMetabolicaBasal: avaliacao.taxaMetabolicaBasal,
-          imme: r.imme,
-          img: r.img,
-          ffmi: r.ffmi,
-          classificacaoAgua: r.classificacoes.agua,
-          classificacaoImme: r.classificacoes.imme,
-          classificacaoImg: r.classificacoes.img,
-          imagemUrl: r.imagem.url,
-          legendaImagem,
-        }}
-        circunferencias={avaliacao.circunferencias}
-        dobras={avaliacao.dobras}
-        nutricionista={nutricionista ?? { nome: "Nutricionista", crn: "—" }}
-      />
-    );
+    const doc = React.createElement(AvaliacaoPdfDocument, {
+      paciente: {
+        nome: paciente.nome,
+        sexo: (body.sex === "F" || body.sex === "feminino") ? "F" : "M",
+        idade: Number(body.idade) || 0,
+        altura_cm: Number(body.alturaCm) || 0,
+      },
+      dados: {
+        data: new Date().toLocaleDateString("pt-BR"),
+        pesoKg: resumo.pesoKg,
+        pctAgua: resumo.pctAgua,
+        massaMagraKg: resumo.massaMagraKg,
+        massaGordaKg: resumo.massaGordaKg,
+        bfPct: resumo.bfPct,
+        imme: resumo.imme,
+        img: resumo.img,
+        ffmi: resumo.ffmi,
+        classificacaoAgua: resumo.classificacoes.agua,
+        classificacaoImme: resumo.classificacoes.imme,
+        classificacaoImg: resumo.classificacoes.img,
+        imagemUrl: resumo.imagem.url,
+        legendaImagem,
+      },
+      nutricionista,
+    });
 
     const buffer = await renderToBuffer(doc);
 
+    // 5) Enviar via Brevo
     const html = `
-      <p>Olá <strong>${escape(paciente.nome)}</strong>,</p>
-      <p>Segue em anexo sua <strong>Avaliação Física</strong>, gerada em ${escape(
-        avaliacao.data ?? new Date().toLocaleDateString("pt-BR")
-      )}.</p>
+      <p>Olá <strong>${esc(paciente.nome)}</strong>,</p>
+      <p>Segue em anexo sua <strong>Avaliação Física</strong>.</p>
       <p>Resumo:<br/>
-      • IMME: <strong>${r.imme.toFixed(2)} kg/m²</strong> (${escape(r.classificacoes.imme.label)})<br/>
-      • IMG: <strong>${r.img.toFixed(2)} kg/m²</strong> (${escape(r.classificacoes.img.label)})<br/>
-      • FFMI: <strong>${r.ffmi.toFixed(2)} kg/m²</strong><br/>
-      • % de Gordura: <strong>${r.bfPct.toFixed(1)}%</strong></p>
+      • IMME: <strong>${resumo.imme.toFixed(2)} kg/m²</strong> (${esc(resumo.classificacoes.imme.label)})<br/>
+      • IMG:  <strong>${resumo.img.toFixed(2)} kg/m²</strong> (${esc(resumo.classificacoes.img.label)})<br/>
+      • FFMI: <strong>${resumo.ffmi.toFixed(2)} kg/m²</strong><br/>
+      • % Gordura: <strong>${resumo.bfPct.toFixed(1)}%</strong><br/>
+      • % Água: <strong>${resumo.pctAgua.toFixed(1)}%</strong> (${esc(resumo.classificacoes.agua.label)})</p>
       <p>Em caso de dúvidas, entre em contato com seu nutricionista.</p>
-      <p>${escape(nutricionista?.nome ?? "")} · CRN ${escape(nutricionista?.crn ?? "")}</p>
+      <p>${esc(nutricionista.nome)} · CRN ${esc(nutricionista.crn)}</p>
     `;
 
+    const slug = slugify(paciente.nome);
+
+    const destino = paciente.email;
+    if (!destino) {
+      return NextResponse.json(
+        { ok: false, erro: "Paciente sem e-mail cadastrado" },
+        { status: 400 }
+      );
+    }
+
     await sendBrevoEmail({
-      to: [{ email: paciente.email, name: paciente.nome }],
+      to: [{ email: destino, name: paciente.nome }],
       subject: `Sua Avaliação Física — ${paciente.nome}`,
       html,
       text:
         `Olá ${paciente.nome}, segue em anexo sua Avaliação Física.\n\n` +
-        `IMME: ${r.imme.toFixed(2)} kg/m²\n` +
-        `IMG: ${r.img.toFixed(2)} kg/m²\n` +
-        `FFMI: ${r.ffmi.toFixed(2)} kg/m²\n` +
-        `% Gordura: ${r.bfPct.toFixed(1)}%\n`,
+        `IMME: ${resumo.imme.toFixed(2)} kg/m²\n` +
+        `IMG:  ${resumo.img.toFixed(2)} kg/m²\n` +
+        `FFMI: ${resumo.ffmi.toFixed(2)} kg/m²\n` +
+        `% Gordura: ${resumo.bfPct.toFixed(1)}%\n` +
+        `% Água: ${resumo.pctAgua.toFixed(1)}%\n`,
       attachments: [
-        {
-          name: `avaliacao-${slug(paciente.nome)}.pdf`,
-          contentBase64: bufferToBase64(buffer),
-        },
+        { name: `avaliacao-${slug}.pdf`, contentBase64: bufferToBase64(buffer) },
       ],
-      replyTo: nutricionista?.email
+      replyTo: nutricionista.email
         ? { email: nutricionista.email, name: nutricionista.nome }
         : undefined,
     });
 
-    return NextResponse.json({
-      ok: true,
-      mensagem: "Avaliação enviada com sucesso.",
-      resumo: r,
-    });
+    return NextResponse.json({ ok: true, mensagem: "Avaliação enviada com sucesso", resumo });
   } catch (e: any) {
     return NextResponse.json(
       { ok: false, erro: e?.message ?? "Erro desconhecido" },
@@ -160,12 +177,12 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function escape(s: string) {
+function esc(s: string) {
   return String(s ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" } as any)[c]
   );
 }
-function slug(s: string) {
+function slugify(s: string) {
   return s
     .toLowerCase()
     .normalize("NFD")

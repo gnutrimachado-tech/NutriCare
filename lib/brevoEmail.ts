@@ -1,7 +1,6 @@
 // lib/brevoEmail.ts
-// Wrapper único para envio via Brevo (API v3 /smtp/email).
-// Reusa as variáveis já usadas pelo seu projeto (BREVO_API_KEY, etc.).
-// Não usa middleware. É importado diretamente pelas rotas proxy server-side.
+// Wrapper minimalista para envio via Brevo (API v3 /smtp/email).
+// Reusa suas env vars já configuradas na Vercel.
 
 export interface BrevoAttachment {
   name: string;
@@ -25,7 +24,7 @@ export async function sendBrevoEmail(args: BrevoSendArgs) {
 
   if (!apiKey) {
     throw new Error(
-      "BREVO_API_KEY ausente. Defina em .env.local e na Vercel (Settings → Environment Variables)."
+      "BREVO_API_KEY ausente. Configure em .env.local e na Vercel (Settings → Environment Variables)."
     );
   }
 
@@ -56,7 +55,6 @@ export async function sendBrevoEmail(args: BrevoSendArgs) {
   return await resp.json().catch(() => ({}));
 }
 
-// Helper para converter um Buffer (PDF) em base64 exigido pela Brevo
 export function bufferToBase64(buf: Buffer | Uint8Array): string {
   return Buffer.from(buf).toString("base64");
 }
