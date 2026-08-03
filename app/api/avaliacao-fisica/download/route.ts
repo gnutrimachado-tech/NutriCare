@@ -91,6 +91,8 @@ export async function POST(req: NextRequest) {
         classificacaoImme: resumo.classificacoes.imme,
         classificacaoImg: resumo.classificacoes.img,
         imagemUrl: resumo.imagem.url,
+        imagemFrenteUrl: resumo.imagem.frontalUrl,
+        imagemLateralUrl: resumo.imagem.lateralUrl,
         legendaImagem,
       },
       nutricionista,

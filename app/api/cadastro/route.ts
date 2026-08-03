@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
           telefone: telefone || null,
           crn: crn || null,
           cpf: cpfLimpo,
-        },
+        } as any,
       })
 
       await (prisma as unknown as {
@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
         telefone: telefone || null,
         crn: crn || null,
         cpf: cpfLimpo || null,
-      },
+      } as any,
     })
 
     return NextResponse.json({ ok: true }, { status: 201 })
