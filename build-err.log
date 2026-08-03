@@ -1,0 +1,75 @@
+[2mLoaded Prisma config from prisma.config.ts.
+[22m
+[2mPrisma schema loaded from prisma\schema.prisma.[22m
+Turbopack build encountered 2 warnings:
+./app/api/avaliacao-fisica/download/route.ts:51:23
+[1m[31mModule not found[39m[22m: Can't resolve [32m'@react-pdf/renderer'[39m
+  [90m49 |[0m     });
+  [90m50 |[0m
+[31m[1m>[0m [90m51 |[0m     [36mconst[0m mod = [36mawait[0m [36mimport[0m([32m"@react-pdf/renderer"[0m).[36mcatch[0m(() => [36mnull[0m);
+  [90m   |[0m                       [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m52 |[0m     [36mif[0m (!mod) {
+  [90m53 |[0m       [36mreturn[0m [33mNextResponse[0m.json(
+  [90m54 |[0m         { ok: [36mfalse[0m, erro: [32m"Instale @react-pdf/renderer (npm i @react-pdf/renderer)"[0m },
+
+
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./app/api/avaliacao-fisica/enviar/route.ts:78:23
+[1m[31mModule not found[39m[22m: Can't resolve [32m'@react-pdf/renderer'[39m
+  [90m76 |[0m
+  [90m77 |[0m     [90m// 4) Gerar PDF via @react-pdf/renderer[0m
+[31m[1m>[0m [90m78 |[0m     [36mconst[0m mod = [36mawait[0m [36mimport[0m([32m"@react-pdf/renderer"[0m).[36mcatch[0m(() => [36mnull[0m);
+  [90m   |[0m                       [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m79 |[0m     [36mif[0m (!mod) {
+  [90m80 |[0m       [36mreturn[0m [33mNextResponse[0m.json(
+  [90m81 |[0m         { ok: [36mfalse[0m, erro: [32m"Instale @react-pdf/renderer (npm i @react-pdf/renderer)"[0m },
+
+
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+
+> Build error occurred
+Error: Turbopack build failed with 1 errors:
+./lib/avaliacaoPdf.tsx:9:1
+[1m[31mModule not found[39m[22m: Can't resolve [32m'@react-pdf/renderer'[39m
+  [90m 7 |[0m [90m// Aqui o JSX é livre e as rotas chamam este componente via React.createElement.[0m
+  [90m 8 |[0m
+[31m[1m>[0m [90m 9 |[0m [36mimport[0m {
+  [90m   |[0m [31m[1m^^^^^^^[0m
+[31m[1m>[0m [90m10 |[0m   [33mDocument[0m,
+  [90m   |[0m [31m[1m^^^^^^^^^^^[0m
+[31m[1m>[0m [90m11 |[0m   [33mPage[0m,
+  [90m   |[0m [31m[1m^^^^^^^[0m
+[31m[1m>[0m [90m12 |[0m   [33mText[0m,
+  [90m   |[0m [31m[1m^^^^^^^[0m
+[31m[1m>[0m [90m13 |[0m   [33mView[0m,
+  [90m   |[0m [31m[1m^^^^^^^[0m
+[31m[1m>[0m [90m14 |[0m   [33mImage[0m [36mas[0m [33mPdfImage[0m,
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^[0m
+[31m[1m>[0m [90m15 |[0m   [33mStyleSheet[0m,
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^[0m
+[31m[1m>[0m [90m16 |[0m   [33mFont[0m,
+  [90m   |[0m [31m[1m^^^^^^^[0m
+[31m[1m>[0m [90m17 |[0m } [36mfrom[0m [32m"@react-pdf/renderer"[0m;
+  [90m   |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m18 |[0m
+  [90m19 |[0m [36mlet[0m greatVibesRegistrada = [36mfalse[0m;
+  [90m20 |[0m [36mfunction[0m registrarFonteGreatVibes() {
+
+
+
+Import trace:
+  App Route:
+    ./lib/avaliacaoPdf.tsx
+    ./app/api/avaliacao-fisica/enviar/route.ts
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+    at <unknown> (./lib/avaliacaoPdf.tsx:9:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
