@@ -61,6 +61,25 @@ type CalcResult = {
   formulaLabel: string;
 };
 
+type AvaliacaoSnapshotResumo = {
+  pesoKg: number;
+  bodyFatPct: number | null;
+  massaMuscularKg: number | null;
+  massaAdiposaKg: number | null;
+  aguaPct: number | null;
+  imme: number;
+  img: number;
+  ffmi: number;
+};
+
+type AvaliacaoSnapshot = {
+  createdAt: string;
+  protocolLabel: string;
+  dobras: Partial<Record<DobraKey, string>>;
+  circunferencias: Partial<Record<CircKey, string>>;
+  resumo: AvaliacaoSnapshotResumo;
+};
+
 type ProtocolDef = {
   id: string;
   label: string;
@@ -190,6 +209,148 @@ const allCircsInitial: Record<CircKey, string> = {
   panturrilha_direita: "",
   panturrilha_esquerda: "",
 };
+
+const SHARED_ANTHRO_KEYS = new Set<string>([
+  "coxa",
+  "abdomen",
+  "peitoral",
+  "axilar_media",
+  "supra_espinhal",
+  "panturrilha",
+  "biceps",
+]);
+const DOBRA_ONLY_KEYS = new Set<string>(["subescapular", "supra_iliaca", "coxa_proximal", "tricipital"]);
+const CIRC_ONLY_KEYS = new Set<string>([
+  "pescoco",
+  "cintura",
+  "quadril",
+  "braco",
+  "biceps_direito",
+  "biceps_esquerdo",
+  "coxa_direita",
+  "coxa_esquerda",
+  "panturrilha_direita",
+  "panturrilha_esquerda",
+]);
+
+const VOICE_FIELD_ALIASES: Array<{ key: DobraKey | CircKey; aliases: string[] }> = [
+  { key: "tricipital", aliases: ["tricipital", "triceps", "tríceps", "dobra tricipital"] },
+  { key: "peitoral", aliases: ["peitoral", "torax", "tórax"] },
+  { key: "axilar_media", aliases: ["axilar media", "axilar média", "axilar", "axila media"] },
+  { key: "subescapular", aliases: ["subescapular"] },
+  { key: "abdomen", aliases: ["abdomen", "abdominal"] },
+  { key: "supra_iliaca", aliases: ["supra iliaca", "supra-iliaca", "supra ilíaca"] },
+  { key: "supra_espinhal", aliases: ["supra espinhal", "supraespinhal", "supra espinal"] },
+  { key: "coxa", aliases: ["coxa"] },
+  { key: "coxa_proximal", aliases: ["coxa proximal"] },
+  { key: "panturrilha", aliases: ["panturrilha"] },
+  { key: "biceps", aliases: ["biceps", "bíceps"] },
+  { key: "pescoco", aliases: ["pescoco", "pescoço", "cervical"] },
+  { key: "cintura", aliases: ["cintura"] },
+  { key: "quadril", aliases: ["quadril", "gluteo", "glúteo"] },
+  { key: "braco", aliases: ["braco", "braço"] },
+  { key: "biceps_direito", aliases: ["biceps direito", "bíceps direito"] },
+  { key: "biceps_esquerdo", aliases: ["biceps esquerdo", "bíceps esquerdo"] },
+  { key: "coxa_direita", aliases: ["coxa direita"] },
+  { key: "coxa_esquerda", aliases: ["coxa esquerda"] },
+  { key: "panturrilha_direita", aliases: ["panturrilha direita"] },
+  { key: "panturrilha_esquerda", aliases: ["panturrilha esquerda"] },
+];
+
+function normalizeSpeechText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\bvirgula\b/g, ",")
+    .replace(/\bponto\b/g, ".")
+    .replace(/[–—-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function detectVoiceFieldKey(transcript: string): DobraKey | CircKey | null {
+  for (const field of VOICE_FIELD_ALIASES) {
+    if (field.aliases.some((alias) => transcript.includes(alias))) return field.key;
+  }
+  return null;
+}
+
+function extractVoiceValue(transcript: string) {
+  const match = transcript.match(/(\d+(?:[.,]\d+)?)/);
+  return match ? normalizeDecimalInput(match[1]) : null;
+}
+
+function resolveVoiceDestination(args: {
+  transcript: string;
+  key: DobraKey | CircKey;
+  value: string;
+  requiredDobras: DobraKey[];
+  requiredCircs: CircKey[];
+}) {
+  const { transcript, key, value, requiredDobras, requiredCircs } = args;
+  if (/(circunferencia|circunferencias|perimetro|perimetros|cm|centimetro|centimetros)/.test(transcript)) return "circ" as const;
+  if (/(dobra|dobras|prega|prega cutanea|mm|milimetro|milimetros)/.test(transcript)) return "dobra" as const;
+  if (DOBRA_ONLY_KEYS.has(key)) return "dobra" as const;
+  if (CIRC_ONLY_KEYS.has(key)) return "circ" as const;
+  if (requiredDobras.includes(key as DobraKey) && !requiredCircs.includes(key as CircKey)) return "dobra" as const;
+  if (requiredCircs.includes(key as CircKey) && !requiredDobras.includes(key as DobraKey)) return "circ" as const;
+  if (!SHARED_ANTHRO_KEYS.has(key)) return "circ" as const;
+
+  const numericValue = Number(value.replace(",", "."));
+  return numericValue > 25 ? "circ" as const : "dobra" as const;
+}
+
+function filterNumericEntries<T extends string>(values: Record<T, string>) {
+  const out: Partial<Record<T, string>> = {};
+  (Object.keys(values) as T[]).forEach((key) => {
+    if (parsePtNumber(values[key]) > 0) out[key] = normalizeDecimalInput(values[key]);
+  });
+  return out;
+}
+
+function parseSnapshotValues(values?: Record<string, string>) {
+  const out: Record<string, number> = {};
+  Object.entries(values ?? {}).forEach(([key, value]) => {
+    const n = parsePtNumber(String(value ?? ""));
+    if (n > 0) out[key] = n;
+  });
+  return out;
+}
+
+function formatMetric(value: number | null, suffix = "") {
+  if (value === null || !Number.isFinite(value)) return "—";
+  return `${value.toFixed(1).replace(".", ",")}${suffix}`;
+}
+
+function metricClassColor(kind: "musculo" | "gordura") {
+  return kind === "musculo"
+    ? { iconBg: "#ecfdf5", icon: "#16a34a", border: "#dcfce7", text: "#16a34a" }
+    : { iconBg: "#fff7ed", icon: "#d97706", border: "#fed7aa", text: "#d97706" };
+}
+
+function parseSnapshot(raw: string | null): AvaliacaoSnapshot | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed as AvaliacaoSnapshot;
+  } catch {
+    return null;
+  }
+}
+
+function parseStorageFloat(value: unknown) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function getSnapshotDateLabel(value?: string) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("pt-BR");
+}
 
 function parsePtNumber(value: string) {
   if (!value) return 0;
@@ -629,6 +790,14 @@ export default function AntropometriaLayout({
   // Só muda quando o nutri edita/apaga; nada é apagado automaticamente.
   // ==============================
   const antroHydratedRef = useRef(false);
+  const recognitionRef = useRef<any>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState(
+    "Toque no microfone e diga algo como: dobra tricipital 12 ou circunferência cintura 85."
+  );
+  const [lastVoiceEntry, setLastVoiceEntry] = useState("");
+  const [compararResultados, setCompararResultados] = useState(false);
+  const [avaliacaoAnterior, setAvaliacaoAnterior] = useState<AvaliacaoSnapshot | null>(null);
 
   useEffect(() => {
     if (!pacienteId) {
@@ -673,6 +842,12 @@ export default function AntropometriaLayout({
       // ignore
     }
   }, [pacienteId, protocolId, dobras, circunferencias]);
+
+  useEffect(() => {
+    if (!pacienteId) return;
+    const snapshot = parseSnapshot(window.localStorage.getItem(`nutricare:avaliacao-snapshot:${pacienteId}`));
+    setAvaliacaoAnterior(snapshot);
+  }, [pacienteId]);
 
   const requiredDobras = useMemo(() => protocoloAtual?.requiredDobras ?? [], [protocoloAtual]);
   const requiredCircs = useMemo(() => protocoloAtual?.requiredCircs ?? [], [protocoloAtual]);
@@ -839,6 +1014,184 @@ export default function AntropometriaLayout({
     } as React.CSSProperties;
   }
 
+  function stopVoiceRecognition() {
+    try {
+      recognitionRef.current?.stop?.();
+    } catch {
+      // ignore
+    }
+    recognitionRef.current = null;
+    setIsListening(false);
+  }
+
+  function handleVoiceCapture() {
+    if (typeof window === "undefined") return;
+
+    const speechWindow = window as typeof window & {
+      SpeechRecognition?: new () => any;
+      webkitSpeechRecognition?: new () => any;
+    };
+
+    const SpeechRecognitionCtor =
+      speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+
+    if (!SpeechRecognitionCtor) {
+      setVoiceStatus("Seu navegador não suporta captura por voz. Use Chrome ou Edge.");
+      return;
+    }
+
+    if (isListening) {
+      stopVoiceRecognition();
+      setVoiceStatus("Captação de voz interrompida.");
+      return;
+    }
+
+    const recognition = new SpeechRecognitionCtor();
+    recognition.lang = "pt-BR";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognitionRef.current = recognition;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      setVoiceStatus('Ouvindo... diga “dobra tricipital 12” ou “circunferência cintura 85”.');
+    };
+
+    recognition.onerror = (event: { error?: string }) => {
+      const message =
+        event?.error === "not-allowed"
+          ? "Permissão do microfone negada pelo navegador."
+          : "Não consegui entender a fala. Tente novamente.";
+      recognitionRef.current = null;
+      setIsListening(false);
+      setVoiceStatus(message);
+    };
+
+    recognition.onend = () => {
+      recognitionRef.current = null;
+      setIsListening(false);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results ?? [])
+        .flatMap((result: any) => Array.from(result ?? []))
+        .map((item: any) => item?.transcript ?? "")
+        .join(" ")
+        .trim();
+
+      setLastVoiceEntry(transcript);
+
+      if (!transcript) {
+        setVoiceStatus("Não recebi nenhum comando de voz.");
+        return;
+      }
+
+      const normalizedTranscript = normalizeSpeechText(transcript);
+      const key = detectVoiceFieldKey(normalizedTranscript);
+      const value = extractVoiceValue(normalizedTranscript);
+
+      if (!key || !value) {
+        setVoiceStatus(`Não consegui identificar o campo e o valor em: “${transcript}”.`);
+        return;
+      }
+
+      const destination = resolveVoiceDestination({
+        transcript: normalizedTranscript,
+        key,
+        value,
+        requiredDobras,
+        requiredCircs,
+      });
+
+      if (destination === "dobra") {
+        onChangeDobra(key as DobraKey, value);
+        setVoiceStatus(`Dobra ${DOBRAS_LABELS[key as DobraKey]} registrada com ${value}.`);
+        return;
+      }
+
+      onChangeCirc(key as CircKey, value);
+      setVoiceStatus(`Circunferência ${CIRC_LABELS[key as CircKey]} registrada com ${value}.`);
+    };
+
+    recognition.start();
+  }
+
+  const currentDobras = useMemo(() => filterNumericEntries(dobras), [dobras]);
+  const currentCircunferencias = useMemo(() => filterNumericEntries(circunferencias), [circunferencias]);
+
+  const previousDobras = useMemo(() => parseSnapshotValues(avaliacaoAnterior?.dobras as Record<string, string> | undefined), [avaliacaoAnterior]);
+  const previousCircunferencias = useMemo(() => parseSnapshotValues(avaliacaoAnterior?.circunferencias as Record<string, string> | undefined), [avaliacaoAnterior]);
+
+  function buildCurrentSnapshot(): AvaliacaoSnapshot {
+    return {
+      createdAt: new Date().toISOString(),
+      protocolLabel: protocoloAtual?.label ?? "",
+      dobras: currentDobras,
+      circunferencias: currentCircunferencias,
+      resumo: {
+        pesoKg,
+        bodyFatPct: result.bodyFatPct,
+        massaMuscularKg: result.massaMuscular,
+        massaAdiposaKg: result.massaAdiposa,
+        aguaPct: aguaCorporalPct,
+        imme: immeVal,
+        img: imgVal,
+        ffmi: ffmiVal,
+      },
+    };
+  }
+
+  function persistAvaliacaoSnapshot() {
+    if (!pacienteId || typeof window === "undefined") return;
+    try {
+      const snapshot = buildCurrentSnapshot();
+      window.localStorage.setItem(`nutricare:avaliacao-snapshot:${pacienteId}`, JSON.stringify(snapshot));
+      setAvaliacaoAnterior(snapshot);
+    } catch {
+      // ignore
+    }
+  }
+
+  function createAvaliacaoPayload() {
+    const snapshot = buildCurrentSnapshot();
+    return {
+      pacienteId,
+      sex: sexoCodigo,
+      idade,
+      alturaCm,
+      pesoKg,
+      bodyFatPct: result.bodyFatPct,
+      massaMuscularKg: result.massaMuscular,
+      massaAdiposaKg: result.massaAdiposa,
+      aguaPct: aguaCorporalPct,
+      protocolLabel: protocoloAtual?.label ?? "",
+      compareResults: compararResultados,
+      currentDobras: Object.fromEntries(
+        Object.entries(snapshot.dobras).map(([key, value]) => [key, parsePtNumber(String(value ?? ""))])
+      ),
+      currentCircunferencias: Object.fromEntries(
+        Object.entries(snapshot.circunferencias).map(([key, value]) => [key, parsePtNumber(String(value ?? ""))])
+      ),
+      previousDobras: compararResultados ? previousDobras : {},
+      previousCircunferencias: compararResultados ? previousCircunferencias : {},
+      previousSummary: compararResultados && avaliacaoAnterior
+        ? {
+            pesoKg: parseStorageFloat(avaliacaoAnterior.resumo?.pesoKg),
+            bodyFatPct: parseStorageFloat(avaliacaoAnterior.resumo?.bodyFatPct),
+            massaMuscularKg: parseStorageFloat(avaliacaoAnterior.resumo?.massaMuscularKg),
+            massaAdiposaKg: parseStorageFloat(avaliacaoAnterior.resumo?.massaAdiposaKg),
+            aguaPct: parseStorageFloat(avaliacaoAnterior.resumo?.aguaPct),
+            imme: parseStorageFloat(avaliacaoAnterior.resumo?.imme),
+            img: parseStorageFloat(avaliacaoAnterior.resumo?.img),
+            ffmi: parseStorageFloat(avaliacaoAnterior.resumo?.ffmi),
+            createdAt: avaliacaoAnterior.createdAt,
+            protocolLabel: avaliacaoAnterior.protocolLabel,
+          }
+        : null,
+    };
+  }
+
   const enviarAvaliacao = useCallback(async () => {
     if (!pacienteId) return;
     if (!result.bodyFatPct) { setAvaliacaoMsg("Calcule o % de gordura antes de enviar."); return; }
@@ -846,17 +1199,12 @@ export default function AntropometriaLayout({
     try {
       const r = await fetch("/api/avaliacao-fisica/enviar", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pacienteId, sex: sexoCodigo, idade, alturaCm, pesoKg,
-          bodyFatPct: result.bodyFatPct,
-          massaMuscularKg: result.massaMuscular,
-          massaAdiposaKg: result.massaAdiposa,
-          aguaPct: aguaCorporalPct,
-        }),
+        body: JSON.stringify(createAvaliacaoPayload()),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || j?.ok === false) throw new Error(j?.erro ?? `Erro HTTP ${r.status}`);
-      setAvaliacaoMsg("Avaliação enviada ao paciente.");
+      persistAvaliacaoSnapshot();
+      setAvaliacaoMsg(j?.destino ? `Avaliação enviada para ${j.destino}.` : "Avaliação enviada ao paciente.");
     } catch (e: any) { setAvaliacaoMsg("Erro ao enviar: " + (e?.message ?? e)); }
     finally { setEnvBusy(false); }
   }, [pacienteId, sexoCodigo, idade, alturaCm, pesoKg, result.bodyFatPct, result.massaMuscular, result.massaAdiposa, aguaCorporalPct]);
@@ -868,18 +1216,13 @@ export default function AntropometriaLayout({
     try {
       const r = await fetch("/api/avaliacao-fisica/download", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pacienteId, sex: sexoCodigo, idade, alturaCm, pesoKg,
-          bodyFatPct: result.bodyFatPct,
-          massaMuscularKg: result.massaMuscular,
-          massaAdiposaKg: result.massaAdiposa,
-          aguaPct: aguaCorporalPct,
-        }),
+        body: JSON.stringify(createAvaliacaoPayload()),
       });
       if (!r.ok) {
         const j = await r.json().catch(() => ({}));
         throw new Error(j?.erro ?? `Erro HTTP ${r.status}`);
       }
+      persistAvaliacaoSnapshot();
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -909,6 +1252,24 @@ export default function AntropometriaLayout({
                 Sexo do paciente: <strong>{sexoPaciente}</strong>
               </p>
             </div>
+          </div>
+
+          <div style={voiceActionWrapStyle}>
+            <button
+              type="button"
+              onClick={handleVoiceCapture}
+              style={{
+                ...voiceButtonStyle,
+                ...(isListening ? voiceButtonActiveStyle : {}),
+              }}
+            >
+              <span style={voiceButtonIconStyle}>{isListening ? "◉" : "🎤"}</span>
+              <span>{isListening ? "Ouvindo agora" : "Nutri por voz"}</span>
+            </button>
+            <div style={voiceHelpStyle}>{voiceStatus}</div>
+            {lastVoiceEntry && (
+              <div style={voiceTranscriptStyle}>Último comando: “{lastVoiceEntry}”</div>
+            )}
           </div>
 
           <div style={selectWrapStyle}>
@@ -1086,29 +1447,11 @@ export default function AntropometriaLayout({
             <div style={resultItemStyle}>
               <div style={resultIconRed}>◉</div>
               <div>
-                <div style={resultTitleRed}>% de gordura</div>
+                <div style={resultTitleRed}>% de Gordura</div>
                 <div style={resultValueRedStyle}>
                   {formatPt(result.bodyFatPct, " %")}
                 </div>
               </div>
-            </div>
-          </div>
-
-          <div style={bottomMetaStyle}>
-            <div style={metaPillStyle}>
-              Densidade corporal: <strong>{formatPt(result.density)}</strong>
-            </div>
-
-            <div style={metaPillStyle}>
-              Peso: <strong>{formatPt(pesoKg, " kg")}</strong>
-            </div>
-
-            <div style={metaPillStyle}>
-              Altura: <strong>{formatPt(alturaCm, " cm")}</strong>
-            </div>
-
-            <div style={metaPillStyle}>
-              Idade: <strong>{idade || 0} anos</strong>
             </div>
           </div>
 
@@ -1119,88 +1462,75 @@ export default function AntropometriaLayout({
             </div>
           )}
         </div>
-
-        {/* ÁGUA CORPORAL + VO2 MAX — lado a lado */}
-        <div style={metricPairGridStyle}>
-          {/* ÁGUA CORPORAL — Fórmula de Watson */}
-          <div style={{ ...resultCardStyle, ...metricPairCardStyle, margin: 0 }}>
-            <div style={resultHeaderStyle}>
-              <div style={headerBlockStyle}>
-                <div style={iconBubbleBlue}>💧</div>
-                <div>
-                  <h3 style={sectionTitleStyle}>% de água corporal</h3>
-                  <p style={subTitleStyle}>
-                    Fórmula de Watson ({sexoPaciente})
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div style={vo2ResultRowStyle}>
-              <div
-                style={{
-                  ...vo2ResultBoxStyle,
-                  background: '#eff6ff',
-                  border: '1px solid #dbeafe',
-                }}
-              >
-                <div style={vo2ResultLabelStyle}>% de água corporal</div>
-                <div style={{ ...vo2ResultValueStyle, color: '#2563eb', fontSize: 32 }}>
-                  {aguaCorporalPct !== null ? formatPt(aguaCorporalPct, " %") : "—"}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* VO2 MAX - Jack Daniels */}
-          <VO2MaxJackDaniels sexoPaciente={sexoPaciente} pacienteId={pacienteId} />
-        </div>
-
-        {/* CARD EXTRAS: IMME / IMG / FFMI / % de agua classificada */}
-        {immeClass && imgClass && aguaClass ? (
+        {immeClass && imgClass ? (
           <div style={avaliacaoExtrasCardStyle}>
             <div style={headerBlockStyle}>
-              <div style={iconBubblePurple}></div>
+              <div style={iconBubblePurple}>🏆</div>
               <div>
-                <h3 style={avaliacaoExtrasTitleStyle}>
-                  Composicao corporal (referencias)
-                </h3>
+                <h3 style={avaliacaoExtrasTitleStyle}>Resultados</h3>
                 <p style={avaliacaoExtrasSubtitleStyle}>
-                  IMME / IMG / FFMI - conforme tabelas anexas
+                  Resultados calculados a partir do protocolo selecionado
                 </p>
               </div>
             </div>
 
-            <div style={avaliacaoExtrasGridStyle}>
-              <div style={avaliacaoExtraItemStyle}>
-                <span style={avaliacaoExtraRotuloStyle}>IMME (musculo esqueletico)</span>
-                <span style={avaliacaoExtraValorStyle}>{formatPt(immeVal, " kg/m2")}</span>
-                <span style={classifPill(immeClass)}>* {immeClass.label}</span>
+            <div style={resultsGridStyle}>
+              <div style={{ ...resultItemStyle, border: "1px solid #dcfce7" }}>
+                <div style={{ ...resultIconGreen, background: metricClassColor("musculo").iconBg, color: metricClassColor("musculo").icon }}>●</div>
+                <div>
+                  <div style={{ ...resultTitleGreen, color: metricClassColor("musculo").text }}>Músculo Esquelético</div>
+                  <div style={resultValueStyle}>{formatPt(immeVal, " kg/m²")}</div>
+                </div>
               </div>
-              <div style={avaliacaoExtraItemStyle}>
-                <span style={avaliacaoExtraRotuloStyle}>IMG (indice massa gorda)</span>
-                <span style={avaliacaoExtraValorStyle}>{formatPt(imgVal, " kg/m2")}</span>
-                <span style={classifPill(imgClass)}>* {imgClass.label}</span>
+
+              <div style={{ ...resultItemStyle, border: "1px solid #fed7aa" }}>
+                <div style={{ ...resultIconOrange, background: metricClassColor("gordura").iconBg, color: metricClassColor("gordura").icon }}>●</div>
+                <div>
+                  <div style={{ ...resultTitleOrange, color: metricClassColor("gordura").text }}>Índice de Massa Gorda</div>
+                  <div style={resultValueStyle}>{formatPt(imgVal, " kg/m²")}</div>
+                </div>
               </div>
-              <div style={avaliacaoExtraItemStyle}>
-                <span style={avaliacaoExtraRotuloStyle}>FFMI</span>
-                <span style={avaliacaoExtraValorStyle}>{formatPt(ffmiVal, " kg/m2")}</span>
-                <span style={{ ...avaliacaoPillBaseStyle, backgroundColor: "#f5f3ff", color: "#7c3aed" }}>
-                  Massa livre de gordura
-                </span>
-              </div>
-              <div style={avaliacaoExtraItemStyle}>
-                <span style={avaliacaoExtraRotuloStyle}>% de agua (Watson)</span>
-                <span style={avaliacaoExtraValorStyle}>
-                  {aguaCorporalPct !== null ? formatPt(aguaCorporalPct, " %") : "-"}
-                </span>
-                <span style={classifPill(aguaClass)}>* {aguaClass.label}</span>
+
+              <div style={{ ...resultItemStyle, border: "1px solid #dcfce7" }}>
+                <div style={{ ...resultIconGreen, background: metricClassColor("musculo").iconBg, color: metricClassColor("musculo").icon }}>●</div>
+                <div>
+                  <div style={{ ...resultTitleGreen, color: metricClassColor("musculo").text }}>Massa Livre de Gordura</div>
+                  <div style={resultValueStyle}>{formatPt(ffmiVal, " kg/m²")}</div>
+                </div>
               </div>
             </div>
           </div>
         ) : null}
 
-        {/* BOTOES: Enviar Avaliacao Fisica / Download PDF */}
+        {/* ÁGUA CORPORAL + VO2 MAX — lado a lado */}
+        <div style={metricPairGridStyle}>
+          <div style={{ ...resultCardStyle, ...metricPairCardStyle, margin: 0 }}>
+            <div style={resultHeaderStyle}>
+              <div style={headerBlockStyle}>
+                <div style={iconBubbleBlue}>💧</div>
+                <div>
+                  <h3 style={sectionTitleStyle}>% de Água corporal</h3>
+                  <p style={subTitleStyle}>Classificação automática por sexo</p>
+                </div>
+              </div>
+            </div>
+
+            <div style={vo2ResultRowStyle}>
+              <div style={{ ...vo2ResultBoxStyle, background: "#eff6ff", border: "1px solid #dbeafe" }}>
+                <div style={vo2ResultLabelStyle}>% de Água corporal</div>
+                <div style={{ ...vo2ResultValueStyle, color: "#2563eb", fontSize: 32 }}>
+                  {aguaCorporalPct !== null ? formatPt(aguaCorporalPct, " %") : "—"}
+                </div>
+                <div style={{ ...compareHintStyle, marginTop: 8 }}>
+                  {aguaClass ? `Resultado: ${aguaClass.label}` : "Resultado indisponível"}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <VO2MaxJackDaniels sexoPaciente={sexoPaciente} pacienteId={pacienteId} />
+        </div>
+
         <div style={avaliacaoBotoesWrapStyle}>
           {avaliacaoMsg ? (
             <span style={avaliacaoFeedbackStyle}>{avaliacaoMsg}</span>
@@ -1212,6 +1542,21 @@ export default function AntropometriaLayout({
             </span>
           )}
 
+          <label style={{ ...compareToggleWrapStyle, opacity: avaliacaoAnterior ? 1 : 0.6 }}>
+            <input
+              type="checkbox"
+              checked={compararResultados}
+              onChange={(e) => setCompararResultados(e.target.checked)}
+              disabled={!avaliacaoAnterior}
+            />
+            <span>Comparar resultados</span>
+            <small style={compareHintStyle}>
+              {avaliacaoAnterior
+                ? `Comparando com ${getSnapshotDateLabel(avaliacaoAnterior.createdAt)}`
+                : "Ative depois da primeira avaliação gerada"}
+            </small>
+          </label>
+
           <button
             type="button"
             onClick={enviarAvaliacao}
@@ -1221,7 +1566,7 @@ export default function AntropometriaLayout({
               ...(envBusy || !result.bodyFatPct ? avaliacaoBtnDisabled : {}),
             }}
           >
-            {envBusy ? "Enviando..." : "Enviar Avaliacao Fisica"}
+            {envBusy ? "Enviando..." : "Enviar Avaliação Física"}
           </button>
 
           <button
@@ -1406,6 +1751,14 @@ const avaliacaoBtnDisabled: React.CSSProperties = { opacity: 0.6, cursor: "not-a
 const avaliacaoFeedbackStyle: React.CSSProperties = {
   fontSize: 13, fontWeight: 600, color: "#15803d", marginRight: "auto",
 };
+const compareToggleWrapStyle: React.CSSProperties = {
+  display: "inline-flex", flexDirection: "column", gap: 4, padding: "10px 14px",
+  borderRadius: 12, border: "1px solid #e5e7eb", background: "#fff", color: "#334155",
+  fontSize: 13, fontWeight: 700,
+};
+const compareHintStyle: React.CSSProperties = {
+  fontSize: 11, color: "#64748b", fontWeight: 500,
+};
 const avaliacaoExtrasCardStyle: React.CSSProperties = {
   marginTop: 24, background: "#fff", border: "1px solid #eee7fb",
   borderRadius: 20, padding: 24,
@@ -1524,6 +1877,150 @@ const tinyTextStyle: React.CSSProperties = {
   margin: "6px 0 0 0",
   fontSize: 12,
   color: "#8b5cf6",
+};
+
+const voiceActionWrapStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
+  flex: 1,
+  minWidth: 280,
+};
+
+const voiceButtonStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 10,
+  minWidth: 220,
+  padding: "16px 20px",
+  borderRadius: 999,
+  border: "1px solid #e9d5ff",
+  background: "linear-gradient(135deg, #faf5ff, #eef2ff)",
+  color: "#6d28d9",
+  fontSize: 15,
+  fontWeight: 800,
+  cursor: "pointer",
+  boxShadow: "0 10px 24px rgba(109, 40, 217, 0.12)",
+};
+
+const voiceButtonActiveStyle: React.CSSProperties = {
+  background: "linear-gradient(135deg, #dc2626, #f97316)",
+  color: "#fff",
+  border: "1px solid transparent",
+};
+
+const voiceButtonIconStyle: React.CSSProperties = {
+  fontSize: 18,
+  lineHeight: 1,
+};
+
+const voiceHelpStyle: React.CSSProperties = {
+  textAlign: "center",
+  color: "#6b7280",
+  fontSize: 12,
+  maxWidth: 320,
+  lineHeight: 1.5,
+};
+
+const voiceTranscriptStyle: React.CSSProperties = {
+  textAlign: "center",
+  color: "#7c3aed",
+  fontSize: 12,
+  fontWeight: 600,
+  maxWidth: 320,
+  lineHeight: 1.5,
+};
+
+const selectWrapStyle: React.CSSProperties = {
+  minWidth: 320,
+  flex: 1,
+  maxWidth: 420,
+};
+
+const selectStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "16px 18px",
+  border: "1px solid #e6e8f0",
+  borderRadius: 14,
+  fontSize: 16,
+  outline: "none",
+  background: "#fff",
+  color: "#111827",
+};
+
+
+const badgeStyle: React.CSSProperties = {
+  padding: "10px 14px",
+  borderRadius: 999,
+  background: "linear-gradient(135deg, #f3e8ff, #ede9fe)",
+  color: "#7c3aed",
+  fontWeight: 700,
+  fontSize: 14,
+};
+
+const listRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 14,
+  padding: "12px 14px",
+  border: "1px solid #ede9fe",
+  borderRadius: 14,
+  marginBottom: 12,
+  background: "#fff",
+};
+
+const circRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 14,
+  padding: "10px 0",
+  borderBottom: "1px solid #f1f5f9",
+};
+
+const numberBubbleStyle: React.CSSProperties = {
+  width: 28,
+  height: 28,
+  borderRadius: "50%",
+  background: "#7c3aed",
+  color: "#fff",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: 800,
+  fontSize: 13,
+  flexShrink: 0,
+};
+
+const circIconStyle: React.CSSProperties = {
+  width: 40,
+  height: 40,
+  borderRadius: "50%",
+  background: "#eff6ff",
+  color: "#2563eb",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 14,
+  fontWeight: 700,
+  flexShrink: 0,
+};
+
+const fieldLabelStyle: React.CSSProperties = {
+  display: "block",
+  color: "#111827",
+  fontSize: 15,
+  fontWeight: 600,
+};
+
+const requiredTextStyle: React.CSSProperties = {
+  display: "block",
+  marginTop: 4,
+  color: "#8b5cf6",
+  fontSize: 12,
+  fontWeight: 600,
 };
 
 const smallInputStyle: React.CSSProperties = {

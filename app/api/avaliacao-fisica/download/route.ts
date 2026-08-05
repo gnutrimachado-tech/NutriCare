@@ -1,11 +1,3 @@
-// app/api/avaliacao-fisica/download/route.ts
-//
-// POST: gera o MESMO PDF do /enviar e devolve como attachment.
-// É o botão "Download do PDF" do nutricionista.
-//
-// IMPORTANTE: sem JSX inline (Turbopack não aceita em arquivos .ts).
-// O componente React é montado via React.createElement.
-
 import { NextRequest, NextResponse } from "next/server";
 import React from "react";
 import { getServerSession } from "next-auth";
@@ -16,9 +8,39 @@ import { resumoCompleto } from "@/lib/bodyComposition";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type BodyShape = {
+  pacienteId?: string;
+  sex?: "M" | "F" | string;
+  idade?: number;
+  alturaCm?: number;
+  pesoKg?: number;
+  bodyFatPct?: number | null;
+  massaMuscularKg?: number | null;
+  massaAdiposaKg?: number | null;
+  aguaPct?: number | null;
+  protocolLabel?: string;
+  compareResults?: boolean;
+  currentDobras?: Record<string, number>;
+  currentCircunferencias?: Record<string, number>;
+  previousDobras?: Record<string, number>;
+  previousCircunferencias?: Record<string, number>;
+  previousSummary?: {
+    pesoKg?: number | null;
+    bodyFatPct?: number | null;
+    massaMuscularKg?: number | null;
+    massaAdiposaKg?: number | null;
+    aguaPct?: number | null;
+    imme?: number | null;
+    img?: number | null;
+    ffmi?: number | null;
+    createdAt?: string | null;
+    protocolLabel?: string | null;
+  } | null;
+};
+
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as BodyShape;
     const pacienteId = body?.pacienteId;
     if (!pacienteId) {
       return NextResponse.json({ ok: false, erro: "pacienteId ausente" }, { status: 400 });
@@ -31,7 +53,7 @@ export async function POST(req: NextRequest) {
 
     const session = await getServerSession(authOptions).catch(() => null);
     const sessionNutri: any = (session as any)?.user ?? {};
-    let nutricionista = {
+    const nutricionista = {
       nome: sessionNutri?.name || "Nutricionista",
       crn: sessionNutri?.crn || "—",
       email: sessionNutri?.email,
@@ -76,6 +98,7 @@ export async function POST(req: NextRequest) {
         sexo: body.sex === "F" || body.sex === "feminino" ? "F" : "M",
         idade: Number(body.idade) || 0,
         altura_cm: Number(body.alturaCm) || 0,
+        nascimento: paciente.data_nascimento ? new Date(paciente.data_nascimento).toISOString() : null,
       },
       dados: {
         data: new Date().toLocaleDateString("pt-BR"),
@@ -94,6 +117,13 @@ export async function POST(req: NextRequest) {
         imagemFrenteUrl: resumo.imagem.frontalUrl,
         imagemLateralUrl: resumo.imagem.lateralUrl,
         legendaImagem,
+        protocolLabel: body.protocolLabel || "",
+        compareResults: Boolean(body.compareResults),
+        currentDobras: body.currentDobras || {},
+        currentCircunferencias: body.currentCircunferencias || {},
+        previousDobras: body.previousDobras || {},
+        previousCircunferencias: body.previousCircunferencias || {},
+        previousSummary: body.previousSummary || null,
       },
       nutricionista,
     });
@@ -110,10 +140,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, erro: e?.message ?? "Erro" },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, erro: e?.message ?? "Erro" }, { status: 500 });
   }
 }
 

@@ -1,24 +1,3 @@
-// app/api/avaliacao-fisica/enviar/route.ts
-//
-// POST: gera o PDF da Avaliação Física e envia ao paciente via Brevo
-// (mesmo arquivo que o botão "Download do PDF" baixa).
-//
-// Body esperado:
-//   {
-//     pacienteId: string,
-//     sexo: "M" | "F",                // derivado do cadastro
-//     idade: number,
-//     alturaCm: number,
-//     pesoKg: number,
-//     bodyFatPct:  number | null,     // calculado na tela de Antropometria
-//     massaMuscularKg: number | null, // "massa magra" = peso - massa gorda
-//     massaAdiposaKg: number | null,  // = peso * BF%
-//     aguaPct: number | null,         // Watson
-//   }
-//
-// IMPORTANTE: NÃO usa JSX aqui (Turbopack recusa JSX em arquivos .ts),
-// então o componente React é montado via React.createElement.
-
 import { NextRequest, NextResponse } from "next/server";
 import React from "react";
 import { getServerSession } from "next-auth";
@@ -30,22 +9,50 @@ import { sendBrevoEmail, bufferToBase64 } from "@/lib/brevoEmail";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type BodyShape = {
+  pacienteId?: string;
+  sex?: "M" | "F" | string;
+  idade?: number;
+  alturaCm?: number;
+  pesoKg?: number;
+  bodyFatPct?: number | null;
+  massaMuscularKg?: number | null;
+  massaAdiposaKg?: number | null;
+  aguaPct?: number | null;
+  protocolLabel?: string;
+  compareResults?: boolean;
+  currentDobras?: Record<string, number>;
+  currentCircunferencias?: Record<string, number>;
+  previousDobras?: Record<string, number>;
+  previousCircunferencias?: Record<string, number>;
+  previousSummary?: {
+    pesoKg?: number | null;
+    bodyFatPct?: number | null;
+    massaMuscularKg?: number | null;
+    massaAdiposaKg?: number | null;
+    aguaPct?: number | null;
+    imme?: number | null;
+    img?: number | null;
+    ffmi?: number | null;
+    createdAt?: string | null;
+    protocolLabel?: string | null;
+  } | null;
+};
+
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as BodyShape;
 
     const pacienteId = body?.pacienteId;
     if (!pacienteId) {
       return NextResponse.json({ ok: false, erro: "pacienteId ausente" }, { status: 400 });
     }
 
-    // 1) Buscar paciente (nome, email, sexo, dt nascimento)
     const paciente = await prisma.pacientes.findUnique({ where: { id: pacienteId } });
     if (!paciente) {
       return NextResponse.json({ ok: false, erro: "Paciente não encontrado" }, { status: 404 });
     }
 
-    // 2) Buscar nutricionista logado (CRN + nome + email)
     const session = await getServerSession(authOptions).catch(() => null);
     const sessionNutri: any = (session as any)?.user ?? {};
     let nutricionista: { nome: string; crn: string; email?: string } = {
@@ -53,28 +60,25 @@ export async function POST(req: NextRequest) {
       crn: sessionNutri?.crn || "—",
       email: sessionNutri?.email,
     };
+
     if (!sessionNutri?.crn && nutricionista.email) {
-      const nutriRow = await prisma.nutricionistas
-        .findUnique({ where: { email: nutricionista.email } })
-        .catch(() => null);
+      const nutriRow = await prisma.nutricionistas.findUnique({ where: { email: nutricionista.email } }).catch(() => null);
       if (nutriRow) {
         nutricionista = { nome: nutriRow.nome, crn: nutriRow.crn || "—", email: nutriRow.email };
       }
     }
 
-    // 3) Montar o resumo (tabelas + seleção de imagem + classificação de água)
     const resumo = resumoCompleto({
       pesoKg: Number(body.pesoKg) || 0,
       alturaCm: Number(body.alturaCm) || 0,
       idade: Number(body.idade) || 0,
-      sexo: (body.sex === "F" || body.sex === "feminino") ? "F" : "M",
+      sexo: body.sex === "F" || body.sex === "feminino" ? "F" : "M",
       pctAgua: Number(body.aguaPct) || 0,
       massaMagraKg: Number(body.massaMuscularKg) || 0,
       massaGordaKg: Number(body.massaAdiposaKg) || 0,
       bfPct: Number(body.bodyFatPct) || 0,
     });
 
-    // 4) Gerar PDF via @react-pdf/renderer
     const mod = await import("@react-pdf/renderer").catch(() => null);
     if (!mod) {
       return NextResponse.json(
@@ -100,9 +104,10 @@ export async function POST(req: NextRequest) {
     const doc = React.createElement(AvaliacaoPdfDocument, {
       paciente: {
         nome: paciente.nome,
-        sexo: (body.sex === "F" || body.sex === "feminino") ? "F" : "M",
+        sexo: body.sex === "F" || body.sex === "feminino" ? "F" : "M",
         idade: Number(body.idade) || 0,
         altura_cm: Number(body.alturaCm) || 0,
+        nascimento: paciente.data_nascimento ? new Date(paciente.data_nascimento).toISOString() : null,
       },
       dados: {
         data: new Date().toLocaleDateString("pt-BR"),
@@ -121,35 +126,37 @@ export async function POST(req: NextRequest) {
         imagemFrenteUrl: resumo.imagem.frontalUrl,
         imagemLateralUrl: resumo.imagem.lateralUrl,
         legendaImagem,
+        protocolLabel: body.protocolLabel || "",
+        compareResults: Boolean(body.compareResults),
+        currentDobras: body.currentDobras || {},
+        currentCircunferencias: body.currentCircunferencias || {},
+        previousDobras: body.previousDobras || {},
+        previousCircunferencias: body.previousCircunferencias || {},
+        previousSummary: body.previousSummary || null,
       },
       nutricionista,
     });
 
     const buffer = await renderToBuffer(doc);
 
-    // 5) Enviar via Brevo
+    const destino = paciente.email;
+    if (!destino) {
+      return NextResponse.json({ ok: false, erro: "Paciente sem e-mail cadastrado" }, { status: 400 });
+    }
+
+    const slug = slugify(paciente.nome);
     const html = `
       <p>Olá <strong>${esc(paciente.nome)}</strong>,</p>
       <p>Segue em anexo sua <strong>Avaliação Física</strong>.</p>
-      <p>Resumo:<br/>
-      • IMME: <strong>${resumo.imme.toFixed(2)} kg/m²</strong> (${esc(resumo.classificacoes.imme.label)})<br/>
-      • IMG:  <strong>${resumo.img.toFixed(2)} kg/m²</strong> (${esc(resumo.classificacoes.img.label)})<br/>
-      • FFMI: <strong>${resumo.ffmi.toFixed(2)} kg/m²</strong><br/>
-      • % Gordura: <strong>${resumo.bfPct.toFixed(1)}%</strong><br/>
-      • % Água: <strong>${resumo.pctAgua.toFixed(1)}%</strong> (${esc(resumo.classificacoes.agua.label)})</p>
+      <p><strong>Resumo principal</strong><br/>
+      • Músculo Esquelético: <strong>${resumo.imme.toFixed(2)} kg/m²</strong> (${esc(resumo.classificacoes.imme.label)})<br/>
+      • Índice de Massa Gorda: <strong>${resumo.img.toFixed(2)} kg/m²</strong> (${esc(resumo.classificacoes.img.label)})<br/>
+      • Massa Livre de Gordura: <strong>${resumo.ffmi.toFixed(2)} kg/m²</strong><br/>
+      • % de Gordura: <strong>${resumo.bfPct.toFixed(1)}%</strong><br/>
+      • % de Água corporal: <strong>${resumo.pctAgua.toFixed(1)}%</strong> (${esc(resumo.classificacoes.agua.label)})</p>
       <p>Em caso de dúvidas, entre em contato com seu nutricionista.</p>
       <p>${esc(nutricionista.nome)} · CRN ${esc(nutricionista.crn)}</p>
     `;
-
-    const slug = slugify(paciente.nome);
-
-    const destino = paciente.email;
-    if (!destino) {
-      return NextResponse.json(
-        { ok: false, erro: "Paciente sem e-mail cadastrado" },
-        { status: 400 }
-      );
-    }
 
     await sendBrevoEmail({
       to: [{ email: destino, name: paciente.nome }],
@@ -157,25 +164,20 @@ export async function POST(req: NextRequest) {
       html,
       text:
         `Olá ${paciente.nome}, segue em anexo sua Avaliação Física.\n\n` +
-        `IMME: ${resumo.imme.toFixed(2)} kg/m²\n` +
-        `IMG:  ${resumo.img.toFixed(2)} kg/m²\n` +
-        `FFMI: ${resumo.ffmi.toFixed(2)} kg/m²\n` +
-        `% Gordura: ${resumo.bfPct.toFixed(1)}%\n` +
-        `% Água: ${resumo.pctAgua.toFixed(1)}%\n`,
-      attachments: [
-        { name: `avaliacao-${slug}.pdf`, contentBase64: bufferToBase64(buffer) },
-      ],
+        `Músculo Esquelético: ${resumo.imme.toFixed(2)} kg/m²\n` +
+        `Índice de Massa Gorda: ${resumo.img.toFixed(2)} kg/m²\n` +
+        `Massa Livre de Gordura: ${resumo.ffmi.toFixed(2)} kg/m²\n` +
+        `% de Gordura: ${resumo.bfPct.toFixed(1)}%\n` +
+        `% de Água corporal: ${resumo.pctAgua.toFixed(1)}%\n`,
+      attachments: [{ name: `avaliacao-${slug}.pdf`, contentBase64: bufferToBase64(buffer) }],
       replyTo: nutricionista.email
         ? { email: nutricionista.email, name: nutricionista.nome }
         : undefined,
     });
 
-    return NextResponse.json({ ok: true, mensagem: "Avaliação enviada com sucesso", resumo });
+    return NextResponse.json({ ok: true, mensagem: "Avaliação enviada com sucesso", resumo, destino });
   } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, erro: e?.message ?? "Erro desconhecido" },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, erro: e?.message ?? "Erro desconhecido" }, { status: 500 });
   }
 }
 
@@ -184,6 +186,7 @@ function esc(s: string) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" } as any)[c]
   );
 }
+
 function slugify(s: string) {
   return s
     .toLowerCase()
