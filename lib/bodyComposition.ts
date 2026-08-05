@@ -57,6 +57,18 @@ function pegarFaixa<S extends "M" | "F">(sexo: S, idade: number, tabela: any) {
   return t.find((f: any) => idade >= f.idadeMin && idade <= f.idadeMax) ?? t[t.length - 1];
 }
 
+function classificarTrinca(kind: "baixo-bom-alto" | "baixo-bom-excesso", value: number, limite: number, bom: number): Classificacao {
+  if (kind === "baixo-bom-alto") {
+    if (value > bom) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
+    if (value >= limite) return { status: "BOM", cor: "verde", label: "Bom" };
+    return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
+  }
+
+  if (value > bom) return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
+  if (value >= limite) return { status: "BOM", cor: "verde", label: "Bom" };
+  return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
+}
+
 // Aproximação usada quando o sistema só dispõe da massa magra.
 export const FRACAO_MUSCULO_ESQUELETICO = 0.45;
 
@@ -80,27 +92,47 @@ export function calcularFFMI(massaLivreGorduraKg: number, alturaCm: number) {
 
 export function classificarIMME(imme: number, sexo: Sexo, idade: number): Classificacao {
   const f = pegarFaixa(sexo, idade, IMME_TABLE);
-  if (imme > f.bom) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
-  if (imme >= f.limite) return { status: "BOM", cor: "verde", label: "Bom" };
-  return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
+  return classificarTrinca("baixo-bom-alto", imme, f.limite, f.bom);
 }
 
 export function classificarIMG(img: number, sexo: Sexo, idade: number): Classificacao {
   const f = pegarFaixa(sexo, idade, IMG_TABLE);
-  if (img > f.bom) return { status: "ATENCAO", cor: "amarelo", label: "Atenção (Excesso)" };
-  if (img >= f.limite) return { status: "BOM", cor: "verde", label: "Bom (Eutrofia)" };
-  return { status: "ATENCAO", cor: "amarelo", label: "Atenção (Abaixo do Ideal)" };
+  return classificarTrinca("baixo-bom-excesso", img, f.limite, f.bom);
 }
 
 export function classificarAgua(pct: number, sexo: Sexo): Classificacao {
   if (sexo === "M") {
     if (pct >= 58) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
-    if (pct >= 50) return { status: "BOM", cor: "verde", label: "Bom" };
+    if (pct >= 51) return { status: "BOM", cor: "verde", label: "Bom" };
     return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
   }
 
   if (pct >= 50) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
-  if (pct >= 42) return { status: "BOM", cor: "verde", label: "Bom" };
+  if (pct >= 43) return { status: "BOM", cor: "verde", label: "Bom" };
+  return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
+}
+
+export function classificarFFMI(ffmi: number, sexo: Sexo): Classificacao {
+  if (sexo === "M") {
+    if (ffmi >= 21.5) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
+    if (ffmi >= 17.5) return { status: "BOM", cor: "verde", label: "Bom" };
+    return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
+  }
+
+  if (ffmi >= 19.0) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
+  if (ffmi >= 14.5) return { status: "BOM", cor: "verde", label: "Bom" };
+  return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
+}
+
+export function classificarPercentualGordura(bfPct: number, sexo: Sexo): Classificacao {
+  if (sexo === "M") {
+    if (bfPct <= 12) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
+    if (bfPct <= 16) return { status: "BOM", cor: "verde", label: "Bom" };
+    return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
+  }
+
+  if (bfPct <= 20) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
+  if (bfPct <= 26) return { status: "BOM", cor: "verde", label: "Bom" };
   return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
 }
 
@@ -152,6 +184,8 @@ export function resumoCompleto(input: AvaliacaoInput) {
       agua: classificarAgua(input.pctAgua, input.sexo),
       imme: classificarIMME(imme, input.sexo, input.idade),
       img: classificarIMG(img, input.sexo, input.idade),
+      ffmi: classificarFFMI(ffmi, input.sexo),
+      gordura: classificarPercentualGordura(input.bfPct, input.sexo),
     },
     imagem: {
       codigo: code,

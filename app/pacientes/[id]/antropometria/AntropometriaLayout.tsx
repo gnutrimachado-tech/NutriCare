@@ -6,6 +6,8 @@ import {
   classificarAgua,
   classificarIMME,
   classificarIMG,
+  classificarFFMI,
+  classificarPercentualGordura,
   calcularIMME,
   calcularIMG,
   calcularFFMI,
@@ -343,6 +345,44 @@ function parseSnapshot(raw: string | null): AvaliacaoSnapshot | null {
 function parseStorageFloat(value: unknown) {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+function speakVoiceConfirmation(text: string) {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  try {
+    const synth = window.speechSynthesis;
+    synth.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "pt-BR";
+    utterance.rate = 1;
+    utterance.pitch = 1.05;
+    const voices = synth.getVoices?.() ?? [];
+    const preferred = voices.find((voice) => /pt[-_]BR/i.test(voice.lang) && /(female|luciana|francisca|helena|microsoft maria|google português do brasil)/i.test(`${voice.name}`))
+      || voices.find((voice) => /pt[-_]BR/i.test(voice.lang))
+      || voices[0];
+    if (preferred) utterance.voice = preferred;
+    synth.speak(utterance);
+  } catch {
+    // ignore
+  }
+}
+
+function readStoredVO2max(pacienteId: string) {
+  if (typeof window === "undefined" || !pacienteId) return null;
+  try {
+    const raw = window.localStorage.getItem(`nutricare:antro-vo2:${pacienteId}`);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    const distancia = Number(String(data?.distancia ?? "").replace(",", "."));
+    const tempo = Number(String(data?.tempo ?? "").replace(",", "."));
+    if (!(distancia > 0) || !(tempo > 0)) return null;
+    const v = distancia / tempo;
+    const valor = -4.6 + 0.182258 * v + 0.000104 * v * v;
+    if (!Number.isFinite(valor) || valor <= 0) return null;
+    return Math.round(valor * 10) / 10;
+  } catch {
+    return null;
+  }
 }
 
 function getSnapshotDateLabel(value?: string) {
@@ -791,11 +831,14 @@ export default function AntropometriaLayout({
   // ==============================
   const antroHydratedRef = useRef(false);
   const recognitionRef = useRef<any>(null);
+  const voiceKeepAliveRef = useRef(false);
+  const voiceFlashTimerRef = useRef<number | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState(
-    "Toque no microfone e diga algo como: dobra tricipital 12 ou circunferência cintura 85."
+    "Toque no microfone para ativar o registro de voz e diga algo como: dobra tricipital 12 ou circunferência cintura 85."
   );
   const [lastVoiceEntry, setLastVoiceEntry] = useState("");
+  const [highlightedVoiceField, setHighlightedVoiceField] = useState<string | null>(null);
   const [compararResultados, setCompararResultados] = useState(false);
   const [avaliacaoAnterior, setAvaliacaoAnterior] = useState<AvaliacaoSnapshot | null>(null);
 
@@ -969,15 +1012,23 @@ export default function AntropometriaLayout({
     };
   }, []);
 
-  function onChangeDobra(key: DobraKey, value: string) {
-    setDobras((prev) => ({ ...prev, [key]: normalizeDecimalInput(value) }));
+  function flashVoiceField(fieldKey: string) {
+    setHighlightedVoiceField(fieldKey);
+    if (voiceFlashTimerRef.current) window.clearTimeout(voiceFlashTimerRef.current);
+    voiceFlashTimerRef.current = window.setTimeout(() => setHighlightedVoiceField(null), 5000);
   }
 
-  function onChangeCirc(key: CircKey, value: string) {
+  function onChangeDobra(key: DobraKey, value: string, options?: { flash?: boolean }) {
+    setDobras((prev) => ({ ...prev, [key]: normalizeDecimalInput(value) }));
+    if (options?.flash) flashVoiceField(`dobra:${key}`);
+  }
+
+  function onChangeCirc(key: CircKey, value: string, options?: { flash?: boolean }) {
     setCircunferencias((prev) => ({
       ...prev,
       [key]: normalizeDecimalInput(value),
     }));
+    if (options?.flash) flashVoiceField(`circ:${key}`);
   }
 
     // =================== IMME / IMG / FFMI / % de agua ===================
@@ -997,8 +1048,11 @@ export default function AntropometriaLayout({
       ? calcularFFMI(result.massaMuscular, alturaCm) : 0;
   const immeClass = immeVal > 0 ? classificarIMME(immeVal, sexoCodigo, idade) : null;
   const imgClass  = imgVal  > 0 ? classificarIMG(imgVal,  sexoCodigo, idade) : null;
+  const ffmiClass = ffmiVal > 0 ? classificarFFMI(ffmiVal, sexoCodigo) : null;
+  const gorduraClass = result.bodyFatPct !== null ? classificarPercentualGordura(result.bodyFatPct, sexoCodigo) : null;
   const aguaClass =
     aguaCorporalPct !== null ? classificarAgua(aguaCorporalPct, sexoCodigo) : null;
+  const vo2maxAtual = pacienteId ? readStoredVO2max(pacienteId) : null;
 
   // =================== BOTOES: Enviar / Download PDF ====================
   const [avaliacaoMsg, setAvaliacaoMsg] = useState<string | null>(null);
@@ -1015,6 +1069,7 @@ export default function AntropometriaLayout({
   }
 
   function stopVoiceRecognition() {
+    voiceKeepAliveRef.current = false;
     try {
       recognitionRef.current?.stop?.();
     } catch {
@@ -1022,6 +1077,7 @@ export default function AntropometriaLayout({
     }
     recognitionRef.current = null;
     setIsListening(false);
+    setVoiceStatus("Registro por voz desativado.");
   }
 
   function handleVoiceCapture() {
@@ -1042,79 +1098,92 @@ export default function AntropometriaLayout({
 
     if (isListening) {
       stopVoiceRecognition();
-      setVoiceStatus("Captação de voz interrompida.");
       return;
     }
 
-    const recognition = new SpeechRecognitionCtor();
-    recognition.lang = "pt-BR";
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-    recognitionRef.current = recognition;
+    voiceKeepAliveRef.current = true;
 
-    recognition.onstart = () => {
-      setIsListening(true);
-      setVoiceStatus('Ouvindo... diga “dobra tricipital 12” ou “circunferência cintura 85”.');
+    const startRecognition = () => {
+      if (!voiceKeepAliveRef.current) return;
+      const recognition = new SpeechRecognitionCtor();
+      recognition.lang = "pt-BR";
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognitionRef.current = recognition;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        setVoiceStatus('Registro por voz ativo. Diga algo como “axilar média 45” ou “circunferência cintura 85”.');
+      };
+
+      recognition.onerror = (event: { error?: string }) => {
+        if (event?.error === "aborted") return;
+        const message =
+          event?.error === "not-allowed"
+            ? "Permissão do microfone negada pelo navegador."
+            : "Não consegui entender a fala. Aguardo o próximo registro.";
+        setVoiceStatus(message);
+      };
+
+      recognition.onend = () => {
+        recognitionRef.current = null;
+        if (!voiceKeepAliveRef.current) {
+          setIsListening(false);
+          return;
+        }
+        window.setTimeout(() => startRecognition(), 180);
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = Array.from(event.results ?? [])
+          .flatMap((result: any) => Array.from(result ?? []))
+          .map((item: any) => item?.transcript ?? "")
+          .join(" ")
+          .trim();
+
+        setLastVoiceEntry(transcript);
+
+        if (!transcript) {
+          setVoiceStatus("Não recebi nenhum comando de voz.");
+          return;
+        }
+
+        const normalizedTranscript = normalizeSpeechText(transcript);
+        const key = detectVoiceFieldKey(normalizedTranscript);
+        const value = extractVoiceValue(normalizedTranscript);
+
+        if (!key || !value) {
+          setVoiceStatus(`Não consegui identificar o campo e o valor em: “${transcript}”.`);
+          return;
+        }
+
+        const destination = resolveVoiceDestination({
+          transcript: normalizedTranscript,
+          key,
+          value,
+          requiredDobras,
+          requiredCircs,
+        });
+
+        if (destination === "dobra") {
+          const label = DOBRAS_LABELS[key as DobraKey];
+          onChangeDobra(key as DobraKey, value, { flash: true });
+          setVoiceStatus(`Dobra ${label} ${value} registrada. Aguardando o próximo registro.`);
+          speakVoiceConfirmation(`${label} ${value} registrado. Aguardo o próximo registro.`);
+          return;
+        }
+
+        const label = CIRC_LABELS[key as CircKey];
+        onChangeCirc(key as CircKey, value, { flash: true });
+        setVoiceStatus(`Circunferência ${label} ${value} registrada. Aguardando o próximo registro.`);
+        speakVoiceConfirmation(`${label} ${value} registrado. Aguardo o próximo registro.`);
+      };
+
+      recognition.start();
     };
 
-    recognition.onerror = (event: { error?: string }) => {
-      const message =
-        event?.error === "not-allowed"
-          ? "Permissão do microfone negada pelo navegador."
-          : "Não consegui entender a fala. Tente novamente.";
-      recognitionRef.current = null;
-      setIsListening(false);
-      setVoiceStatus(message);
-    };
-
-    recognition.onend = () => {
-      recognitionRef.current = null;
-      setIsListening(false);
-    };
-
-    recognition.onresult = (event: any) => {
-      const transcript = Array.from(event.results ?? [])
-        .flatMap((result: any) => Array.from(result ?? []))
-        .map((item: any) => item?.transcript ?? "")
-        .join(" ")
-        .trim();
-
-      setLastVoiceEntry(transcript);
-
-      if (!transcript) {
-        setVoiceStatus("Não recebi nenhum comando de voz.");
-        return;
-      }
-
-      const normalizedTranscript = normalizeSpeechText(transcript);
-      const key = detectVoiceFieldKey(normalizedTranscript);
-      const value = extractVoiceValue(normalizedTranscript);
-
-      if (!key || !value) {
-        setVoiceStatus(`Não consegui identificar o campo e o valor em: “${transcript}”.`);
-        return;
-      }
-
-      const destination = resolveVoiceDestination({
-        transcript: normalizedTranscript,
-        key,
-        value,
-        requiredDobras,
-        requiredCircs,
-      });
-
-      if (destination === "dobra") {
-        onChangeDobra(key as DobraKey, value);
-        setVoiceStatus(`Dobra ${DOBRAS_LABELS[key as DobraKey]} registrada com ${value}.`);
-        return;
-      }
-
-      onChangeCirc(key as CircKey, value);
-      setVoiceStatus(`Circunferência ${CIRC_LABELS[key as CircKey]} registrada com ${value}.`);
-    };
-
-    recognition.start();
+    startRecognition();
   }
 
   const currentDobras = useMemo(() => filterNumericEntries(dobras), [dobras]);
@@ -1166,6 +1235,7 @@ export default function AntropometriaLayout({
       massaAdiposaKg: result.massaAdiposa,
       aguaPct: aguaCorporalPct,
       protocolLabel: protocoloAtual?.label ?? "",
+      vo2max: vo2maxAtual,
       compareResults: compararResultados,
       currentDobras: Object.fromEntries(
         Object.entries(snapshot.dobras).map(([key, value]) => [key, parsePtNumber(String(value ?? ""))])
@@ -1264,7 +1334,7 @@ export default function AntropometriaLayout({
               }}
             >
               <span style={voiceButtonIconStyle}>{isListening ? "◉" : "🎤"}</span>
-              <span>{isListening ? "Ouvindo agora" : "Nutri por voz"}</span>
+              <span>Registro por voz</span>
             </button>
             <div style={voiceHelpStyle}>{voiceStatus}</div>
             {lastVoiceEntry && (
@@ -1321,7 +1391,7 @@ export default function AntropometriaLayout({
                       placeholder="0,0"
                       value={dobras[key]}
                       onChange={(e) => onChangeDobra(key, e.target.value)}
-                      style={smallInputStyle}
+                      style={{ ...smallInputStyle, ...(highlightedVoiceField === `dobra:${key}` ? voiceFieldFlashStyle : {}) }}
                     />
                   </div>
                 ))
@@ -1385,7 +1455,7 @@ export default function AntropometriaLayout({
                       placeholder="0,0"
                       value={circunferencias[key]}
                       onChange={(e) => onChangeCirc(key, e.target.value)}
-                      style={smallInputStyle}
+                      style={{ ...smallInputStyle, ...(highlightedVoiceField === `circ:${key}` ? voiceFieldFlashStyle : {}) }}
                     />
                   </div>
                 );
@@ -1423,7 +1493,7 @@ export default function AntropometriaLayout({
           </div>
 
           <div style={resultsGridStyle}>
-            <div style={resultItemStyle}>
+            <div style={{ ...resultItemStyle, border: "1px solid #dcfce7" }}>
               <div style={resultIconGreen}>💪</div>
               <div>
                 <div style={resultTitleGreen}>Massa muscular</div>
@@ -1434,8 +1504,8 @@ export default function AntropometriaLayout({
               </div>
             </div>
 
-            <div style={resultItemStyle}>
-              <div style={resultIconOrange}>◉</div>
+            <div style={{ ...resultItemStyle, border: "1px solid #fed7aa" }}>
+              <div style={resultIconOrange}>🟠</div>
               <div>
                 <div style={resultTitleOrange}>Massa adiposa</div>
                 <div style={resultValueStyle}>
@@ -1444,8 +1514,8 @@ export default function AntropometriaLayout({
               </div>
             </div>
 
-            <div style={resultItemStyle}>
-              <div style={resultIconRed}>◉</div>
+            <div style={{ ...resultItemStyle, border: "1px solid #fed7aa" }}>
+              <div style={resultIconOrange}>🔥</div>
               <div>
                 <div style={resultTitleRed}>% de Gordura</div>
                 <div style={resultValueRedStyle}>
@@ -1476,7 +1546,7 @@ export default function AntropometriaLayout({
 
             <div style={resultsGridStyle}>
               <div style={{ ...resultItemStyle, border: "1px solid #dcfce7" }}>
-                <div style={{ ...resultIconGreen, background: metricClassColor("musculo").iconBg, color: metricClassColor("musculo").icon }}>●</div>
+                <div style={{ ...resultIconGreen, background: metricClassColor("musculo").iconBg, color: metricClassColor("musculo").icon }}>🏋️</div>
                 <div>
                   <div style={{ ...resultTitleGreen, color: metricClassColor("musculo").text }}>Músculo Esquelético</div>
                   <div style={resultValueStyle}>{formatPt(immeVal, " kg/m²")}</div>
@@ -1484,7 +1554,7 @@ export default function AntropometriaLayout({
               </div>
 
               <div style={{ ...resultItemStyle, border: "1px solid #fed7aa" }}>
-                <div style={{ ...resultIconOrange, background: metricClassColor("gordura").iconBg, color: metricClassColor("gordura").icon }}>●</div>
+                <div style={{ ...resultIconOrange, background: metricClassColor("gordura").iconBg, color: metricClassColor("gordura").icon }}>📏</div>
                 <div>
                   <div style={{ ...resultTitleOrange, color: metricClassColor("gordura").text }}>Índice de Massa Gorda</div>
                   <div style={resultValueStyle}>{formatPt(imgVal, " kg/m²")}</div>
@@ -1492,7 +1562,7 @@ export default function AntropometriaLayout({
               </div>
 
               <div style={{ ...resultItemStyle, border: "1px solid #dcfce7" }}>
-                <div style={{ ...resultIconGreen, background: metricClassColor("musculo").iconBg, color: metricClassColor("musculo").icon }}>●</div>
+                <div style={{ ...resultIconGreen, background: metricClassColor("musculo").iconBg, color: metricClassColor("musculo").icon }}>🧩</div>
                 <div>
                   <div style={{ ...resultTitleGreen, color: metricClassColor("musculo").text }}>Massa Livre de Gordura</div>
                   <div style={resultValueStyle}>{formatPt(ffmiVal, " kg/m²")}</div>
@@ -1907,7 +1977,7 @@ const voiceButtonStyle: React.CSSProperties = {
 };
 
 const voiceButtonActiveStyle: React.CSSProperties = {
-  background: "linear-gradient(135deg, #dc2626, #f97316)",
+  background: "linear-gradient(135deg, #16a34a, #15803d)",
   color: "#fff",
   border: "1px solid transparent",
 };
@@ -1927,10 +1997,10 @@ const voiceHelpStyle: React.CSSProperties = {
 
 const voiceTranscriptStyle: React.CSSProperties = {
   textAlign: "center",
-  color: "#7c3aed",
+  color: "#16a34a",
   fontSize: 12,
-  fontWeight: 600,
-  maxWidth: 320,
+  fontWeight: 700,
+  maxWidth: 360,
   lineHeight: 1.5,
 };
 
@@ -2031,6 +2101,12 @@ const smallInputStyle: React.CSSProperties = {
   fontSize: 15,
   textAlign: "center",
   outline: "none",
+  transition: "all 0.2s ease",
+};
+
+const voiceFieldFlashStyle: React.CSSProperties = {
+  border: "1px solid #86efac",
+  boxShadow: "0 0 0 4px rgba(134, 239, 172, 0.25)",
 };
 
 const resultsGridStyle: React.CSSProperties = {

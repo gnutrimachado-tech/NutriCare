@@ -19,6 +19,7 @@ type BodyShape = {
   massaMuscularKg?: number | null;
   massaAdiposaKg?: number | null;
   aguaPct?: number | null;
+  vo2max?: number | null;
   protocolLabel?: string;
   compareResults?: boolean;
   currentDobras?: Record<string, number>;
@@ -31,6 +32,7 @@ type BodyShape = {
     massaMuscularKg?: number | null;
     massaAdiposaKg?: number | null;
     aguaPct?: number | null;
+  vo2max?: number | null;
     imme?: number | null;
     img?: number | null;
     ffmi?: number | null;
@@ -119,9 +121,12 @@ export async function POST(req: NextRequest) {
         imme: resumo.imme,
         img: resumo.img,
         ffmi: resumo.ffmi,
+        vo2max: body.vo2max ?? null,
         classificacaoAgua: resumo.classificacoes.agua,
         classificacaoImme: resumo.classificacoes.imme,
         classificacaoImg: resumo.classificacoes.img,
+        classificacaoFfmi: resumo.classificacoes.ffmi,
+        classificacaoGordura: resumo.classificacoes.gordura,
         imagemUrl: resumo.imagem.url,
         imagemFrenteUrl: resumo.imagem.frontalUrl,
         imagemLateralUrl: resumo.imagem.lateralUrl,
@@ -169,7 +174,7 @@ export async function POST(req: NextRequest) {
         `Massa Livre de Gordura: ${resumo.ffmi.toFixed(2)} kg/m²\n` +
         `% de Gordura: ${resumo.bfPct.toFixed(1)}%\n` +
         `% de Água corporal: ${resumo.pctAgua.toFixed(1)}%\n`,
-      attachments: [{ name: `avaliacao-${slug}.pdf`, contentBase64: bufferToBase64(buffer) }],
+      attachments: [{ name: `avaliacao-${slug}.pdf`, content: bufferToBase64(buffer) }],
       replyTo: nutricionista.email
         ? { email: nutricionista.email, name: nutricionista.nome }
         : undefined,

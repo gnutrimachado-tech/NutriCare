@@ -4,7 +4,7 @@
 
 export interface BrevoAttachment {
   name: string;
-  contentBase64: string;
+  content: string;
 }
 
 export interface BrevoSendArgs {
