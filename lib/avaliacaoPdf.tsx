@@ -728,4 +728,110 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 </View>
                 <View style={styles.metricLine}>
                   <Text style={styles.metricLabel}>Massa Magra</Text>
-                  <Text style={styles.metr
+                  <Text style={styles.metricValue}>{toFixedPt(dados.massaMagraKg)} kg</Text>
+                  <Text style={styles.metricStatus}>-</Text>
+                </View>
+                <View style={styles.metricLine}>
+                  <Text style={styles.metricLabel}>Massa Gorda</Text>
+                  <Text style={styles.metricValue}>{toFixedPt(dados.massaGordaKg)} kg</Text>
+                  <Text style={styles.metricStatus}>-</Text>
+                </View>
+                <View style={styles.metricLine}>
+                  <Text style={styles.metricLabel}>% de Gordura Corporal</Text>
+                  <Text style={styles.metricValue}>{toFixedPt(dados.bfPct)}%</Text>
+                  <Text style={styles.metricStatus}>{dados.legendaImagem || "-"}</Text>
+                </View>
+
+                <View style={styles.miniCardsWrap}>
+                  <View style={styles.miniCardOrange}>
+                    <Text style={styles.miniCardTitleOrange}>Índice de Massa Gorda</Text>
+                    <Text style={styles.miniCardValue}>{toFixedPt(dados.img, 2)} kg/m²</Text>
+                    <Text style={styles.miniCardStatus}>{dados.classificacaoImg?.label || "Resultado"}</Text>
+                  </View>
+                  <View style={styles.miniCardGreen}>
+                    <Text style={styles.miniCardTitleGreen}>Músculo Esquelético</Text>
+                    <Text style={styles.miniCardValue}>{toFixedPt(dados.imme, 2)} kg/m²</Text>
+                    <Text style={styles.miniCardStatus}>{dados.classificacaoImme?.label || "Resultado"}</Text>
+                  </View>
+                  <View style={styles.miniCardGreen}>
+                    <Text style={styles.miniCardTitleGreen}>Massa Livre de Gordura</Text>
+                    <Text style={styles.miniCardValue}>{toFixedPt(dados.ffmi, 2)} kg/m²</Text>
+                    <Text style={styles.miniCardStatus}>Resultado</Text>
+                  </View>
+                  <View style={styles.miniCardOrange}>
+                    <Text style={styles.miniCardTitleOrange}>VO2max — (corredores)</Text>
+                    <Text style={styles.miniCardValue}>{dados.vo2max !== null && dados.vo2max !== undefined ? `${toFixedPt(dados.vo2max)} ml/kg/min` : "-"}</Text>
+                    <Text style={styles.miniCardStatus}>{dados.vo2ClassLabel || "Resultado"}</Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.compositionRight}>{frente ? <Image src={frente} style={styles.bodyFront} /> : null}</View>
+            </View>
+          </View>
+
+          <View style={[styles.card, styles.topCard]}>
+            <Text style={styles.cardTitle}>Evolução</Text>
+            <View style={styles.legendRow}>
+              <View style={styles.legendItem}>
+                <View style={styles.legendWeight} />
+                <Text style={styles.legendText}>Peso (kg)</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={styles.legendFat} />
+                <Text style={styles.legendText}>% Gordura</Text>
+              </View>
+            </View>
+            {chartContent(dados.pesoKg, dados.bfPct, compare ? dados.previousSummary : null)}
+            {!compare ? (
+              <View style={styles.evolutionMsgWrap}>
+                <View style={styles.redDot} />
+                <Text style={styles.evolutionMsg}>{firstEvolutionMsg}</Text>
+              </View>
+            ) : evolutionText ? (
+              <View style={styles.evolutionMsgWrap}>
+                <View style={styles.redDot} />
+                <Text style={styles.evolutionMsg}>{evolutionText}</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+
+        <View style={styles.row}>
+          <ComparisonTable title="Circunferências" rows={circRows} compare={compare} />
+
+          <View style={[styles.card, styles.bottomCard]}>
+            <Text style={styles.cardTitle}>Dobras</Text>
+            <View style={styles.dobrasRow}>
+              <View style={styles.dobrasTableCol}>
+                <View style={styles.tableHeader}>
+                  <Text style={styles.colLabel}>Parâmetro</Text>
+                  {compare ? <Text style={styles.colPrev}>Antes</Text> : null}
+                  <Text style={styles.colCurrent}>Atual</Text>
+                </View>
+                {dobraRows.map((row) => (
+                  <View style={styles.tableRow} key={row.key}>
+                    <Text style={styles.colLabel}>{row.label}</Text>
+                    {compare ? <Text style={styles.colPrev}>{row.anteriorTxt}</Text> : null}
+                    <Text style={styles.colCurrent}>{row.atualTxt}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.dobrasImageCol}>{lateral ? <Image src={lateral} style={styles.bodySide} /> : null}</View>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.footer}>
+          <View>
+            <Text style={styles.signatureTitle}>Nutricionista: {nutricionista?.nome || "Nutricionista"}</Text>
+            <Text style={styles.crn}>CRN: {nutricionista?.crn || "-"}</Text>
+          </View>
+          {logo ? <Image src={logo} style={styles.footerLogo} /> : <View style={styles.footerLogo} />}
+        </View>
+      </Page>
+    </Document>
+  );
+}
+
+export default AvaliacaoPdfDocument;
