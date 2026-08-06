@@ -8,7 +8,6 @@ import { resumoCompleto } from "@/lib/bodyComposition";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type BodyShape = {
   pacienteId?: string;
   sex?: "M" | "F" | string;
   idade?: number;
