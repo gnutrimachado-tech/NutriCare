@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
         `Massa Livre de Gordura: ${resumo.ffmi.toFixed(2)} kg/m²\n` +
         `% de Gordura: ${resumo.bfPct.toFixed(1)}%\n` +
         `% de Água corporal: ${resumo.pctAgua.toFixed(1)}%\n`,
-      attachments: [{ name: `avaliacao-${slug}.pdf`, contentBase64: bufferToBase64(buffer) }],
+      attachments: [{ name: `avaliacao-${slug}.pdf`, content: bufferToBase64(buffer) }],
       replyTo: nutricionista.email
         ? { email: nutricionista.email, name: nutricionista.nome }
         : undefined,
