@@ -13,6 +13,7 @@ import {
   Circle,
   Rect,
   Polyline,
+  Font,
 } from "@react-pdf/renderer";
 
 type Classificacao = {
@@ -55,11 +56,10 @@ type PdfProps = {
     img: number;
     ffmi: number;
     vo2max?: number | null;
+    vo2ClassLabel?: string | null;
     classificacaoAgua?: Classificacao;
     classificacaoImme?: Classificacao;
     classificacaoImg?: Classificacao;
-    classificacaoFfmi?: Classificacao;
-    classificacaoGordura?: Classificacao;
     imagemUrl?: string;
     imagemFrenteUrl?: string;
     imagemLateralUrl?: string;
@@ -83,32 +83,31 @@ const CIRC_LABELS: Record<string, string> = {
   pescoco: "Pescoço",
   cintura: "Cintura",
   quadril: "Quadril",
-  braco: "Braço",
-  coxa: "Coxa",
   abdomen: "Abdômen",
   peitoral: "Peitoral",
   axilar_media: "Axilar média",
   supra_espinhal: "Supra espinhal",
-  panturrilha: "Panturrilha",
   biceps: "Bíceps",
   biceps_direito: "Bíceps direito",
   biceps_esquerdo: "Bíceps esquerdo",
+  coxa: "Coxa",
   coxa_direita: "Coxa direita",
   coxa_esquerda: "Coxa esquerda",
+  panturrilha: "Panturrilha",
   panturrilha_direita: "Panturrilha direita",
   panturrilha_esquerda: "Panturrilha esquerda",
 };
 
 const DOBRAS_LABELS: Record<string, string> = {
-  peitoral: "Peitoral",
-  axilar_media: "Axilar média",
   tricipital: "Tricipital",
   subescapular: "Subescapular",
-  abdomen: "Abdominal",
+  axilar_media: "Axilar média",
   supra_iliaca: "Supra-ilíaca",
+  abdomen: "Abdominal",
   coxa: "Coxa",
   panturrilha: "Panturrilha",
   biceps: "Bíceps",
+  peitoral: "Peitoral",
   supra_espinhal: "Supra espinhal",
   coxa_proximal: "Coxa proximal",
 };
@@ -124,8 +123,10 @@ const CIRC_ORDER = [
   "biceps",
   "biceps_direito",
   "biceps_esquerdo",
+  "coxa",
   "coxa_direita",
   "coxa_esquerda",
+  "panturrilha",
   "panturrilha_direita",
   "panturrilha_esquerda",
 ] as const;
@@ -144,67 +145,31 @@ const DOBRAS_ORDER = [
   "coxa_proximal",
 ] as const;
 
+function absPublic(relPath?: string) {
+  if (!relPath) return null;
+  const clean = relPath.replace(/^\/+/, "");
+  return path.join(process.cwd(), "public", clean);
+}
+
+const greatVibesPath = absPublic("/fonts/GreatVibes-Regular.ttf");
+if (greatVibesPath && fs.existsSync(greatVibesPath)) {
+  Font.register({ family: "GreatVibes", src: greatVibesPath });
+}
+
 function toFixedPt(value: number | null | undefined, digits = 1) {
   if (value === null || value === undefined || !Number.isFinite(Number(value))) return "-";
   return Number(value).toFixed(digits).replace(".", ",");
 }
 
-function diffText(current?: number | null, previous?: number | null, unit = "kg") {
-  if (!Number.isFinite(Number(current)) || !Number.isFinite(Number(previous))) return null;
-  const delta = Number(current) - Number(previous);
-  if (Math.abs(delta) < 0.05) return null;
-  const value = `${Math.abs(delta).toFixed(1).replace(".", ",")} ${unit}`;
-  return delta < 0 ? { kind: "reduziu", value } : { kind: "ganhou", value };
-}
-
-function buildEvolutionSummary(current: PdfProps["dados"], previous?: SummarySnapshot | null) {
-  if (!previous) return "faça uma reavaliação para ver sua evolução";
-
-  const changes = [
-    { label: "de peso corporal", data: diffText(current.pesoKg, previous.pesoKg, "kg") },
-    { label: "de gordura corporal", data: diffText(current.bfPct, previous.bodyFatPct, "%") },
-    { label: "de massa muscular", data: diffText(current.massaMagraKg, previous.massaMuscularKg, "kg") },
-  ].filter((item) => item.data);
-
-  if (changes.length === 0) return "";
-
-  const reductions = changes
-    .filter((item) => item.data?.kind === "reduziu")
-    .map((item) => `você reduziu ${item.data?.value} ${item.label}`);
-
-  const gains = changes
-    .filter((item) => item.data?.kind === "ganhou")
-    .map((item) => `você ganhou ${item.data?.value} ${item.label}`);
-
-  return [...reductions, ...gains].join(" e ");
+function formatBirth(value?: string | null) {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString("pt-BR");
 }
 
 function labelSexo(sexo: "M" | "F") {
   return sexo === "F" ? "feminino" : "masculino";
-}
-
-function classifyVo2max(v?: number | null) {
-  if (!Number.isFinite(Number(v))) return null;
-  const value = Number(v);
-  if (value < 35) return "Iniciante";
-  if (value < 45) return "Recreativo treinado";
-  if (value < 55) return "Muito bom";
-  if (value < 65) return "Excelente";
-  return "Elite";
-}
-
-function colorForClassificacao(cls?: Classificacao) {
-  return cls?.cor === "amarelo" ? "#b45309" : "#166534";
-}
-
-function bgForClassificacao(cls?: Classificacao) {
-  return cls?.cor === "amarelo" ? "#fff7ed" : "#ecfdf5";
-}
-
-function absPublic(relPath?: string) {
-  if (!relPath) return null;
-  const clean = relPath.replace(/^\/+/, "");
-  return path.join(process.cwd(), "public", clean);
 }
 
 function guessMime(filePath: string) {
@@ -239,81 +204,130 @@ function resolveImagePair(dados: PdfProps["dados"], sexo: "M" | "F") {
   };
 }
 
-function formatBirth(value?: string | null) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleDateString("pt-BR");
+function hasPositive(value: number | null | undefined) {
+  return value !== null && value !== undefined && Number(value) > 0;
 }
 
-function getMeasurementRows(
+function measurementRows(
   order: readonly string[],
   labels: Record<string, string>,
   current?: MeasurementMap,
   previous?: MeasurementMap,
-  compare = false
+  compare = false,
+  unit = "cm"
 ) {
-  return order.map((key) => ({
-    key,
-    label: labels[key] || key,
-    atual: current?.[key],
-    anterior: compare ? previous?.[key] : undefined,
-  }));
+  const base = order.map((key) => {
+    const atual = current?.[key];
+    const anterior = previous?.[key];
+    return {
+      key,
+      label: labels[key] || key,
+      anterior,
+      atual,
+      anteriorTxt: hasPositive(anterior) ? `${toFixedPt(anterior)} ${unit}` : "-",
+      atualTxt: hasPositive(atual) ? `${toFixedPt(atual)} ${unit}` : "-",
+    };
+  });
+
+  return compare
+    ? base.filter((row) => hasPositive(row.anterior) || hasPositive(row.atual))
+    : base;
+}
+
+function metricDeltaSentence(dados: PdfProps["dados"], compare: boolean) {
+  if (!compare || !dados.previousSummary) return null;
+
+  const parts: string[] = [];
+  const prev = dados.previousSummary;
+
+  const diffPeso = Number(dados.pesoKg) - Number(prev.pesoKg ?? dados.pesoKg);
+  const diffGordura = Number(dados.bfPct) - Number(prev.bodyFatPct ?? dados.bfPct);
+  const diffMusculo = Number(dados.massaMagraKg) - Number(prev.massaMuscularKg ?? dados.massaMagraKg);
+
+  if (Math.abs(diffPeso) >= 0.05) {
+    parts.push(
+      diffPeso < 0
+        ? `reduziu ${toFixedPt(Math.abs(diffPeso))} kg de peso corporal`
+        : `ganhou ${toFixedPt(Math.abs(diffPeso))} kg de peso corporal`
+    );
+  }
+
+  if (Math.abs(diffGordura) >= 0.05) {
+    parts.push(
+      diffGordura < 0
+        ? `reduziu ${toFixedPt(Math.abs(diffGordura))}% de gordura corporal`
+        : `ganhou ${toFixedPt(Math.abs(diffGordura))}% de gordura corporal`
+    );
+  }
+
+  if (Math.abs(diffMusculo) >= 0.05) {
+    parts.push(
+      diffMusculo < 0
+        ? `reduziu ${toFixedPt(Math.abs(diffMusculo))} kg de massa muscular`
+        : `ganhou ${toFixedPt(Math.abs(diffMusculo))} kg de massa muscular`
+    );
+  }
+
+  if (!parts.length) return null;
+  return `Você ${parts.join(" e ")}.`;
 }
 
 function buildChartSeries(currentWeight: number, currentFat: number, previous?: SummarySnapshot | null) {
-  if (!(previous && Number(previous.pesoKg) > 0 && Number(previous.bodyFatPct) >= 0)) return [] as Array<{ label: string; weight: number; fat: number }>;
+  if (!previous || !hasPositive(previous.pesoKg) || previous.bodyFatPct === null || previous.bodyFatPct === undefined) {
+    return null;
+  }
   return [
     {
       label: previous.createdAt ? new Date(previous.createdAt).toLocaleDateString("pt-BR") : "Antes",
       weight: Number(previous.pesoKg),
       fat: Number(previous.bodyFatPct),
     },
-    { label: "Atual", weight: currentWeight, fat: currentFat },
+    {
+      label: "Atual",
+      weight: Number(currentWeight),
+      fat: Number(currentFat),
+    },
   ];
 }
 
-function toPolyline(points: Array<{ x: number; y: number }>) {
-  return points.map((point) => `${point.x},${point.y}`).join(" ");
-}
-
-function renderEvolutionChart(currentWeight: number, currentFat: number, previous?: SummarySnapshot | null) {
-  const raw = buildChartSeries(currentWeight, currentFat, previous);
-  const width = 248;
-  const height = 126;
-  const left = 24;
+function chartContent(currentWeight: number, currentFat: number, previous?: SummarySnapshot | null) {
+  const series = buildChartSeries(currentWeight, currentFat, previous);
+  const width = 250;
+  const height = 128;
+  const left = 22;
   const top = 14;
-  const chartWidth = 196;
-  const chartHeight = 74;
+  const chartWidth = 205;
+  const chartHeight = 82;
 
-  if (raw.length === 0) {
+  if (!series) {
     return (
       <Svg width={width} height={height}>
-        <Rect x={0} y={0} width={width} height={height} rx={12} ry={12} fill="#f8fafc" />
-        <Line x1={left} y1={top + chartHeight} x2={left + chartWidth} y2={top + chartHeight} stroke="#cbd5e1" strokeWidth={1} />
-        <Line x1={left} y1={top} x2={left} y2={top + chartHeight} stroke="#cbd5e1" strokeWidth={1} />
-        <Text style={{ position: "absolute", left: 68, top: 44, fontSize: 10, color: "#94a3b8" }}>
-          Sem dados anteriores para comparação
-        </Text>
+        <Rect x={0} y={0} width={width} height={height} rx={10} ry={10} fill="#f8fafc" />
+        <Line x1={left} y1={top + chartHeight} x2={left + chartWidth} y2={top + chartHeight} stroke="#d9dfd2" strokeWidth={1} />
+        <Line x1={left} y1={top} x2={left} y2={top + chartHeight} stroke="#d9dfd2" strokeWidth={1} />
+        <Line x1={left} y1={top + 20} x2={left + chartWidth} y2={top + 20} stroke="#eef2ea" strokeWidth={1} />
+        <Line x1={left} y1={top + 41} x2={left + chartWidth} y2={top + 41} stroke="#eef2ea" strokeWidth={1} />
+        <Line x1={left} y1={top + 61} x2={left + chartWidth} y2={top + 61} stroke="#eef2ea" strokeWidth={1} />
       </Svg>
     );
   }
 
-  const allWeights = raw.map((item) => item.weight);
-  const allFat = raw.map((item) => item.fat);
+  const allWeights = series.map((item) => item.weight);
+  const allFat = series.map((item) => item.fat);
   const minWeight = Math.min(...allWeights) - 2;
   const maxWeight = Math.max(...allWeights) + 2;
   const minFat = Math.max(0, Math.min(...allFat) - 3);
   const maxFat = Math.max(...allFat) + 3;
 
-  const weightPoints = raw.map((item, index) => ({
-    x: left + (raw.length === 1 ? chartWidth / 2 : (index * chartWidth) / (raw.length - 1)),
+  const weightPoints = series.map((item, index) => ({
+    x: left + (index * chartWidth) / Math.max(1, series.length - 1),
     y: top + chartHeight - ((item.weight - minWeight) / Math.max(1, maxWeight - minWeight)) * chartHeight,
     label: item.label,
     value: item.weight,
   }));
-  const fatPoints = raw.map((item, index) => ({
-    x: left + (raw.length === 1 ? chartWidth / 2 : (index * chartWidth) / (raw.length - 1)),
+
+  const fatPoints = series.map((item, index) => ({
+    x: left + (index * chartWidth) / Math.max(1, series.length - 1),
     y: top + chartHeight - ((item.fat - minFat) / Math.max(1, maxFat - minFat)) * chartHeight,
     label: item.label,
     value: item.fat,
@@ -321,18 +335,21 @@ function renderEvolutionChart(currentWeight: number, currentFat: number, previou
 
   return (
     <Svg width={width} height={height}>
-      <Rect x={0} y={0} width={width} height={height} rx={12} ry={12} fill="#f8fafc" />
-      <Line x1={left} y1={top + chartHeight} x2={left + chartWidth} y2={top + chartHeight} stroke="#cbd5e1" strokeWidth={1} />
-      <Line x1={left} y1={top} x2={left} y2={top + chartHeight} stroke="#cbd5e1" strokeWidth={1} />
-      <Polyline points={toPolyline(weightPoints)} stroke="#163c2f" strokeWidth={2} fill="none" />
-      <Polyline points={toPolyline(fatPoints)} stroke="#84a94a" strokeWidth={2} fill="none" />
+      <Rect x={0} y={0} width={width} height={height} rx={10} ry={10} fill="#f8fafc" />
+      <Line x1={left} y1={top + chartHeight} x2={left + chartWidth} y2={top + chartHeight} stroke="#d9dfd2" strokeWidth={1} />
+      <Line x1={left} y1={top} x2={left} y2={top + chartHeight} stroke="#d9dfd2" strokeWidth={1} />
+      <Line x1={left} y1={top + 20} x2={left + chartWidth} y2={top + 20} stroke="#eef2ea" strokeWidth={1} />
+      <Line x1={left} y1={top + 41} x2={left + chartWidth} y2={top + 41} stroke="#eef2ea" strokeWidth={1} />
+      <Line x1={left} y1={top + 61} x2={left + chartWidth} y2={top + 61} stroke="#eef2ea" strokeWidth={1} />
+      <Polyline points={weightPoints.map((p) => `${p.x},${p.y}`).join(" ")} stroke="#163c2f" strokeWidth={2} fill="none" />
+      <Polyline points={fatPoints.map((p) => `${p.x},${p.y}`).join(" ")} stroke="#84a94a" strokeWidth={2} fill="none" />
       {weightPoints.map((point, index) => (
         <React.Fragment key={`w-${index}`}>
           <Circle cx={point.x} cy={point.y} r={3.1} fill="#163c2f" />
-          <Text style={{ position: "absolute", left: point.x - 12, top: point.y - 14, fontSize: 7.5, color: "#163c2f" }}>
+          <Text style={{ position: "absolute", left: point.x - 10, top: point.y - 13, fontSize: 7.5, color: "#163c2f" }}>
             {toFixedPt(point.value)}
           </Text>
-          <Text style={{ position: "absolute", left: point.x - 24, top: top + chartHeight + 6, fontSize: 7.5, color: "#64748b" }}>
+          <Text style={{ position: "absolute", left: point.x - 16, top: top + chartHeight + 8, fontSize: 7.2, color: "#6b7280" }}>
             {point.label}
           </Text>
         </React.Fragment>
@@ -351,12 +368,12 @@ function renderEvolutionChart(currentWeight: number, currentFat: number, previou
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 16,
+    paddingTop: 14,
     paddingBottom: 14,
-    paddingHorizontal: 18,
+    paddingHorizontal: 14,
     fontSize: 9,
-    color: "#24311f",
-    backgroundColor: "#fcfcf8",
+    color: "#232c22",
+    backgroundColor: "#fbfaf6",
   },
   bg: {
     position: "absolute",
@@ -369,276 +386,272 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 12,
-    marginBottom: 6,
+    gap: 10,
+    marginBottom: 4,
   },
   logo: {
-    width: 54,
-    height: 54,
+    width: 34,
+    height: 34,
     objectFit: "contain",
   },
   headerText: {
     flexGrow: 1,
   },
   patientName: {
-    fontSize: 16,
+    fontSize: 10.6,
     fontWeight: 700,
-    marginBottom: 3,
-  },
-  patientMeta: {
-    fontSize: 9,
-    color: "#3f4d38",
     marginBottom: 2,
   },
-  divider: {
-    height: 1.7,
-    backgroundColor: "#37542a",
-    marginTop: 4,
-    marginBottom: 8,
+  patientMeta: {
+    fontSize: 7.7,
+    color: "#4b5848",
+    marginBottom: 1,
   },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+  divider: {
+    height: 1.2,
+    backgroundColor: "#3d5b33",
     marginBottom: 8,
   },
   title: {
-    fontSize: 20,
-    color: "#111111",
-    fontWeight: 700,
-    letterSpacing: 0.5,
+    fontSize: 16.5,
+    fontWeight: 800,
+    textAlign: "center",
+    marginBottom: 8,
+    letterSpacing: 0.4,
   },
-  grid: {
+  row: {
     flexDirection: "row",
-    flexWrap: "wrap",
     justifyContent: "space-between",
-    gap: 10,
+    marginBottom: 10,
   },
   card: {
     width: "48.7%",
     borderWidth: 1,
-    borderColor: "#5a6f50",
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.94)",
-    padding: 10,
-    minHeight: 240,
+    borderColor: "#596c50",
+    borderRadius: 11,
+    backgroundColor: "rgba(255,255,255,0.95)",
+    padding: 9,
   },
   topCard: {
-    minHeight: 258,
+    minHeight: 285,
   },
   bottomCard: {
-    minHeight: 228,
+    minHeight: 225,
   },
   cardTitle: {
-    fontSize: 11,
+    fontSize: 10.2,
     fontWeight: 700,
-    color: "#355227",
-    marginBottom: 8,
+    color: "#2f3f28",
     textTransform: "uppercase",
+    marginBottom: 7,
   },
-  splitRow: {
+  compositionRow: {
     flexDirection: "row",
-    gap: 8,
+    alignItems: "flex-start",
   },
-  leftCol: {
-    width: "61%",
-    gap: 3,
+  compositionLeft: {
+    width: "48%",
+    paddingRight: 6,
   },
-  rightCol: {
-    width: "39%",
+  compositionRight: {
+    width: "52%",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
+    paddingTop: 4,
   },
-  bodyFrameFront: {
-    width: 118,
-    height: 182,
-    borderRadius: 12,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.01)",
-  },
-  bodyFrameSide: {
-    width: 110,
-    height: 186,
-    borderRadius: 12,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.01)",
-  },
-  bodyImageFront: {
-    width: 154,
-    height: 222,
-    objectFit: "cover",
-  },
-  bodyImageSide: {
-    width: 138,
-    height: 220,
-    objectFit: "cover",
-  },
-  kvRow: {
+  metricLine: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: "#edf1e7",
-    paddingVertical: 3,
-    gap: 6,
+    alignItems: "flex-start",
+    paddingVertical: 2,
+    gap: 8,
   },
-  kvLabel: {
-    color: "#263424",
-    fontSize: 8.6,
-    width: "52%",
-  },
-  kvValue: {
-    color: "#1f2937",
-    fontSize: 8.6,
-    fontWeight: 700,
-    textAlign: "right",
-    width: "28%",
-  },
-  kvStatus: {
-    width: "20%",
-    textAlign: "right",
-    fontSize: 7.4,
-    fontWeight: 700,
-  },
-  metricsWrap: {
-    marginTop: 7,
-    flexDirection: "row",
-    gap: 6,
-    flexWrap: "wrap",
-  },
-  metricBoxMuscle: {
-    width: "48.5%",
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    backgroundColor: "#ecfdf5",
-    borderWidth: 1,
-    borderColor: "#bbf7d0",
-    minHeight: 56,
-  },
-  metricBoxFat: {
-    width: "48.5%",
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    backgroundColor: "#fff7ed",
-    borderWidth: 1,
-    borderColor: "#fed7aa",
-    minHeight: 56,
-  },
-  metricTitleMuscle: {
-    color: "#15803d",
-    fontSize: 7.6,
-    fontWeight: 700,
-    marginBottom: 2,
-  },
-  metricTitleFat: {
-    color: "#c2410c",
-    fontSize: 7.6,
-    fontWeight: 700,
-    marginBottom: 2,
+  metricLabel: {
+    width: "50%",
+    fontSize: 8,
+    color: "#293525",
   },
   metricValue: {
+    width: "26%",
+    fontSize: 8,
+    textAlign: "right",
     color: "#111827",
-    fontSize: 10.4,
-    fontWeight: 800,
+    fontWeight: 700,
   },
   metricStatus: {
-    fontSize: 7.2,
-    marginTop: 2,
+    width: "24%",
+    fontSize: 7.6,
+    textAlign: "right",
+    color: "#64748b",
+  },
+  miniCardsWrap: {
+    marginTop: 8,
+    width: 92,
+    gap: 6,
+  },
+  miniCardOrange: {
+    borderWidth: 1,
+    borderColor: "#f5c78a",
+    backgroundColor: "#fff7ed",
+    borderRadius: 9,
+    padding: 6,
+    minHeight: 44,
+  },
+  miniCardGreen: {
+    borderWidth: 1,
+    borderColor: "#bfe7c9",
+    backgroundColor: "#ecfdf5",
+    borderRadius: 9,
+    padding: 6,
+    minHeight: 44,
+  },
+  miniCardTitleOrange: {
+    fontSize: 6.6,
+    color: "#c2410c",
     fontWeight: 700,
+    marginBottom: 2,
+  },
+  miniCardTitleGreen: {
+    fontSize: 6.6,
+    color: "#15803d",
+    fontWeight: 700,
+    marginBottom: 2,
+  },
+  miniCardValue: {
+    fontSize: 10.6,
+    color: "#111827",
+    fontWeight: 800,
+    marginBottom: 1,
+  },
+  miniCardStatus: {
+    fontSize: 6.8,
+    color: "#6b7280",
+  },
+  bodyFront: {
+    width: 128,
+    height: 205,
+    objectFit: "contain",
+  },
+  bodySide: {
+    width: 96,
+    height: 192,
+    objectFit: "contain",
   },
   legendRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
     gap: 12,
-    marginBottom: 5,
+    marginBottom: 4,
   },
   legendItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
   },
-  legendDotWeight: {
+  legendWeight: {
     width: 10,
-    height: 4,
+    height: 3,
+    borderRadius: 99,
     backgroundColor: "#163c2f",
-    borderRadius: 99,
   },
-  legendDotFat: {
+  legendFat: {
     width: 10,
-    height: 4,
-    backgroundColor: "#84a94a",
+    height: 3,
     borderRadius: 99,
+    backgroundColor: "#84a94a",
   },
   legendText: {
-    fontSize: 7.6,
-    color: "#475569",
+    fontSize: 7.3,
+    color: "#5d6a58",
   },
-  compareInfo: {
-    marginTop: 6,
-    fontSize: 7.8,
-    color: "#475569",
-    minHeight: 28,
+  evolutionMsgWrap: {
+    marginTop: 7,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+  },
+  redDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 99,
+    backgroundColor: "#dc2626",
+    marginTop: 2,
+    flexShrink: 0,
+  },
+  evolutionMsg: {
+    fontSize: 8,
+    color: "#4b5563",
+    lineHeight: 1.35,
+    flexGrow: 1,
   },
   tableHeader: {
     flexDirection: "row",
     borderBottomWidth: 1,
-    borderBottomColor: "#dbe5d0",
-    paddingBottom: 4,
-    marginBottom: 4,
+    borderBottomColor: "#dce4d3",
+    paddingBottom: 5,
+    marginBottom: 3,
   },
   tableRow: {
     flexDirection: "row",
     borderBottomWidth: 1,
     borderBottomColor: "#edf1e7",
-    paddingVertical: 3,
-    gap: 4,
-    minHeight: 16,
+    paddingVertical: 2.8,
   },
   colLabel: {
-    width: "46%",
+    width: "48%",
     fontSize: 7.7,
-    color: "#263424",
+    color: "#2b3627",
   },
   colPrev: {
-    width: "24%",
+    width: "22%",
     fontSize: 7.7,
-    color: "#475569",
+    color: "#64748b",
     textAlign: "center",
   },
   colCurrent: {
-    width: "24%",
+    width: "22%",
     fontSize: 7.7,
     color: "#111827",
     textAlign: "center",
     fontWeight: 700,
   },
-  tableBodyWrap: {
-    flexGrow: 1,
+  tableNote: {
+    marginTop: 8,
+    fontSize: 7.4,
+    color: "#6b7280",
+  },
+  dobrasRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  dobrasTableCol: {
+    width: "63%",
+  },
+  dobrasImageCol: {
+    width: "33%",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 4,
   },
   footer: {
-    marginTop: 10,
+    marginTop: 8,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-end",
   },
-  signature: {
-    fontSize: 14,
-    color: "#304b28",
-    marginBottom: 2,
+  signatureTitle: {
+    fontSize: 12.2,
+    color: "#2f4727",
+    fontFamily: "GreatVibes",
+    marginBottom: 1,
   },
   crn: {
-    fontSize: 9,
-    color: "#304b28",
+    fontSize: 8.2,
+    color: "#2f4727",
   },
-  smallLogo: {
-    width: 46,
-    height: 46,
+  footerLogo: {
+    width: 34,
+    height: 34,
     objectFit: "contain",
   },
 });
@@ -649,197 +662,70 @@ function ComparisonTable({
   compare,
 }: {
   title: string;
-  rows: Array<{ key: string; label: string; atual?: number | null | undefined; anterior?: number | null | undefined }>;
+  rows: Array<{ key: string; label: string; anteriorTxt: string; atualTxt: string }>;
   compare: boolean;
 }) {
-  const labelStyle = compare ? styles.colLabel : { ...styles.colLabel, width: "64%" };
-  const currentStyle = compare ? styles.colCurrent : { ...styles.colCurrent, width: "30%" };
-
   return (
-    <View style={{ ...styles.card, ...styles.bottomCard }}>
+    <View style={[styles.card, styles.bottomCard]}>
       <Text style={styles.cardTitle}>{title}</Text>
-      <View style={styles.tableBodyWrap}>
-        <View style={styles.tableHeader}>
-          <Text style={labelStyle}>Parâmetro</Text>
-          {compare ? <Text style={styles.colPrev}>Antes</Text> : null}
-          <Text style={currentStyle}>Atual</Text>
-        </View>
-        {rows.map((row) => (
-          <View style={styles.tableRow} key={row.key}>
-            <Text style={labelStyle}>{row.label}</Text>
-            {compare ? <Text style={styles.colPrev}>{toFixedPt(row.anterior)}</Text> : null}
-            <Text style={currentStyle}>{toFixedPt(row.atual)}</Text>
-          </View>
-        ))}
+      <View style={styles.tableHeader}>
+        <Text style={styles.colLabel}>Parâmetro</Text>
+        {compare ? <Text style={styles.colPrev}>Antes</Text> : null}
+        <Text style={styles.colCurrent}>Atual</Text>
       </View>
+      {rows.map((row) => (
+        <View style={styles.tableRow} key={row.key}>
+          <Text style={styles.colLabel}>{row.label}</Text>
+          {compare ? <Text style={styles.colPrev}>{row.anteriorTxt}</Text> : null}
+          <Text style={styles.colCurrent}>{row.atualTxt}</Text>
+        </View>
+      ))}
     </View>
   );
-}
-
-function statusText(cls?: Classificacao) {
-  return cls?.label || "Resultado";
-}
-
-function statusColor(cls?: Classificacao) {
-  return cls?.cor === "amarelo" ? "#b45309" : "#166534";
 }
 
 export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProps) {
   const logo = fileToDataUri("/logo-nutricare.png");
   const fundo = fileToDataUri("/fundo-layout.jpg") || fileToDataUri("/layouts/fundo-layout.jpg");
   const { frente, lateral } = resolveImagePair(dados, paciente.sexo);
-  const nomeNutri = nutricionista?.nome || "Nutricionista";
-  const crn = nutricionista?.crn || "—";
   const compare = Boolean(dados.compareResults && dados.previousSummary);
-  const circRows = getMeasurementRows(CIRC_ORDER, CIRC_LABELS, dados.currentCircunferencias, dados.previousCircunferencias, compare);
-  const dobraRows = getMeasurementRows(DOBRAS_ORDER, DOBRAS_LABELS, dados.currentDobras, dados.previousDobras, compare);
-  const evolutionSummary = buildEvolutionSummary(dados, compare ? dados.previousSummary : null);
+  const circRows = measurementRows(CIRC_ORDER, CIRC_LABELS, dados.currentCircunferencias, dados.previousCircunferencias, compare, "cm");
+  const dobraRows = measurementRows(DOBRAS_ORDER, DOBRAS_LABELS, dados.currentDobras, dados.previousDobras, compare, "mm");
+  const evolutionText = metricDeltaSentence(dados, compare);
+  const firstEvolutionMsg = "Faça uma reavaliação para ver sua evolução.";
 
   return (
     <Document>
-      <Page size="A4" style={styles.page} wrap={false}>
+      <Page size="A4" style={styles.page}>
         {fundo ? <Image src={fundo} style={styles.bg} /> : null}
 
         <View style={styles.header}>
           {logo ? <Image src={logo} style={styles.logo} /> : <View style={styles.logo} />}
           <View style={styles.headerText}>
             <Text style={styles.patientName}>{paciente.nome}</Text>
-            <Text style={styles.patientMeta}>
-              nascimento: {formatBirth(paciente.nascimento)} | peso: {toFixedPt(dados.pesoKg)}kg
-            </Text>
-            <Text style={styles.patientMeta}>
-              altura {toFixedPt(paciente.altura_cm, 0)}cm | sexo: {labelSexo(paciente.sexo)}
-            </Text>
+            <Text style={styles.patientMeta}>nascimento: {formatBirth(paciente.nascimento)} | peso: {toFixedPt(dados.pesoKg)}kg</Text>
+            <Text style={styles.patientMeta}>altura {toFixedPt(paciente.altura_cm, 0)}cm | sexo: {labelSexo(paciente.sexo)}</Text>
           </View>
         </View>
 
         <View style={styles.divider} />
+        <Text style={styles.title}>AVALIAÇÃO FÍSICA</Text>
 
-        <View style={styles.titleRow}>
-          <Text style={styles.title}>AVALIAÇÃO FÍSICA</Text>
-        </View>
-
-        <View style={styles.grid}>
-          <View style={{ ...styles.card, ...styles.topCard }}>
+        <View style={styles.row}>
+          <View style={[styles.card, styles.topCard]}>
             <Text style={styles.cardTitle}>Composição corporal</Text>
-            <View style={styles.splitRow}>
-              <View style={styles.leftCol}>
-                <View style={styles.kvRow}>
-                  <Text style={styles.kvLabel}>Peso Atual</Text>
-                  <Text style={styles.kvValue}>{toFixedPt(dados.pesoKg)} kg</Text>
-                  <Text style={{ ...styles.kvStatus, color: "#64748b" }}>—</Text>
+            <View style={styles.compositionRow}>
+              <View style={styles.compositionLeft}>
+                <View style={styles.metricLine}>
+                  <Text style={styles.metricLabel}>Peso Atual</Text>
+                  <Text style={styles.metricValue}>{toFixedPt(dados.pesoKg)} kg</Text>
+                  <Text style={styles.metricStatus}>-</Text>
                 </View>
-                <View style={styles.kvRow}>
-                  <Text style={styles.kvLabel}>% de Água</Text>
-                  <Text style={styles.kvValue}>{toFixedPt(dados.pctAgua)}%</Text>
-                  <Text style={{ ...styles.kvStatus, color: colorForClassificacao(dados.classificacaoAgua) }}>
-                    {statusText(dados.classificacaoAgua)}
-                  </Text>
+                <View style={styles.metricLine}>
+                  <Text style={styles.metricLabel}>% de Água</Text>
+                  <Text style={styles.metricValue}>{toFixedPt(dados.pctAgua)}%</Text>
+                  <Text style={styles.metricStatus}>{dados.classificacaoAgua?.label || "-"}</Text>
                 </View>
-                <View style={styles.kvRow}>
-                  <Text style={styles.kvLabel}>Massa Magra</Text>
-                  <Text style={styles.kvValue}>{toFixedPt(dados.massaMagraKg)} kg</Text>
-                  <Text style={{ ...styles.kvStatus, color: "#64748b" }}>—</Text>
-                </View>
-                <View style={styles.kvRow}>
-                  <Text style={styles.kvLabel}>Massa Gorda</Text>
-                  <Text style={styles.kvValue}>{toFixedPt(dados.massaGordaKg)} kg</Text>
-                  <Text style={{ ...styles.kvStatus, color: "#64748b" }}>—</Text>
-                </View>
-                <View style={styles.kvRow}>
-                  <Text style={styles.kvLabel}>% de Gordura Corporal</Text>
-                  <Text style={styles.kvValue}>{toFixedPt(dados.bfPct)}%</Text>
-                  <Text style={{ ...styles.kvStatus, color: colorForClassificacao(dados.classificacaoGordura) }}>
-                    {statusText(dados.classificacaoGordura)}
-                  </Text>
-                </View>
-
-                <View style={styles.metricsWrap}>
-                  <View style={styles.metricBoxFat}>
-                    <Text style={styles.metricTitleFat}>Índice de Massa Gorda</Text>
-                    <Text style={styles.metricValue}>{toFixedPt(dados.img, 2)} kg/m²</Text>
-                    <Text style={{ ...styles.metricStatus, color: statusColor(dados.classificacaoImg) }}>{statusText(dados.classificacaoImg)}</Text>
-                  </View>
-                  <View style={styles.metricBoxMuscle}>
-                    <Text style={styles.metricTitleMuscle}>Músculo Esquelético</Text>
-                    <Text style={styles.metricValue}>{toFixedPt(dados.imme, 2)} kg/m²</Text>
-                    <Text style={{ ...styles.metricStatus, color: statusColor(dados.classificacaoImme) }}>{statusText(dados.classificacaoImme)}</Text>
-                  </View>
-                  <View style={styles.metricBoxMuscle}>
-                    <Text style={styles.metricTitleMuscle}>Massa Livre de Gordura</Text>
-                    <Text style={styles.metricValue}>{toFixedPt(dados.ffmi, 2)} kg/m²</Text>
-                    <Text style={{ ...styles.metricStatus, color: statusColor(dados.classificacaoFfmi) }}>{statusText(dados.classificacaoFfmi)}</Text>
-                  </View>
-                  <View style={styles.metricBoxFat}>
-                    <Text style={styles.metricTitleFat}>VO2max — (corredores)</Text>
-                    <Text style={styles.metricValue}>
-                      {dados.vo2max !== null && dados.vo2max !== undefined ? `${toFixedPt(dados.vo2max)} ml/kg/min` : "-"}
-                    </Text>
-                    <Text style={{ ...styles.metricStatus, color: "#64748b" }}>{classifyVo2max(dados.vo2max) || "-"}</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.rightCol}>
-                <View style={styles.bodyFrameFront}>{frente ? <Image src={frente} style={styles.bodyImageFront} /> : null}</View>
-              </View>
-            </View>
-          </View>
-
-          <View style={{ ...styles.card, ...styles.topCard }}>
-            <Text style={styles.cardTitle}>Evolução</Text>
-            <View style={styles.legendRow}>
-              <View style={styles.legendItem}>
-                <View style={styles.legendDotWeight} />
-                <Text style={styles.legendText}>Peso (kg)</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={styles.legendDotFat} />
-                <Text style={styles.legendText}>% Gordura</Text>
-              </View>
-            </View>
-            {renderEvolutionChart(dados.pesoKg, dados.bfPct, compare ? dados.previousSummary : null)}
-            <Text style={styles.compareInfo}>{evolutionSummary}</Text>
-          </View>
-
-          <ComparisonTable title="Circunferências" rows={circRows} compare={compare} />
-
-          <View style={{ ...styles.card, ...styles.bottomCard }}>
-            <Text style={styles.cardTitle}>Dobras</Text>
-            <View style={styles.splitRow}>
-              <View style={{ ...styles.leftCol, width: compare ? "59%" : "57%" }}>
-                <View style={styles.tableBodyWrap}>
-                  <View style={styles.tableHeader}>
-                    <Text style={compare ? styles.colLabel : { ...styles.colLabel, width: "64%" }}>Parâmetro</Text>
-                    {compare ? <Text style={styles.colPrev}>Antes</Text> : null}
-                    <Text style={compare ? styles.colCurrent : { ...styles.colCurrent, width: "30%" }}>Atual</Text>
-                  </View>
-                  {dobraRows.map((row) => (
-                    <View style={styles.tableRow} key={row.key}>
-                      <Text style={compare ? styles.colLabel : { ...styles.colLabel, width: "64%" }}>{row.label}</Text>
-                      {compare ? <Text style={styles.colPrev}>{toFixedPt(row.anterior)}</Text> : null}
-                      <Text style={compare ? styles.colCurrent : { ...styles.colCurrent, width: "30%" }}>{toFixedPt(row.atual)}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-              <View style={styles.rightCol}>
-                <View style={styles.bodyFrameSide}>{lateral ? <Image src={lateral} style={styles.bodyImageSide} /> : null}</View>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.footer}>
-          <View>
-            <Text style={styles.signature}>Nutricionista: {nomeNutri}</Text>
-            <Text style={styles.crn}>CRN: {crn}</Text>
-          </View>
-          {logo ? <Image src={logo} style={styles.smallLogo} /> : <View style={styles.smallLogo} />}
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
-export default AvaliacaoPdfDocument;
+                <View style={styles.metricLine}>
+                  <Text style={styles.metricLabel}>Massa Magra</Text>
+                  <Text style={styles.metr
