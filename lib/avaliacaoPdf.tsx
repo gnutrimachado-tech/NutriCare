@@ -237,39 +237,26 @@ function measurementRows(
 function metricDeltaSentence(dados: PdfProps["dados"], compare: boolean) {
   if (!compare || !dados.previousSummary) return null;
 
-  const parts: string[] = [];
+  const reduced: string[] = [];
+  const gained: string[] = [];
   const prev = dados.previousSummary;
+
+  const addDelta = (diff: number, reducedText: string, gainedText: string) => {
+    if (Math.abs(diff) < 0.05) return;
+    (diff < 0 ? reduced : gained).push(diff < 0 ? reducedText : gainedText);
+  };
 
   const diffPeso = Number(dados.pesoKg) - Number(prev.pesoKg ?? dados.pesoKg);
   const diffGordura = Number(dados.bfPct) - Number(prev.bodyFatPct ?? dados.bfPct);
   const diffMusculo = Number(dados.massaMagraKg) - Number(prev.massaMuscularKg ?? dados.massaMagraKg);
 
-  if (Math.abs(diffPeso) >= 0.05) {
-    parts.push(
-      diffPeso < 0
-        ? `reduziu ${toFixedPt(Math.abs(diffPeso))} kg de peso corporal`
-        : `ganhou ${toFixedPt(Math.abs(diffPeso))} kg de peso corporal`
-    );
-  }
+  addDelta(diffPeso, `Você reduziu ${toFixedPt(Math.abs(diffPeso))} kg de peso corporal.`, `Você ganhou ${toFixedPt(Math.abs(diffPeso))} kg de peso corporal.`);
+  addDelta(diffGordura, `Você reduziu ${toFixedPt(Math.abs(diffGordura))}% de gordura corporal.`, `Você ganhou ${toFixedPt(Math.abs(diffGordura))}% de gordura corporal.`);
+  addDelta(diffMusculo, `Você reduziu ${toFixedPt(Math.abs(diffMusculo))} kg de massa muscular.`, `Você ganhou ${toFixedPt(Math.abs(diffMusculo))} kg de massa muscular.`);
 
-  if (Math.abs(diffGordura) >= 0.05) {
-    parts.push(
-      diffGordura < 0
-        ? `reduziu ${toFixedPt(Math.abs(diffGordura))}% de gordura corporal`
-        : `ganhou ${toFixedPt(Math.abs(diffGordura))}% de gordura corporal`
-    );
-  }
-
-  if (Math.abs(diffMusculo) >= 0.05) {
-    parts.push(
-      diffMusculo < 0
-        ? `reduziu ${toFixedPt(Math.abs(diffMusculo))} kg de massa muscular`
-        : `ganhou ${toFixedPt(Math.abs(diffMusculo))} kg de massa muscular`
-    );
-  }
-
-  if (!parts.length) return null;
-  return `Você ${parts.join(" e ")}.`;
+  const lines = [reduced.length ? reduced.join(" ") : null, gained.length ? gained.join(" ") : null]
+    .filter((line): line is string => Boolean(line));
+  return lines.length ? lines : null;
 }
 
 function buildChartSeries(currentWeight: number, currentFat: number, previous?: SummarySnapshot | null) {
@@ -791,7 +778,11 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             ) : evolutionText ? (
               <View style={styles.evolutionMsgWrap}>
                 <View style={styles.redDot} />
-                <Text style={styles.evolutionMsg}>{evolutionText}</Text>
+                <View style={styles.evolutionMsg}>
+                  {evolutionText.map((line) => (
+                    <Text key={line}>{line}</Text>
+                  ))}
+                </View>
               </View>
             ) : null}
           </View>
