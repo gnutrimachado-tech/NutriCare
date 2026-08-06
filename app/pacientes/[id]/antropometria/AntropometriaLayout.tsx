@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { sincronizarAntropometria } from "../anamnese/actions";
+import type { AvaliacaoHistoricoSnapshot } from "@/lib/avaliacaoHistorico";
 import {
   classificarAgua,
   classificarIMME,
@@ -21,6 +22,7 @@ type Props = {
   idade: number;
   pesoKg: number;
   alturaCm: number;
+  avaliacaoAnteriorInicial?: AvaliacaoHistoricoSnapshot | null;
 };
 
 type DobraKey =
@@ -733,6 +735,7 @@ export default function AntropometriaLayout({
   idade,
   pesoKg,
   alturaCm,
+  avaliacaoAnteriorInicial,
 }: Props) {
   const protocolosDisponiveis = useMemo(
     () => PROTOCOLS.filter((p) => p.sexo === sexoPaciente),
@@ -773,4 +776,706 @@ export default function AntropometriaLayout({
     (Object.keys(dobras) as DobraKey[]).forEach((key) => {
       out[key] = parsePtNumber(dobras[key]);
     });
-    r
+    return out;
+  }, [dobras]);
+
+  const circNum = useMemo(() => {
+    const out = {} as Record<CircKey, number>;
+    (Object.keys(circunferencias) as CircKey[]).forEach((key) => {
+      out[key] = parsePtNumber(circunferencias[key]);
+    });
+    return out;
+  }, [circunferencias]);
+
+  const [aguaInput, setAguaInput] = useState("");
+  const [mensagem, setMensagem] = useState("");
+  const [gerando, setGerando] = useState<"" | "baixar" | "enviar" | "salvar">("");
+  const [ouvindo, setOuvindo] = useState(false);
+  const [avaliacaoAnterior, setAvaliacaoAnterior] =
+    useState<AvaliacaoHistoricoSnapshot | null>(avaliacaoAnteriorInicial ?? null);
+  const [comparar, setComparar] = useState<boolean>(Boolean(avaliacaoAnteriorInicial));
+
+  const recRef = useRef<any>(null);
+  const ultimoSincronizadoRef = useRef<string>("");
+
+  const resultado = useMemo<CalcResult | null>(() => {
+    if (!protocoloAtual) return null;
+    const reqDobras = protocoloAtual.requiredDobras;
+    const reqCircs = protocoloAtual.requiredCircs ?? [];
+    const faltaDobra = reqDobras.some((k) => !(dobrasNum[k] > 0));
+    const faltaCirc = reqCircs.some((k) => !(circNum[k] > 0));
+    if (faltaDobra || faltaCirc) return null;
+    if (protocoloAtual.needsHeight && !(alturaCm > 0)) return null;
+    try {
+      return protocoloAtual.calculate({
+        idade,
+        pesoKg,
+        alturaCm,
+        dobras: dobrasNum,
+        circ: circNum,
+      });
+    } catch {
+      return null;
+    }
+  }, [protocoloAtual, dobrasNum, circNum, idade, pesoKg, alturaCm]);
+
+  const sexoBC: SexoBC = sexoPaciente === "Feminino" ? "F" : "M";
+  const bfPct = resultado?.bodyFatPct ?? null;
+  const bfPctRound = bfPct !== null ? round1(bfPct) : null;
+  const massaGordaKg =
+    bfPct !== null && pesoKg > 0 ? round1((pesoKg * bfPct) / 100) : null;
+  const massaMagraKg =
+    bfPct !== null && pesoKg > 0 && massaGordaKg !== null
+      ? round1(pesoKg - massaGordaKg)
+      : null;
+  const massaMuscularEsqueleticaKg =
+    massaMagraKg !== null
+      ? round1(massaMagraKg * FRACAO_MUSCULO_ESQUELETICO)
+      : null;
+  const imme =
+    massaMuscularEsqueleticaKg !== null
+      ? calcularIMME(massaMuscularEsqueleticaKg, alturaCm)
+      : null;
+  const img = massaGordaKg !== null ? calcularIMG(massaGordaKg, alturaCm) : null;
+  const ffmi = massaMagraKg !== null ? calcularFFMI(massaMagraKg, alturaCm) : null;
+
+  const classImme =
+    imme !== null ? classificarIMME(imme, sexoBC, idade) : null;
+  const classImg = img !== null ? classificarIMG(img, sexoBC, idade) : null;
+  const aguaNum = parsePtNumber(aguaInput);
+  const classAgua = aguaNum > 0 ? classificarAgua(aguaNum, sexoBC) : null;
+
+  const anteriorResumo = avaliacaoAnterior?.resumo ?? null;
+  const anteriorDobras = parseSnapshotValues(
+    avaliacaoAnterior?.dobras as Record<string, string> | undefined
+  );
+  const anteriorCircs = parseSnapshotValues(
+    avaliacaoAnterior?.circunferencias as Record<string, string> | undefined
+  );
+
+  // Sincroniza os resultados calculados com as barras da Anamnese.
+  useEffect(() => {
+    if (bfPctRound === null) return;
+    const payload = {
+      percentual_gordura: bfPctRound,
+      massa_muscular: massaMagraKg,
+      massa_adiposa: massaGordaKg,
+    };
+    const key = JSON.stringify(payload);
+    if (key === ultimoSincronizadoRef.current) return;
+    ultimoSincronizadoRef.current = key;
+    sincronizarAntropometria(pacienteId, payload).catch(() => {});
+  }, [bfPctRound, massaMagraKg, massaGordaKg, pacienteId]);
+
+  const iniciarVoz = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const Ctor =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!Ctor) {
+      setMensagem("Reconhecimento de voz não é suportado neste navegador.");
+      return;
+    }
+    try {
+      const rec = new Ctor();
+      rec.lang = "pt-BR";
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+      rec.onresult = (event: any) => {
+        const transcript = normalizeSpeechText(
+          String(event?.results?.[0]?.[0]?.transcript || "")
+        );
+        const key = detectVoiceFieldKey(transcript);
+        const value = extractVoiceValue(transcript);
+        if (!key || !value) {
+          setMensagem(
+            'Não entendi. Diga, por exemplo: "dobra tricipital 12" ou "circunferência cintura 80".'
+          );
+          return;
+        }
+        const destino = resolveVoiceDestination({
+          transcript,
+          key,
+          value,
+          requiredDobras: protocoloAtual?.requiredDobras ?? [],
+          requiredCircs: protocoloAtual?.requiredCircs ?? [],
+        });
+        if (destino === "dobra") {
+          setDobras((prev) => ({ ...prev, [key]: value }) as Record<DobraKey, string>);
+        } else {
+          setCircunferencias((prev) => ({ ...prev, [key]: value }) as Record<CircKey, string>);
+        }
+        const rotulo =
+          (DOBRAS_LABELS as Record<string, string>)[key] ||
+          CIRC_LABELS[key as CircKey] ||
+          key;
+        setMensagem(`Preenchido por voz: ${rotulo} = ${value}`);
+      };
+      rec.onend = () => setOuvindo(false);
+      rec.onerror = () => setOuvindo(false);
+      recRef.current = rec;
+      setOuvindo(true);
+      rec.start();
+    } catch {
+      setOuvindo(false);
+      setMensagem("Não foi possível iniciar o reconhecimento de voz.");
+    }
+  }, [protocoloAtual]);
+
+  function resumoAtual() {
+    return {
+      pesoKg: pesoKg > 0 ? pesoKg : null,
+      bodyFatPct: bfPctRound,
+      massaMuscularKg: massaMagraKg,
+      massaAdiposaKg: massaGordaKg,
+      aguaPct: aguaNum > 0 ? aguaNum : null,
+      imme,
+      img,
+      ffmi,
+      protocolLabel: protocoloAtual?.label || "",
+    };
+  }
+
+  async function salvarHistorico() {
+    const res = await fetch("/api/avaliacao-fisica/historico", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pacienteId,
+        protocolLabel: protocoloAtual?.label || "",
+        currentDobras: dobrasNum,
+        currentCircunferencias: circNum,
+        resumo: resumoAtual(),
+      }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.erro || "Falha ao salvar a avaliação.");
+    }
+    return json.snapshot as AvaliacaoHistoricoSnapshot;
+  }
+
+  function payloadPdf() {
+    const usarComparacao = comparar && Boolean(avaliacaoAnterior);
+    return {
+      pacienteId,
+      sex: sexoBC,
+      idade,
+      alturaCm,
+      pesoKg,
+      bodyFatPct: bfPctRound,
+      massaMuscularKg: massaMagraKg,
+      massaAdiposaKg: massaGordaKg,
+      aguaPct: aguaNum > 0 ? aguaNum : null,
+      protocolLabel: protocoloAtual?.label || "",
+      compareResults: usarComparacao,
+      currentDobras: dobrasNum,
+      currentCircunferencias: circNum,
+      previousDobras: usarComparacao ? anteriorDobras : {},
+      previousCircunferencias: usarComparacao ? anteriorCircs : {},
+      previousSummary: usarComparacao
+        ? {
+            ...anteriorResumo,
+            createdAt: avaliacaoAnterior?.createdAt ?? null,
+            protocolLabel:
+              avaliacaoAnterior?.protocolLabel ||
+              anteriorResumo?.protocolLabel ||
+              "",
+          }
+        : null,
+    };
+  }
+
+  async function handleSalvar() {
+    if (!resultado || bfPctRound === null) {
+      setMensagem("Preencha as medidas do protocolo antes de salvar a avaliação.");
+      return;
+    }
+    setGerando("salvar");
+    setMensagem("");
+    try {
+      const snapshot = await salvarHistorico();
+      setAvaliacaoAnterior(snapshot);
+      setMensagem("Avaliação salva com sucesso.");
+    } catch (e: any) {
+      setMensagem(e?.message || "Erro ao salvar a avaliação.");
+    } finally {
+      setGerando("");
+    }
+  }
+
+  async function chamarPdf(tipo: "download" | "enviar") {
+    if (!resultado || bfPctRound === null || !protocoloAtual) {
+      setMensagem("Preencha as medidas do protocolo para gerar o PDF.");
+      return;
+    }
+    setGerando(tipo === "download" ? "baixar" : "enviar");
+    setMensagem("");
+    try {
+      // Salva a avaliação atual antes de gerar o PDF (habilita a próxima comparação).
+      const snapshot = await salvarHistorico().catch(() => null);
+      if (snapshot) setAvaliacaoAnterior(snapshot);
+
+      const res = await fetch(`/api/avaliacao-fisica/${tipo}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payloadPdf()),
+      });
+
+      if (tipo === "download") {
+        if (!res.ok) throw new Error("Falha ao gerar o PDF.");
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "avaliacao-fisica.pdf";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        setMensagem("PDF baixado com sucesso.");
+      } else {
+        const json = await res.json().catch(() => null);
+        if (!res.ok || !json?.ok) {
+          throw new Error(json?.erro || "Falha ao enviar a avaliação por e-mail.");
+        }
+        setMensagem("Avaliação enviada por e-mail com sucesso.");
+      }
+    } catch (e: any) {
+      setMensagem(e?.message || "Erro ao processar a avaliação.");
+    } finally {
+      setGerando("");
+    }
+  }
+
+  function renderCampo(
+    key: DobraKey | CircKey,
+    mapa: Record<string, string>,
+    setMapa: (fn: (prev: any) => any) => void,
+    unidade: string,
+    obrigatorio: boolean
+  ) {
+    const rotulo =
+      (DOBRAS_LABELS as Record<string, string>)[key] ||
+      CIRC_LABELS[key as CircKey] ||
+      key;
+    return (
+      <div key={key}>
+        <label style={styles.label}>
+          {rotulo} ({unidade})
+          {obrigatorio ? <span style={styles.required}> *</span> : null}
+        </label>
+        <input
+          style={{
+            ...styles.input,
+            ...(obrigatorio ? styles.inputRequired : null),
+          }}
+          inputMode="decimal"
+          placeholder="0,0"
+          value={mapa[key] ?? ""}
+          onChange={(e) =>
+            setMapa((prev: any) => ({ ...prev, [key]: e.target.value }))
+          }
+          onBlur={(e) =>
+            setMapa((prev: any) => ({
+              ...prev,
+              [key]: normalizeDecimalInput(e.target.value),
+            }))
+          }
+        />
+      </div>
+    );
+  }
+
+  function chipClassificacao(cl: { label: string; cor: string } | null) {
+    if (!cl) return null;
+    const cores =
+      cl.cor === "verde"
+        ? { bg: "#ecfdf5", border: "#bbf7d0", text: "#15803d" }
+        : { bg: "#fff7ed", border: "#fed7aa", text: "#c2410c" };
+    return (
+      <span
+        style={{
+          display: "inline-block",
+          marginLeft: 8,
+          padding: "2px 10px",
+          borderRadius: 999,
+          fontSize: 12,
+          fontWeight: 700,
+          background: cores.bg,
+          border: `1px solid ${cores.border}`,
+          color: cores.text,
+        }}
+      >
+        {cl.label}
+      </span>
+    );
+  }
+
+  function linhaResultado(
+    label: string,
+    valor: string,
+    cl: { label: string; cor: string } | null = null
+  ) {
+    return (
+      <div style={styles.resultRow} key={label}>
+        <span style={styles.resultLabel}>{label}</span>
+        <span style={styles.resultValue}>
+          {valor}
+          {chipClassificacao(cl)}
+        </span>
+      </div>
+    );
+  }
+
+  function deltaComparacao(atual: number | null, anterior: number | null, invertido: boolean) {
+    if (atual === null || anterior === null) return <span style={styles.deltaNeutro}>—</span>;
+    const diff = round1(atual - anterior);
+    if (Math.abs(diff) < 0.05) return <span style={styles.deltaNeutro}>=</span>;
+    const positivo = diff > 0;
+    // invertido = true para métricas em que subir é ruim (peso, gordura)
+    const bom = invertido ? !positivo : positivo;
+    return (
+      <span style={bom ? styles.deltaBom : styles.deltaRuim}>
+        {positivo ? "▲" : "▼"} {formatPt(Math.abs(diff))}
+      </span>
+    );
+  }
+
+  const dobrasDoSexo = DOBRAS_POR_SEXO[sexoPaciente];
+  const reqDobras = protocoloAtual?.requiredDobras ?? [];
+  const reqCircs = protocoloAtual?.requiredCircs ?? [];
+
+  return (
+    <div style={styles.wrapper}>
+      {mensagem ? <div style={styles.alert}>{mensagem}</div> : null}
+
+      <div style={styles.card}>
+        <h3 style={styles.cardTitle}>Protocolo de avaliação</h3>
+        <div style={styles.protocolRow}>
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <label style={styles.label}>Protocolo</label>
+            <select
+              style={styles.input}
+              value={effectiveProtocolId}
+              onChange={(e) => setProtocolId(e.target.value)}
+            >
+              {protocolosDisponiveis.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            style={ouvindo ? styles.btnVoiceActive : styles.btnVoice}
+            onClick={iniciarVoz}
+          >
+            {ouvindo ? "🎙️ Ouvindo..." : "🎙️ Preencher por voz"}
+          </button>
+        </div>
+        {avaliacaoAnterior ? (
+          <label style={styles.compareRow}>
+            <input
+              type="checkbox"
+              checked={comparar}
+              onChange={(e) => setComparar(e.target.checked)}
+            />
+            <span>
+              Comparar com a avaliação anterior (
+              {getSnapshotDateLabel(avaliacaoAnterior.createdAt)})
+            </span>
+          </label>
+        ) : (
+          <p style={styles.hint}>
+            Primeira avaliação deste paciente. Salve para habilitar a comparação
+            na próxima reavaliação.
+          </p>
+        )}
+      </div>
+
+      <div style={styles.grid}>
+        <div style={styles.card}>
+          <h3 style={styles.cardTitle}>Dobras cutâneas (mm)</h3>
+          <div style={styles.fieldGrid}>
+            {dobrasDoSexo.map((key) =>
+              renderCampo(
+                key,
+                dobras,
+                setDobras,
+                "mm",
+                reqDobras.includes(key)
+              )
+            )}
+          </div>
+        </div>
+
+        <div style={styles.card}>
+          <h3 style={styles.cardTitle}>Circunferências (cm)</h3>
+          <div style={styles.fieldGrid}>
+            {VISIBLE_CIRC_FIELDS.map((key) =>
+              renderCampo(
+                key,
+                circunferencias,
+                setCircunferencias,
+                "cm",
+                reqCircs.includes(key)
+              )
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div style={styles.card}>
+        <h3 style={styles.cardTitle}>
+          Resultado {resultado ? `— ${resultado.formulaLabel}` : ""}
+        </h3>
+        {!resultado ? (
+          <p style={styles.hint}>
+            Preencha as medidas obrigatórias (*) do protocolo selecionado para
+            ver o resultado.
+          </p>
+        ) : (
+          <>
+            {linhaResultado("% de Gordura corporal", formatPt(bfPctRound, "%"))}
+            {linhaResultado("Massa gorda", formatMetric(massaGordaKg, " kg"))}
+            {linhaResultado("Massa magra", formatMetric(massaMagraKg, " kg"))}
+            {linhaResultado(
+              "Massa muscular esquelética (estimada)",
+              formatMetric(massaMuscularEsqueleticaKg, " kg")
+            )}
+            {linhaResultado("IMME", imme !== null ? `${imme.toFixed(2).replace(".", ",")} kg/m²` : "—", classImme)}
+            {linhaResultado("Índice de Massa Gorda (IMG)", img !== null ? `${img.toFixed(2).replace(".", ",")} kg/m²` : "—", classImg)}
+            {linhaResultado("Massa Livre de Gordura (FFMI)", ffmi !== null ? `${ffmi.toFixed(2).replace(".", ",")} kg/m²` : "—")}
+            <div style={{ marginTop: 12, maxWidth: 280 }}>
+              <label style={styles.label}>
+                Água corporal (%){chipClassificacao(classAgua)}
+              </label>
+              <input
+                style={styles.input}
+                inputMode="decimal"
+                placeholder="0,0"
+                value={aguaInput}
+                onChange={(e) => setAguaInput(e.target.value)}
+                onBlur={(e) => setAguaInput(normalizeDecimalInput(e.target.value))}
+              />
+            </div>
+          </>
+        )}
+      </div>
+
+      {comparar && anteriorResumo ? (
+        <div style={styles.card}>
+          <h3 style={styles.cardTitle}>
+            Comparação com a avaliação anterior (
+            {getSnapshotDateLabel(avaliacaoAnterior?.createdAt)})
+          </h3>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Parâmetro</th>
+                <th style={styles.th}>Antes</th>
+                <th style={styles.th}>Atual</th>
+                <th style={styles.th}>Variação</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={styles.td}>Peso corporal (kg)</td>
+                <td style={styles.td}>{formatMetric(anteriorResumo.pesoKg ?? null)}</td>
+                <td style={styles.td}>{formatMetric(pesoKg > 0 ? pesoKg : null)}</td>
+                <td style={styles.td}>
+                  {deltaComparacao(pesoKg > 0 ? pesoKg : null, anteriorResumo.pesoKg ?? null, true)}
+                </td>
+              </tr>
+              <tr>
+                <td style={styles.td}>% de Gordura</td>
+                <td style={styles.td}>{formatMetric(anteriorResumo.bodyFatPct ?? null, "%")}</td>
+                <td style={styles.td}>{formatMetric(bfPctRound, "%")}</td>
+                <td style={styles.td}>
+                  {deltaComparacao(bfPctRound, anteriorResumo.bodyFatPct ?? null, true)}
+                </td>
+              </tr>
+              <tr>
+                <td style={styles.td}>Massa muscular (kg)</td>
+                <td style={styles.td}>{formatMetric(anteriorResumo.massaMuscularKg ?? null)}</td>
+                <td style={styles.td}>{formatMetric(massaMagraKg)}</td>
+                <td style={styles.td}>
+                  {deltaComparacao(massaMagraKg, anteriorResumo.massaMuscularKg ?? null, false)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      <div style={styles.actions}>
+        <button
+          type="button"
+          style={styles.btnGhost}
+          disabled={gerando !== ""}
+          onClick={handleSalvar}
+        >
+          {gerando === "salvar" ? "Salvando..." : "Salvar avaliação"}
+        </button>
+        <button
+          type="button"
+          style={styles.btnPrimary}
+          disabled={gerando !== ""}
+          onClick={() => chamarPdf("download")}
+        >
+          {gerando === "baixar" ? "Gerando PDF..." : "Baixar PDF"}
+        </button>
+        <button
+          type="button"
+          style={styles.btnSecondary}
+          disabled={gerando !== ""}
+          onClick={() => chamarPdf("enviar")}
+        >
+          {gerando === "enviar" ? "Enviando..." : "Enviar por e-mail"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const styles: Record<string, React.CSSProperties> = {
+  wrapper: { display: "flex", flexDirection: "column", gap: 16, marginTop: 16 },
+  card: {
+    background: "#ffffff",
+    borderRadius: 16,
+    border: "1px solid #e2e8f0",
+    padding: 20,
+    boxShadow: "0 1px 3px rgba(15, 23, 42, 0.06)",
+  },
+  cardTitle: { margin: "0 0 12px", fontSize: 18, fontWeight: 700, color: "#0f172a" },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+    gap: 16,
+  },
+  fieldGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
+  label: {
+    display: "block",
+    fontSize: 12,
+    fontWeight: 600,
+    color: "#475569",
+    marginBottom: 4,
+  },
+  input: {
+    width: "100%",
+    padding: "8px 10px",
+    borderRadius: 10,
+    border: "1px solid #cbd5e1",
+    fontSize: 14,
+    boxSizing: "border-box",
+  },
+  inputRequired: { borderColor: "#16a34a", background: "#f0fdf4" },
+  required: { color: "#16a34a" },
+  protocolRow: { display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" },
+  compareRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 12,
+    fontSize: 14,
+    color: "#334155",
+    cursor: "pointer",
+  },
+  hint: { margin: "8px 0 0", fontSize: 13, color: "#64748b" },
+  alert: {
+    background: "#f0fdf4",
+    border: "1px solid #bbf7d0",
+    color: "#166534",
+    borderRadius: 12,
+    padding: "10px 14px",
+    fontSize: 14,
+  },
+  resultRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    padding: "8px 0",
+    borderBottom: "1px solid #f1f5f9",
+    flexWrap: "wrap",
+  },
+  resultLabel: { fontSize: 14, color: "#475569" },
+  resultValue: { fontSize: 15, fontWeight: 700, color: "#0f172a" },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: 14 },
+  th: {
+    textAlign: "left",
+    padding: "8px 6px",
+    borderBottom: "2px solid #e2e8f0",
+    color: "#475569",
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  td: { padding: "8px 6px", borderBottom: "1px solid #f1f5f9", color: "#0f172a" },
+  deltaBom: { color: "#15803d", fontWeight: 700 },
+  deltaRuim: { color: "#b91c1c", fontWeight: 700 },
+  deltaNeutro: { color: "#94a3b8", fontWeight: 700 },
+  actions: { display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "flex-end" },
+  btnPrimary: {
+    padding: "10px 18px",
+    borderRadius: 12,
+    border: "none",
+    background: "#16a34a",
+    color: "#ffffff",
+    fontWeight: 700,
+    cursor: "pointer",
+    fontSize: 14,
+  },
+  btnSecondary: {
+    padding: "10px 18px",
+    borderRadius: 12,
+    border: "none",
+    background: "#0f766e",
+    color: "#ffffff",
+    fontWeight: 700,
+    cursor: "pointer",
+    fontSize: 14,
+  },
+  btnGhost: {
+    padding: "10px 18px",
+    borderRadius: 12,
+    border: "1px solid #cbd5e1",
+    background: "#f8fafc",
+    color: "#334155",
+    fontWeight: 700,
+    cursor: "pointer",
+    fontSize: 14,
+  },
+  btnVoice: {
+    padding: "10px 18px",
+    borderRadius: 12,
+    border: "1px solid #bbf7d0",
+    background: "#f0fdf4",
+    color: "#166534",
+    fontWeight: 700,
+    cursor: "pointer",
+    fontSize: 14,
+  },
+  btnVoiceActive: {
+    padding: "10px 18px",
+    borderRadius: 12,
+    border: "1px solid #fecaca",
+    background: "#fef2f2",
+    color: "#b91c1c",
+    fontWeight: 700,
+    cursor: "pointer",
+    fontSize: 14,
+  },
+};
+
+function normalizeDecimalInput(value: string) {
+  const limpo = String(value || "")
+    .replace(/[^\d.,]/g, "")
+    .replace(/\./g, ",")
+    .replace(/,+/g, ",");
+  if (!limpo) return "";
+  const partes = limpo.split(",");
+  if (partes.length === 1) return partes[0];
+  return `${partes[0]},${partes.slice(1).join("")}`;
+}
