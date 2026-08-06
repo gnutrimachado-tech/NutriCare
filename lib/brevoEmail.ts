@@ -19,8 +19,14 @@ export interface BrevoSendArgs {
 export async function sendBrevoEmail(args: BrevoSendArgs) {
   const apiKey = process.env.BREVO_API_KEY;
   const senderEmail =
-    process.env.BREVO_SENDER_EMAIL ?? process.env.MAIL_FROM ?? "no-reply@nutricare.app";
-  const senderName = process.env.BREVO_SENDER_NAME ?? "NutriCare";
+    process.env.BREVO_SENDER_EMAIL ??
+    process.env.BREVO_FROM_EMAIL ??
+    process.env.MAIL_FROM ??
+    "no-reply@nutricare.app";
+  const senderName =
+    process.env.BREVO_SENDER_NAME ??
+    process.env.BREVO_FROM_NAME ??
+    "NutriCare";
 
   if (!apiKey) {
     throw new Error(

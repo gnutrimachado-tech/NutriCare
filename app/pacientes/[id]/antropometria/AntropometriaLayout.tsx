@@ -23,6 +23,7 @@ type Props = {
   idade: number;
   pesoKg: number;
   alturaCm: number;
+  avaliacaoAnteriorInicial?: AvaliacaoSnapshot | null;
 };
 
 type DobraKey =
@@ -64,14 +65,14 @@ type CalcResult = {
 };
 
 type AvaliacaoSnapshotResumo = {
-  pesoKg: number;
+  pesoKg: number | null;
   bodyFatPct: number | null;
   massaMuscularKg: number | null;
   massaAdiposaKg: number | null;
   aguaPct: number | null;
-  imme: number;
-  img: number;
-  ffmi: number;
+  imme: number | null;
+  img: number | null;
+  ffmi: number | null;
 };
 
 type AvaliacaoSnapshot = {
@@ -139,9 +140,6 @@ const VISIBLE_CIRC_FIELDS: CircKey[] = [
   "quadril",
   "abdomen",
   "peitoral",
-  "axilar_media",
-  "supra_espinhal",
-  "biceps",
   "biceps_direito",
   "biceps_esquerdo",
   "coxa_direita",
@@ -773,6 +771,7 @@ export default function AntropometriaLayout({
   idade,
   pesoKg,
   alturaCm,
+  avaliacaoAnteriorInicial = null,
 }: Props) {
   const protocolosDisponiveis = useMemo(
     () => PROTOCOLS.filter((p) => p.sexo === sexoPaciente),
@@ -835,12 +834,12 @@ export default function AntropometriaLayout({
   const voiceFlashTimerRef = useRef<number | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState(
-    "Toque no microfone para ativar o registro de voz e diga algo como: dobra tricipital 12 ou circunferência cintura 85."
+    "Clique para ativar o registro de voz e diga algo como: dobra tricipital 12 ou circunferência cintura 85."
   );
   const [lastVoiceEntry, setLastVoiceEntry] = useState("");
   const [highlightedVoiceField, setHighlightedVoiceField] = useState<string | null>(null);
   const [compararResultados, setCompararResultados] = useState(false);
-  const [avaliacaoAnterior, setAvaliacaoAnterior] = useState<AvaliacaoSnapshot | null>(null);
+  const [avaliacaoAnterior, setAvaliacaoAnterior] = useState<AvaliacaoSnapshot | null>(avaliacaoAnteriorInicial);
 
   useEffect(() => {
     if (!pacienteId) {
@@ -887,10 +886,14 @@ export default function AntropometriaLayout({
   }, [pacienteId, protocolId, dobras, circunferencias]);
 
   useEffect(() => {
+    if (avaliacaoAnteriorInicial) {
+      setAvaliacaoAnterior(avaliacaoAnteriorInicial);
+      return;
+    }
     if (!pacienteId) return;
     const snapshot = parseSnapshot(window.localStorage.getItem(`nutricare:avaliacao-snapshot:${pacienteId}`));
     setAvaliacaoAnterior(snapshot);
-  }, [pacienteId]);
+  }, [pacienteId, avaliacaoAnteriorInicial]);
 
   const requiredDobras = useMemo(() => protocoloAtual?.requiredDobras ?? [], [protocoloAtual]);
   const requiredCircs = useMemo(() => protocoloAtual?.requiredCircs ?? [], [protocoloAtual]);

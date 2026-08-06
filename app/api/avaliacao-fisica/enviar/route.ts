@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import { resumoCompleto } from "@/lib/bodyComposition";
+import { salvarAvaliacaoHistorico } from "@/lib/avaliacaoHistorico";
 import { sendBrevoEmail, bufferToBase64 } from "@/lib/brevoEmail";
 
 export const runtime = "nodejs";
@@ -163,7 +164,7 @@ export async function POST(req: NextRequest) {
       <p>${esc(nutricionista.nome)} · CRN ${esc(nutricionista.crn)}</p>
     `;
 
-    await sendBrevoEmail({
+    const emailResp = await sendBrevoEmail({
       to: [{ email: destino, name: paciente.nome }],
       subject: `Sua Avaliação Física — ${paciente.nome}`,
       html,
@@ -180,7 +181,24 @@ export async function POST(req: NextRequest) {
         : undefined,
     });
 
-    return NextResponse.json({ ok: true, mensagem: "Avaliação enviada com sucesso", resumo, destino });
+    const snapshot = await salvarAvaliacaoHistorico({
+      pacienteId,
+      protocolLabel: body.protocolLabel || "",
+      currentDobras: body.currentDobras || {},
+      currentCircunferencias: body.currentCircunferencias || {},
+      resumo: {
+        pesoKg: resumo.pesoKg,
+        bodyFatPct: resumo.bfPct,
+        massaMuscularKg: resumo.massaMagraKg,
+        massaAdiposaKg: resumo.massaGordaKg,
+        aguaPct: resumo.pctAgua,
+        imme: resumo.imme,
+        img: resumo.img,
+        ffmi: resumo.ffmi,
+      },
+    });
+
+    return NextResponse.json({ ok: true, mensagem: "Avaliação enviada com sucesso", resumo, destino, messageId: emailResp?.messageId ?? null, snapshot });
   } catch (e: any) {
     return NextResponse.json({ ok: false, erro: e?.message ?? "Erro desconhecido" }, { status: 500 });
   }

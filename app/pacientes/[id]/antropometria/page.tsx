@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { extrairSnapshotDeEvolucao } from "@/lib/avaliacaoHistorico";
 import AntropometriaLayout from "./AntropometriaLayout";
 import PatientTabsNav from "@/components/PatientTabsNav";
 
@@ -87,6 +88,17 @@ export default async function AntropometriaPage({
   // ==============================
   const alturaCm = Number(anamnese?.altura ?? 0);
 
+  const ultimaAvaliacao = await prisma.evolucao_corporal.findFirst({
+    where: {
+      paciente_id: id,
+    },
+    orderBy: {
+      created_at: "desc",
+    },
+  });
+
+  const avaliacaoAnterior = extrairSnapshotDeEvolucao(ultimaAvaliacao || {});
+
   return (
     <div>
       {/* Cabeçalho */}
@@ -127,6 +139,7 @@ export default async function AntropometriaPage({
         idade={idade}
         pesoKg={pesoKg}
         alturaCm={alturaCm}
+        avaliacaoAnteriorInicial={avaliacaoAnterior}
       />
     </div>
   );
