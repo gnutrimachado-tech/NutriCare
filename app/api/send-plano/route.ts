@@ -7,6 +7,9 @@ import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFFont, type PDFP
 import { promises as fs } from "fs";
 import path from "path";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 type MealFood = {
   id?: string;
   name: string;
@@ -1391,14 +1394,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_PASS;
+    const brevoApiKey = process.env.BREVO_API_KEY;
+    const brevoFromEmail = process.env.BREVO_FROM_EMAIL || process.env.BREVO_SENDER_EMAIL || "";
+    const brevoFromName = process.env.BREVO_FROM_NAME || process.env.BREVO_SENDER_NAME || "NutriCare";
+    const smtpUser = process.env.SMTP_USER || brevoFromEmail;
+    const smtpPass = process.env.SMTP_PASS || "";
     const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
     const smtpPort = parseInt(process.env.SMTP_PORT || "587", 10);
 
-    if (!smtpUser || !smtpPass) {
+    if (!brevoApiKey || !brevoFromEmail) {
       return NextResponse.json(
-        { error: "Configuração de email não encontrada. Adicione SMTP_USER e SMTP_PASS no arquivo .env para enviar emails." },
+        { error: "Configure BREVO_API_KEY e BREVO_FROM_EMAIL na Vercel antes de enviar o plano." },
         { status: 500 }
       );
     }
@@ -1534,12 +1540,8 @@ export async function POST(request: Request) {
     try {
       const resendApiKey = process.env.RESEND_API_KEY;
 
-      const brevoApiKey = process.env.BREVO_API_KEY;
-
       if (brevoApiKey) {
-        // ── Brevo API (HTTPS porta 443 — envia para qualquer destinatário sem domínio próprio) ──
-        const brevoFromEmail = process.env.BREVO_FROM_EMAIL || smtpUser || "";
-        const brevoFromName = process.env.BREVO_FROM_NAME || "NutriCare";
+        // ── Brevo API (HTTPS porta 443) ──
         const body = {
           sender: { name: brevoFromName, email: brevoFromEmail },
           to: [{ email: paciente.email, name: paciente.nome || nomePaciente }],
