@@ -4,7 +4,6 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import { resumoCompleto } from "@/lib/bodyComposition";
-import { salvarAvaliacaoHistorico } from "@/lib/avaliacaoHistorico";
 import { sendBrevoEmail, bufferToBase64 } from "@/lib/brevoEmail";
 
 export const runtime = "nodejs";
@@ -21,6 +20,7 @@ type BodyShape = {
   massaAdiposaKg?: number | null;
   aguaPct?: number | null;
   vo2max?: number | null;
+  vo2ClassLabel?: string | null;
   protocolLabel?: string;
   compareResults?: boolean;
   currentDobras?: Record<string, number>;
@@ -33,7 +33,6 @@ type BodyShape = {
     massaMuscularKg?: number | null;
     massaAdiposaKg?: number | null;
     aguaPct?: number | null;
-  vo2max?: number | null;
     imme?: number | null;
     img?: number | null;
     ffmi?: number | null;
@@ -123,11 +122,10 @@ export async function POST(req: NextRequest) {
         img: resumo.img,
         ffmi: resumo.ffmi,
         vo2max: body.vo2max ?? null,
+        vo2ClassLabel: body.vo2ClassLabel ?? null,
         classificacaoAgua: resumo.classificacoes.agua,
         classificacaoImme: resumo.classificacoes.imme,
         classificacaoImg: resumo.classificacoes.img,
-        classificacaoFfmi: resumo.classificacoes.ffmi,
-        classificacaoGordura: resumo.classificacoes.gordura,
         imagemUrl: resumo.imagem.url,
         imagemFrenteUrl: resumo.imagem.frontalUrl,
         imagemLateralUrl: resumo.imagem.lateralUrl,
@@ -164,7 +162,7 @@ export async function POST(req: NextRequest) {
       <p>${esc(nutricionista.nome)} · CRN ${esc(nutricionista.crn)}</p>
     `;
 
-    const emailResp = await sendBrevoEmail({
+    await sendBrevoEmail({
       to: [{ email: destino, name: paciente.nome }],
       subject: `Sua Avaliação Física — ${paciente.nome}`,
       html,
@@ -181,24 +179,7 @@ export async function POST(req: NextRequest) {
         : undefined,
     });
 
-    const snapshot = await salvarAvaliacaoHistorico({
-      pacienteId,
-      protocolLabel: body.protocolLabel || "",
-      currentDobras: body.currentDobras || {},
-      currentCircunferencias: body.currentCircunferencias || {},
-      resumo: {
-        pesoKg: resumo.pesoKg,
-        bodyFatPct: resumo.bfPct,
-        massaMuscularKg: resumo.massaMagraKg,
-        massaAdiposaKg: resumo.massaGordaKg,
-        aguaPct: resumo.pctAgua,
-        imme: resumo.imme,
-        img: resumo.img,
-        ffmi: resumo.ffmi,
-      },
-    });
-
-    return NextResponse.json({ ok: true, mensagem: "Avaliação enviada com sucesso", resumo, destino, messageId: emailResp?.messageId ?? null, snapshot });
+    return NextResponse.json({ ok: true, mensagem: "Avaliação enviada com sucesso", resumo, destino });
   } catch (e: any) {
     return NextResponse.json({ ok: false, erro: e?.message ?? "Erro desconhecido" }, { status: 500 });
   }

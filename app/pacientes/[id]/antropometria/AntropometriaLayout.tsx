@@ -722,10 +722,18 @@ export default function AntropometriaLayout({
   const [aguaInput, setAguaInput] = useState("");
   const [mensagem, setMensagem] = useState("");
   const [gerando, setGerando] = useState<"" | "baixar" | "enviar" | "salvar">("");
+<<<<<<< HEAD
+=======
+  const [ouvindo, setOuvindo] = useState(false);
+>>>>>>> 40e382baec24f80fb1731f10f93020c34fd714f7
   const [avaliacaoAnterior, setAvaliacaoAnterior] =
     useState<AvaliacaoHistoricoSnapshot | null>(avaliacaoAnteriorInicial ?? null);
   const [comparar, setComparar] = useState<boolean>(Boolean(avaliacaoAnteriorInicial));
 
+<<<<<<< HEAD
+=======
+  const recRef = useRef<any>(null);
+>>>>>>> 40e382baec24f80fb1731f10f93020c34fd714f7
   const ultimoSincronizadoRef = useRef<string>("");
 
   const resultado = useMemo<CalcResult | null>(() => {
@@ -797,6 +805,7 @@ export default function AntropometriaLayout({
     sincronizarAntropometria(pacienteId, payload).catch(() => {});
   }, [bfPctRound, massaMagraKg, massaGordaKg, pacienteId]);
 
+<<<<<<< HEAD
   function resumoAtual() {
     return {
       pesoKg: pesoKg > 0 ? pesoKg : null,
@@ -830,6 +839,95 @@ export default function AntropometriaLayout({
     return json.snapshot as AvaliacaoHistoricoSnapshot;
   }
 
+=======
+  const iniciarVoz = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const Ctor =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!Ctor) {
+      setMensagem("Reconhecimento de voz não é suportado neste navegador.");
+      return;
+    }
+    try {
+      const rec = new Ctor();
+      rec.lang = "pt-BR";
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+      rec.onresult = (event: any) => {
+        const transcript = normalizeSpeechText(
+          String(event?.results?.[0]?.[0]?.transcript || "")
+        );
+        const key = detectVoiceFieldKey(transcript);
+        const value = extractVoiceValue(transcript);
+        if (!key || !value) {
+          setMensagem(
+            'Não entendi. Diga, por exemplo: "dobra tricipital 12" ou "circunferência cintura 80".'
+          );
+          return;
+        }
+        const destino = resolveVoiceDestination({
+          transcript,
+          key,
+          value,
+          requiredDobras: protocoloAtual?.requiredDobras ?? [],
+          requiredCircs: protocoloAtual?.requiredCircs ?? [],
+        });
+        if (destino === "dobra") {
+          setDobras((prev) => ({ ...prev, [key]: value }) as Record<DobraKey, string>);
+        } else {
+          setCircunferencias((prev) => ({ ...prev, [key]: value }) as Record<CircKey, string>);
+        }
+        const rotulo =
+          (DOBRAS_LABELS as Record<string, string>)[key] ||
+          CIRC_LABELS[key as CircKey] ||
+          key;
+        setMensagem(`Preenchido por voz: ${rotulo} = ${value}`);
+      };
+      rec.onend = () => setOuvindo(false);
+      rec.onerror = () => setOuvindo(false);
+      recRef.current = rec;
+      setOuvindo(true);
+      rec.start();
+    } catch {
+      setOuvindo(false);
+      setMensagem("Não foi possível iniciar o reconhecimento de voz.");
+    }
+  }, [protocoloAtual]);
+
+  function resumoAtual() {
+    return {
+      pesoKg: pesoKg > 0 ? pesoKg : null,
+      bodyFatPct: bfPctRound,
+      massaMuscularKg: massaMagraKg,
+      massaAdiposaKg: massaGordaKg,
+      aguaPct: aguaNum > 0 ? aguaNum : null,
+      imme,
+      img,
+      ffmi,
+      protocolLabel: protocoloAtual?.label || "",
+    };
+  }
+
+  async function salvarHistorico() {
+    const res = await fetch("/api/avaliacao-fisica/historico", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pacienteId,
+        protocolLabel: protocoloAtual?.label || "",
+        currentDobras: dobrasNum,
+        currentCircunferencias: circNum,
+        resumo: resumoAtual(),
+      }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.erro || "Falha ao salvar a avaliação.");
+    }
+    return json.snapshot as AvaliacaoHistoricoSnapshot;
+  }
+
+>>>>>>> 40e382baec24f80fb1731f10f93020c34fd714f7
   function payloadPdf() {
     const usarComparacao = comparar && Boolean(avaliacaoAnterior);
     return {
@@ -1042,6 +1140,13 @@ export default function AntropometriaLayout({
               ))}
             </select>
           </div>
+          <button
+            type="button"
+            style={ouvindo ? styles.btnVoiceActive : styles.btnVoice}
+            onClick={iniciarVoz}
+          >
+            {ouvindo ? "🎙️ Ouvindo..." : "🎙️ Preencher por voz"}
+          </button>
         </div>
         {avaliacaoAnterior ? (
           <label style={styles.compareRow}>
@@ -1316,6 +1421,29 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     fontSize: 14,
   },
+<<<<<<< HEAD
+=======
+  btnVoice: {
+    padding: "10px 18px",
+    borderRadius: 12,
+    border: "1px solid #bbf7d0",
+    background: "#f0fdf4",
+    color: "#166534",
+    fontWeight: 700,
+    cursor: "pointer",
+    fontSize: 14,
+  },
+  btnVoiceActive: {
+    padding: "10px 18px",
+    borderRadius: 12,
+    border: "1px solid #fecaca",
+    background: "#fef2f2",
+    color: "#b91c1c",
+    fontWeight: 700,
+    cursor: "pointer",
+    fontSize: 14,
+  },
+>>>>>>> 40e382baec24f80fb1731f10f93020c34fd714f7
 };
 
 function normalizeDecimalInput(value: string) {
