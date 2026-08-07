@@ -576,16 +576,25 @@ export default function EnvioPlanoLayout({
         method: 'POST',
         body: formData,
       })
-      const data = await res.json()
+
+      const raw = await res.text()
+      let data: { message?: string; error?: string } = {}
+      try {
+        data = raw ? JSON.parse(raw) : {}
+      } catch {
+        data = { error: raw || `Falha inesperada (${res.status}) ao enviar o plano.` }
+      }
+
       if (res.ok) {
         alert(data.message || '✅ Plano enviado com sucesso!')
         setMessage('')
         setAttachments([])
       } else {
-        alert(data.error || 'Erro ao enviar o plano.')
+        alert(data.error || `Erro ao enviar o plano (${res.status}).`)
       }
-    } catch {
-      alert('Erro de conexão ao enviar o plano.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro de conexão ao enviar o plano.'
+      alert(message || 'Erro de conexão ao enviar o plano.')
     } finally {
       setSending(false)
     }

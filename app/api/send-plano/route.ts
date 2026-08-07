@@ -9,6 +9,7 @@ import path from "path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 type MealFood = {
   id?: string;
