@@ -291,52 +291,70 @@ function getRawWeightFactor(foodName: string): number {
 
 function simplifyFoodName(fullName: string): string {
   if (!fullName) return fullName;
-  const parts = fullName.split(",").map(p => p.trim());
+  const parts = fullName.split(",").map(p => p.trim()).filter(Boolean);
   if (parts.length <= 1) return fullName;
 
   const main = parts[0];
-  const variety = parts.length > 1 ? parts[1] : "";
-  const sub = parts.length > 2 ? parts[2] : "";
+  const variation = parts.length > 1 ? parts[1] : "";
+  const detail1 = parts.length > 2 ? parts[2] : "";
+  const detail2 = parts.length > 3 ? parts[3] : "";
 
   const isPrepWord = (s: string) => {
+    if (!s) return true;
     const l = s.toLowerCase();
     return Array.from(PREP_WORDS_SET).some(w => l === w) || l.includes("sem ") || l.includes("com gordura");
   };
 
+  const cap = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : "";
+
+  // Mantém o preparo (grelhado, assado, cozido...) sempre visível, sem a partícula "sem ..."/"com gordura".
+  let prepWord = "";
+  if (detail2 && isPrepWord(detail2) && !detail2.toLowerCase().startsWith("sem ") && !detail2.toLowerCase().startsWith("com ")) {
+    prepWord = detail2.toLowerCase();
+  } else if (detail1 && isPrepWord(detail1) && !detail1.toLowerCase().startsWith("sem ") && !detail1.toLowerCase().startsWith("com ")) {
+    prepWord = detail1.toLowerCase();
+  }
+  const withPrep = (base: string) => prepWord ? `${base} ${prepWord}` : base;
+
   const mainLower = main.toLowerCase();
 
-  if (mainLower === "carne" && variety.toLowerCase() === "bovina" && sub && !isPrepWord(sub)) {
-    const cleanSub = sub.split(",")[0].trim();
-    if (!isPrepWord(cleanSub)) {
-      return cleanSub.charAt(0).toUpperCase() + cleanSub.slice(1).toLowerCase() + " bovino";
-    }
-    return main + " bovina";
+  // Carne bovina → corte + "bovino" (ex.: "Carne, bovina, bisteca, magro" → "Bisteca bovina")
+  if (mainLower === "carne" && variation.toLowerCase() === "bovina" && detail1 && !isPrepWord(detail1)) {
+    const cleanSub = detail1.split(",")[0].trim();
+    if (cleanSub) return withPrep(cap(cleanSub) + " bovino");
+    return withPrep("Carne bovina");
   }
 
-  if (mainLower === "frango" && variety && !isPrepWord(variety)) {
-    const varLower = variety.toLowerCase();
-    if (varLower === "peito") return "Peito de frango";
-    if (varLower === "coxa") return "Coxa de frango";
-    if (varLower === "sobrecoxa") return "Sobrecoxa de frango";
-    return variety.charAt(0).toUpperCase() + variety.slice(1).toLowerCase() + " de frango";
+  // Frango → corte + "de frango" (ex.: "Frango, peito, sem pele, grelhado" → "Peito de frango grelhado")
+  if (mainLower === "frango" && variation) {
+    const varLower = variation.toLowerCase();
+    if (varLower === "peito") return withPrep("Peito de frango");
+    if (varLower === "coxa") return withPrep("Coxa de frango");
+    if (varLower === "sobrecoxa") return withPrep("Sobrecoxa de frango");
+    return withPrep(cap(variation) + " de frango");
   }
 
+  // Porco/Peixe → mostra só o corte (porco é implícito no nome do prato)
+  if ((mainLower === "porco" || mainLower === "peixe") && variation) {
+    return withPrep(cap(variation));
+  }
+
+  // Cereais/leguminosas → mantém nome + variação; ignora "cozido" (default)
   if (["arroz","feijão","feijao","lentilha","ervilha","aveia","quinoa","macarrão","macarrao"].some(k => mainLower.includes(k))) {
-    const varLower = variety.toLowerCase();
-    if (/^tipo \d/.test(varLower) || isPrepWord(variety)) return main;
-    return main + " " + variety.toLowerCase();
-  }
-
-  if (!isPrepWord(variety)) {
-    const varLower = variety.toLowerCase();
-    if (/^tipo \d/.test(varLower)) return main;
-    if (["suco","concentrado","envasado"].includes(varLower)) {
-      return main + " (suco)";
+    if (!variation || /^tipo \d/.test(variation.toLowerCase()) || isPrepWord(variation)) {
+      return prepWord ? `${main} ${prepWord}` : main;
     }
-    return main + " " + variety.toLowerCase();
+    return prepWord ? `${main} ${variation.toLowerCase()} ${prepWord}` : `${main} ${variation.toLowerCase()}`;
   }
 
-  return main;
+  // Outros: mostra o nome com a variação condensada ("Tipo N" ou suco segue padrão antigo)
+  if (!variation) return prepWord ? `${main} ${prepWord}` : main;
+  if (isPrepWord(variation)) return prepWord ? `${main} ${prepWord}` : main;
+  if (/^tipo \d/.test(variation.toLowerCase())) return prepWord ? `${main} ${prepWord}` : main;
+  if (["suco","concentrado","envasado"].includes(variation.toLowerCase())) {
+    return prepWord ? `${main} (suco) ${prepWord}` : `${main} (suco)`;
+  }
+  return prepWord ? `${main} ${variation.toLowerCase()} ${prepWord}` : `${main} ${variation.toLowerCase()}`;
 }
 
 // ── Structured meal lines (for colored Para X: rendering) ──────────────────────
@@ -345,7 +363,7 @@ type SubLine = { isPara: boolean; text: string };
 function getMealLinesStructured(meal: EnvioMeal | undefined): { mainLines: string[]; subLines: SubLine[] } {
   const mainLines = (meal?.foods || [])
     .filter(food => food?.name)
-    .map(food => `${food.name} — ${String(food.qty ?? "")} ${String(food.unit ?? "").trim()}`.replace(/\s+/g, " ").trim());
+    .map(food => `${simplifyFoodName(food.name)} — ${String(food.qty ?? "")} ${String(food.unit ?? "").trim()}`.replace(/\s+/g, " ").trim());
 
   const subLines: SubLine[] = [];
   Object.entries(meal?.subs || {}).forEach(([foodId, subs]) => {
@@ -353,12 +371,12 @@ function getMealLinesStructured(meal: EnvioMeal | undefined): { mainLines: strin
     if (validSubs.length === 0) return;
     const mainFood = (meal?.foods || []).find(food => food.id === foodId);
     if (mainFood?.name) {
-      subLines.push({ isPara: true, text: `Para ${shortFoodName(mainFood.name)}:` });
+      subLines.push({ isPara: true, text: `Para ${simplifyFoodName(mainFood.name)}:` });
     }
     validSubs.forEach(sub => {
       subLines.push({
         isPara: false,
-        text: `${sub.name} — ${String(sub.qty ?? "")} ${String(sub.unit ?? "").trim()}`.replace(/\s+/g, " ").trim(),
+        text: `${simplifyFoodName(sub.name)} — ${String(sub.qty ?? "")} ${String(sub.unit ?? "").trim()}`.replace(/\s+/g, " ").trim(),
       });
     });
   });
@@ -713,9 +731,9 @@ function drawMealBox(doc: LayoutDoc, page: PDFPage, x: number, y: number, width:
 
   const innerTop = y + height - 43;
   const colGap = 14;
-  const innerWidth = width - 26;
+  const innerWidth = width - 30;
   const colWidth = (innerWidth - colGap) / 2;
-  const leftX = x + 13;
+  const leftX = x + 15;
   const rightX = leftX + colWidth + colGap;
 
   page.drawText("principais", {
@@ -784,11 +802,11 @@ async function buildPlanoPdf(params: {
   }
 
   {
-    const gridX = PAGE_MARGIN_X - 14;
-    const colGap = 11;
+    const gridX = PAGE_MARGIN_X - 16;
+    const colGap = 8;
     const rowGap = 14;
-    const boxWidth = 276;
-    const colWidth = (boxWidth - 26 - 14) / 2;
+    const boxWidth = 282;
+    const colWidth = (boxWidth - 30 - 14) / 2;
     const MEAL_OVERHEAD = 66;
     const MEAL_BOTTOM_PAD = 10;
     const MEAL_LINE_H = 8 + 3.5;
@@ -836,8 +854,15 @@ async function buildPlanoPdf(params: {
       }
 
       const y = mealPageY - rowHeight;
-      drawMealBox(doc, mealPage!, gridX, y, boxWidth, rowHeight, mealA);
-      drawMealBox(doc, mealPage!, gridX + boxWidth + colGap, y, boxWidth, rowHeight, mealB);
+      // Ajuste 1: 1mm de padding lateral (≈2.83pt) em cada card do plano alimentar.
+      const SIDE_PAD_PT = 2.83;
+      const paddedGridX = gridX + SIDE_PAD_PT;
+      const paddedColGap = Math.max(0, colGap - 2 * SIDE_PAD_PT);
+      const paddedBoxWidth = Math.max(80, boxWidth - 2 * SIDE_PAD_PT);
+      const paddedY = y - SIDE_PAD_PT;
+      const paddedRowHeight = Math.max(40, rowHeight - 2 * SIDE_PAD_PT);
+      drawMealBox(doc, mealPage!, paddedGridX, paddedY, paddedBoxWidth, paddedRowHeight, mealA);
+      drawMealBox(doc, mealPage!, paddedGridX + paddedBoxWidth + paddedColGap, paddedY, paddedBoxWidth, paddedRowHeight, mealB);
       mealPageY -= rowHeight + rowGap;
     }
   }
@@ -945,11 +970,11 @@ async function buildAllPdfsOptimized(params: {
   }
 
   {
-    const gridX = PAGE_MARGIN_X - 14;
-    const colGap = 11;
+    const gridX = PAGE_MARGIN_X - 16;
+    const colGap = 8;
     const rowGap = 14;
-    const boxWidth = 276;
-    const colWidth = (boxWidth - 26 - 14) / 2; // matches drawMealBox inner colWidth
+    const boxWidth = 282;
+    const colWidth = (boxWidth - 30 - 14) / 2; // matches drawMealBox inner colWidth
     const MEAL_OVERHEAD = 66;
     const MEAL_BOTTOM_PAD = 10;
     const MEAL_LINE_H = 8 + 3.5;
@@ -1000,8 +1025,15 @@ async function buildAllPdfsOptimized(params: {
       }
 
       const y = mealPageY - rowHeight;
-      drawMealBox(planoDoc, mealPage!, gridX, y, boxWidth, rowHeight, mealA);
-      drawMealBox(planoDoc, mealPage!, gridX + boxWidth + colGap, y, boxWidth, rowHeight, mealB);
+      // Ajuste 1: 1mm de padding lateral (≈2.83pt) em cada card do plano alimentar.
+      const SIDE_PAD_PT = 2.83;
+      const paddedGridX = gridX + SIDE_PAD_PT;
+      const paddedColGap = Math.max(0, colGap - 2 * SIDE_PAD_PT);
+      const paddedBoxWidth = Math.max(80, boxWidth - 2 * SIDE_PAD_PT);
+      const paddedY = y - SIDE_PAD_PT;
+      const paddedRowHeight = Math.max(40, rowHeight - 2 * SIDE_PAD_PT);
+      drawMealBox(planoDoc, mealPage!, paddedGridX, paddedY, paddedBoxWidth, paddedRowHeight, mealA);
+      drawMealBox(planoDoc, mealPage!, paddedGridX + paddedBoxWidth + paddedColGap, paddedY, paddedBoxWidth, paddedRowHeight, mealB);
       mealPageY -= rowHeight + rowGap;
     }
   }
@@ -1458,6 +1490,9 @@ export async function POST(request: Request) {
       nutricionistaCrn,
     });
 
+    // Limite do Brevo /smtp/email: ~50 MB totais para anexos.
+    // Se ultrapassar, não reenviar — exibir erro amigável ao nutri.
+    const BREVO_MAX_TOTAL_BYTES = 49 * 1024 * 1024; // 49 MB (margem de segurança sobre 50 MB)
     const mailAttachments: Array<{ filename: string; content: Buffer; contentType: string }> = [
       {
         filename: `${sanitizeFilename(nomePaciente || paciente.nome || "paciente")}-plano-alimentar.pdf`,
@@ -1488,6 +1523,24 @@ export async function POST(request: Request) {
         content: Buffer.from(await file.arrayBuffer()),
         contentType: file.type || "application/octet-stream",
       });
+    }
+
+    const totalAttachmentBytes = mailAttachments.reduce((sum, a) => sum + a.content.length, 0);
+    if (totalAttachmentBytes > BREVO_MAX_TOTAL_BYTES) {
+      const totalMb = (totalAttachmentBytes / (1024 * 1024)).toFixed(1);
+      console.warn(
+        `[send-plano] Pacote de PDFs muito grande para envio único: ${totalMb} MB > limite Brevo 49 MB`
+      );
+      return NextResponse.json(
+        {
+          error:
+            `Arquivo muito grande para ser enviado junto: ${totalMb} MB (limite do provedor de e-mail ~50 MB). ` +
+            `Reduza a quantidade de alimentos/orientações ou divida o envio em partes.`,
+          code: "ATTACHMENTS_TOO_LARGE",
+          totalBytes: totalAttachmentBytes,
+        },
+        { status: 413 }
+      );
     }
 
     const originHeader = request.headers.get("origin") || request.headers.get("referer") || "";
