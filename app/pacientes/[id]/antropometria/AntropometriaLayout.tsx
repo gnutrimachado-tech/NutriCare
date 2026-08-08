@@ -1040,10 +1040,11 @@ export default function AntropometriaLayout({
     aguaCorporalPct !== null ? classificarAgua(aguaCorporalPct, sexoCodigo) : null;
   const vo2maxAtual = pacienteId ? readStoredVO2max(pacienteId) : null;
 
-  // =================== BOTOES: Enviar / Download PDF ====================
-  const [avaliacaoMsg, setAvaliacaoMsg] = useState<string | null>(null);
-  const [envBusy, setEnvBusy] = useState(false);
-  const [downBusy, setDownBusy] = useState(false);
+  // =================== AVALIAÇÃO FÍSICA (somente leitura) ====================
+  // Os botões "Enviar avaliação física", "Download PDF" e "Comparação" foram
+  // removidos por solicitação do produto. O layout da aba Antropometria
+  // permanece intacto — apenas as ações de envio/download ficam indisponíveis.
+  const avaliacaoMsg: string | null = null;
 
   function classifPill(c: { cor: "verde" | "amarelo" }) {
     return {
@@ -1248,49 +1249,9 @@ export default function AntropometriaLayout({
     };
   }
 
-  const enviarAvaliacao = useCallback(async () => {
-    if (!pacienteId) return;
-    if (!result.bodyFatPct) { setAvaliacaoMsg("Calcule o % de gordura antes de enviar."); return; }
-    setAvaliacaoMsg(null); setEnvBusy(true);
-    try {
-      const r = await fetch("/api/avaliacao-fisica/enviar", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(createAvaliacaoPayload()),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || j?.ok === false) throw new Error(j?.erro ?? `Erro HTTP ${r.status}`);
-      persistAvaliacaoSnapshot();
-      setAvaliacaoMsg(j?.destino ? `Avaliação enviada para ${j.destino}.` : "Avaliação enviada ao paciente.");
-    } catch (e: any) { setAvaliacaoMsg("Erro ao enviar: " + (e?.message ?? e)); }
-    finally { setEnvBusy(false); }
-  }, [pacienteId, sexoCodigo, idade, alturaCm, pesoKg, result.bodyFatPct, result.massaMuscular, result.massaAdiposa, aguaCorporalPct]);
-
-  const downloadAvaliacao = useCallback(async () => {
-    if (!pacienteId) return;
-    if (!result.bodyFatPct) { setAvaliacaoMsg("Calcule o % de gordura antes de baixar."); return; }
-    setAvaliacaoMsg(null); setDownBusy(true);
-    try {
-      const r = await fetch("/api/avaliacao-fisica/download", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(createAvaliacaoPayload()),
-      });
-      if (!r.ok) {
-        const j = await r.json().catch(() => ({}));
-        throw new Error(j?.erro ?? `Erro HTTP ${r.status}`);
-      }
-      persistAvaliacaoSnapshot();
-      const blob = await r.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `avaliacao-${String(pacienteId)}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (e: any) { setAvaliacaoMsg("Erro ao baixar: " + (e?.message ?? e)); }
-    finally { setDownBusy(false); }
-  }, [pacienteId, sexoCodigo, idade, alturaCm, pesoKg, result.bodyFatPct, result.massaMuscular, result.massaAdiposa, aguaCorporalPct]);
+  // Botões de envio/download da avaliação física foram desativados.
+  // Mantemos apenas as funções internas para que o snapshot local continue
+  // funcionando sem expor chamadas às rotas /api/avaliacao-fisica/*.
 
     const protocolosSexo = DOBRAS_POR_SEXO[sexoPaciente];
 
@@ -1598,44 +1559,7 @@ export default function AntropometriaLayout({
             </span>
           )}
 
-          <label style={{ ...compareToggleWrapStyle, opacity: avaliacaoAnterior ? 1 : 0.6 }}>
-            <input
-              type="checkbox"
-              checked={compararResultados}
-              onChange={(e) => setCompararResultados(e.target.checked)}
-              disabled={!avaliacaoAnterior}
-            />
-            <span>Comparar resultados</span>
-            <small style={compareHintStyle}>
-              {avaliacaoAnterior
-                ? `Comparando com ${getSnapshotDateLabel(avaliacaoAnterior.createdAt)}`
-                : "Ative depois da primeira avaliação gerada"}
-            </small>
-          </label>
-
-          <button
-            type="button"
-            onClick={enviarAvaliacao}
-            disabled={envBusy || !result.bodyFatPct}
-            style={{
-              ...avaliacaoBtnPrimary,
-              ...(envBusy || !result.bodyFatPct ? avaliacaoBtnDisabled : {}),
-            }}
-          >
-            {envBusy ? "Enviando..." : "Enviar Avaliação Física"}
-          </button>
-
-          <button
-            type="button"
-            onClick={downloadAvaliacao}
-            disabled={downBusy || !result.bodyFatPct}
-            style={{
-              ...avaliacaoBtnSecondary,
-              ...(downBusy || !result.bodyFatPct ? avaliacaoBtnDisabled : {}),
-            }}
-          >
-            {downBusy ? "Baixando..." : "Download do PDF"}
-          </button>
+          <span style={compareToggleWrapStyle} aria-hidden="true" hidden />
         </div>
 
       </div>
@@ -1788,30 +1712,15 @@ function normalizeDecimalInput(value: string) {
 }
 
 // ==================== AVALIAÇÃO: ESTILOS DOS BOTÕES ====================
-const avaliacaoBotoesWrapStyle: React.CSSProperties = {
-  display: "flex", flexWrap: "wrap", gap: 12, marginTop: 24,
-  alignItems: "center", justifyContent: "flex-end",
-};
-const avaliacaoBtnPrimary: React.CSSProperties = {
-  padding: "12px 20px", borderRadius: 12, border: "none",
-  background: "linear-gradient(135deg, #16a34a, #15803d)",
-  color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer",
-  boxShadow: "0 8px 20px rgba(22, 163, 74, 0.25)",
-};
-const avaliacaoBtnSecondary: React.CSSProperties = {
-  padding: "12px 20px", borderRadius: 12,
-  border: "1px solid #16a34a", background: "#ffffff",
-  color: "#15803d", fontWeight: 700, fontSize: 14, cursor: "pointer",
-};
-const avaliacaoBtnDisabled: React.CSSProperties = { opacity: 0.6, cursor: "not-allowed" };
-const avaliacaoFeedbackStyle: React.CSSProperties = {
-  fontSize: 13, fontWeight: 600, color: "#15803d", marginRight: "auto",
-};
-const compareToggleWrapStyle: React.CSSProperties = {
-  display: "inline-flex", flexDirection: "column", gap: 4, padding: "10px 14px",
-  borderRadius: 12, border: "1px solid #e5e7eb", background: "#fff", color: "#334155",
-  fontSize: 13, fontWeight: 700,
-};
+// Botões "Enviar avaliação física / Download PDF / Comparação" foram removidos
+// por solicitação do produto. Os estilos abaixo ficam apenas como referência
+// histórica e não estão sendo usados no layout atual da aba Antropometria.
+const avaliacaoBotoesWrapStyle: React.CSSProperties = { display: "none" };
+const avaliacaoBtnPrimary: React.CSSProperties = { display: "none" };
+const avaliacaoBtnSecondary: React.CSSProperties = { display: "none" };
+const avaliacaoBtnDisabled: React.CSSProperties = { display: "none" };
+const avaliacaoFeedbackStyle: React.CSSProperties = { display: "none" };
+const compareToggleWrapStyle: React.CSSProperties = { display: "none" };
 const compareHintStyle: React.CSSProperties = {
   fontSize: 11, color: "#64748b", fontWeight: 500,
 };
