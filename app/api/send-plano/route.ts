@@ -79,7 +79,9 @@ const SHOP_BOTTOM_PAD = 20;           // padding inferior do quadrado
 const BACKGROUND_OPACITY = 0.15;
 const FOOTER_LOGO_OPACITY = 0.15;
 const BOX_RADIUS = 8;
-const BOX_FILL_OPACITY = 0.40;
+// Quadros dos PDFs devem ser totalmente brancos, sem transparência.
+// Esta constante é usada pelo plano alimentar, lista de compras e orientações.
+const BOX_FILL_OPACITY = 1;
 const CRN_LABEL = process.env.NUTRICARE_CRN || "CRN:";
 
 const assetCache = new Map<string, Buffer | null>();
