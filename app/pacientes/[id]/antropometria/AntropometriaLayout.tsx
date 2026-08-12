@@ -18,6 +18,12 @@ import {
 
 type SexoPaciente = "Masculino" | "Feminino";
 
+type HistoricoItem = {
+  id: string;
+  createdAt: string | null;
+  snapshot: AvaliacaoHistoricoSnapshot | null;
+};
+
 type Props = {
   pacienteId: string;
   sexoPaciente: SexoPaciente;
@@ -25,6 +31,7 @@ type Props = {
   pesoKg: number;
   alturaCm: number;
   avaliacaoAnteriorInicial?: AvaliacaoHistoricoSnapshot | null;
+  historicoAvaliacoes?: HistoricoItem[];
 };
 
 type DobraKey =
@@ -754,6 +761,7 @@ export default function AntropometriaLayout({
   pesoKg,
   alturaCm,
   avaliacaoAnteriorInicial = null,
+  historicoAvaliacoes = [],
 }: Props) {
   const protocolosDisponiveis = useMemo(
     () => PROTOCOLS.filter((p) => p.sexo === sexoPaciente),
@@ -1040,11 +1048,24 @@ export default function AntropometriaLayout({
     aguaCorporalPct !== null ? classificarAgua(aguaCorporalPct, sexoCodigo) : null;
   const vo2maxAtual = pacienteId ? readStoredVO2max(pacienteId) : null;
 
-  // =================== AVALIAÇÃO FÍSICA (somente leitura) ====================
-  // Os botões "Enviar avaliação física", "Download PDF" e "Comparação" foram
-  // removidos por solicitação do produto. O layout da aba Antropometria
-  // permanece intacto — apenas as ações de envio/download ficam indisponíveis.
-  const avaliacaoMsg: string | null = null;
+  // =================== AVALIAÇÃO FÍSICA ====================
+  const [avaliacaoMsg, setAvaliacaoMsg] = useState<string | null>(null);
+  const [enviandoAvaliacao, setEnviandoAvaliacao] = useState(false);
+  const [baixandoAvaliacao, setBaixandoAvaliacao] = useState(false);
+
+  // Seletor 1ª / 2ª / 3ª avaliação (para comparar)
+  const historicoOrdenado = useMemo(() => {
+    const arr = [...(historicoAvaliacoes || [])].filter((h) => h?.snapshot);
+    arr.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+    return arr;
+  }, [historicoAvaliacoes]);
+  const [avaliacaoBaseId, setAvaliacaoBaseId] = useState<string>("");
+  useEffect(() => {
+    // Padrão: comparar contra a 1ª avaliação (mais antiga), se existir.
+    if (!avaliacaoBaseId && historicoOrdenado[0]?.id) {
+      setAvaliacaoBaseId(historicoOrdenado[0].id);
+    }
+  }, [historicoOrdenado, avaliacaoBaseId]);
 
   function classifPill(c: { cor: "verde" | "amarelo" }) {
     return {
@@ -1249,9 +1270,72 @@ export default function AntropometriaLayout({
     };
   }
 
-  // Botões de envio/download da avaliação física foram desativados.
-  // Mantemos apenas as funções internas para que o snapshot local continue
-  // funcionando sem expor chamadas às rotas /api/avaliacao-fisica/*.
+  // Ações da Avaliação Física
+  async function handleEnviarAvaliacao() {
+    if (!pacienteId || enviandoAvaliacao) return;
+    if (result.bodyFatPct === null) {
+      setAvaliacaoMsg("Preencha e calcule antes de enviar.");
+      return;
+    }
+    try {
+      setEnviandoAvaliacao(true);
+      setAvaliacaoMsg("Enviando avaliação...");
+      const resp = await fetch("/api/avaliacao-fisica/enviar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(createAvaliacaoPayload()),
+      });
+      const json = await resp.json().catch(() => ({}));
+      if (!resp.ok || json?.ok === false) {
+        setAvaliacaoMsg(json?.erro || "Não foi possível enviar a avaliação.");
+      } else {
+        setAvaliacaoMsg(`Avaliação enviada para ${json?.destino || "o paciente"}.`);
+      }
+    } catch (e: any) {
+      setAvaliacaoMsg(e?.message || "Erro ao enviar avaliação.");
+    } finally {
+      setEnviandoAvaliacao(false);
+    }
+  }
+
+  async function handleDownloadAvaliacao() {
+    if (!pacienteId || baixandoAvaliacao) return;
+    if (result.bodyFatPct === null) {
+      setAvaliacaoMsg("Preencha e calcule antes de baixar.");
+      return;
+    }
+    try {
+      setBaixandoAvaliacao(true);
+      setAvaliacaoMsg("Gerando PDF...");
+      const resp = await fetch("/api/avaliacao-fisica/download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(createAvaliacaoPayload()),
+      });
+      if (!resp.ok) {
+        const json = await resp.json().catch(() => ({}));
+        setAvaliacaoMsg(json?.erro || "Não foi possível gerar o PDF.");
+        return;
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `avaliacao-fisica.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      // Persiste snapshot local (histórico do lado do front) — o backend também
+      // gravou no banco (rotação 1ª/2ª/3ª).
+      persistAvaliacaoSnapshot();
+      setAvaliacaoMsg("PDF gerado e histórico atualizado.");
+    } catch (e: any) {
+      setAvaliacaoMsg(e?.message || "Erro ao gerar PDF.");
+    } finally {
+      setBaixandoAvaliacao(false);
+    }
+  }
 
     const protocolosSexo = DOBRAS_POR_SEXO[sexoPaciente];
 
@@ -1548,18 +1632,76 @@ export default function AntropometriaLayout({
           <VO2MaxJackDaniels sexoPaciente={sexoPaciente} pacienteId={pacienteId} />
         </div>
 
-        <div style={avaliacaoBotoesWrapStyle}>
-          {avaliacaoMsg ? (
-            <span style={avaliacaoFeedbackStyle}>{avaliacaoMsg}</span>
-          ) : (
-            <span style={avaliacaoFeedbackStyle}>
-              {result.bodyFatPct !== null
-                ? "Pronto para gerar o PDF."
-                : "Preencha e calcule para gerar o PDF."}
-            </span>
-          )}
+        {/* ============ AVALIAÇÃO FÍSICA — Botões + Comparação ============ */}
+        <div style={avaliacaoActionsCardStyle}>
+          <div style={avaliacaoActionsRowStyle}>
+            <button
+              type="button"
+              onClick={handleEnviarAvaliacao}
+              disabled={enviandoAvaliacao || result.bodyFatPct === null}
+              style={{
+                ...avaliacaoActionBtnPrimary,
+                ...(enviandoAvaliacao || result.bodyFatPct === null ? avaliacaoActionBtnDisabled : {}),
+              }}
+            >
+              {enviandoAvaliacao ? "Enviando..." : "Enviar avaliação física"}
+            </button>
 
-          <span style={compareToggleWrapStyle} aria-hidden="true" hidden />
+            <button
+              type="button"
+              onClick={handleDownloadAvaliacao}
+              disabled={baixandoAvaliacao || result.bodyFatPct === null}
+              style={{
+                ...avaliacaoActionBtnSecondary,
+                ...(baixandoAvaliacao || result.bodyFatPct === null ? avaliacaoActionBtnDisabled : {}),
+              }}
+            >
+              {baixandoAvaliacao ? "Gerando..." : "Download do PDF"}
+            </button>
+          </div>
+
+          <div style={avaliacaoCompareRowStyle}>
+            <label style={avaliacaoCompareToggleStyle}>
+              <input
+                type="checkbox"
+                checked={compararResultados}
+                onChange={(e) => setCompararResultados(e.target.checked)}
+              />
+              <span>Comparação de resultados</span>
+            </label>
+
+            {compararResultados ? (
+              <div style={avaliacaoCompareSelectWrapStyle}>
+                <span style={compareHintStyle}>Comparar com:</span>
+                <select
+                  value={avaliacaoBaseId}
+                  onChange={(e) => setAvaliacaoBaseId(e.target.value)}
+                  style={avaliacaoCompareSelectStyle}
+                >
+                  {historicoOrdenado.length === 0 ? (
+                    <option value="">Sem avaliações anteriores</option>
+                  ) : (
+                    historicoOrdenado.map((h, idx) => {
+                      const label =
+                        idx === 0
+                          ? "1ª avaliação"
+                          : idx === 1
+                          ? "2ª avaliação"
+                          : "3ª avaliação";
+                      const d = h.createdAt ? new Date(h.createdAt).toLocaleDateString("pt-BR") : "—";
+                      return (
+                        <option key={h.id} value={h.id}>
+                          {label} — {d}
+                        </option>
+                      );
+                    })
+                  )}
+                </select>
+              </div>
+            ) : null}
+          </div>
+
+          {avaliacaoMsg ? <div style={avaliacaoFeedbackBoxStyle}>{avaliacaoMsg}</div> : null}
         </div>
 
       </div>
@@ -1712,9 +1854,69 @@ function normalizeDecimalInput(value: string) {
 }
 
 // ==================== AVALIAÇÃO: ESTILOS DOS BOTÕES ====================
-// Botões "Enviar avaliação física / Download PDF / Comparação" foram removidos
-// por solicitação do produto. Os estilos abaixo ficam apenas como referência
-// histórica e não estão sendo usados no layout atual da aba Antropometria.
+const avaliacaoActionsCardStyle: React.CSSProperties = {
+  marginTop: 20,
+  background: "#fff",
+  border: "1px solid #eee7fb",
+  borderRadius: 20,
+  padding: 20,
+  boxShadow: "0 8px 20px rgba(15, 23, 42, 0.04)",
+  display: "flex",
+  flexDirection: "column",
+  gap: 12,
+};
+const avaliacaoActionsRowStyle: React.CSSProperties = {
+  display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center",
+};
+const avaliacaoActionBtnPrimary: React.CSSProperties = {
+  padding: "10px 16px",
+  background: "#2f5d31",
+  color: "#fff",
+  border: "none",
+  borderRadius: 10,
+  fontWeight: 700,
+  cursor: "pointer",
+  fontSize: 13,
+};
+const avaliacaoActionBtnSecondary: React.CSSProperties = {
+  padding: "10px 16px",
+  background: "#fff",
+  color: "#2f5d31",
+  border: "1px solid #2f5d31",
+  borderRadius: 10,
+  fontWeight: 700,
+  cursor: "pointer",
+  fontSize: 13,
+};
+const avaliacaoActionBtnDisabled: React.CSSProperties = {
+  opacity: 0.55, cursor: "not-allowed",
+};
+const avaliacaoCompareRowStyle: React.CSSProperties = {
+  display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center",
+};
+const avaliacaoCompareToggleStyle: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", gap: 8,
+  fontSize: 13, fontWeight: 600, color: "#334",
+};
+const avaliacaoCompareSelectWrapStyle: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", gap: 8,
+};
+const avaliacaoCompareSelectStyle: React.CSSProperties = {
+  padding: "6px 10px",
+  border: "1px solid #d1d5db",
+  borderRadius: 8,
+  fontSize: 13,
+  background: "#fff",
+};
+const avaliacaoFeedbackBoxStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "#334",
+  background: "#f6f7f4",
+  border: "1px solid #e6ebde",
+  borderRadius: 8,
+  padding: "6px 10px",
+};
+// Aliases mantidos para compat. (referências antigas no arquivo).
 const avaliacaoBotoesWrapStyle: React.CSSProperties = { display: "none" };
 const avaliacaoBtnPrimary: React.CSSProperties = { display: "none" };
 const avaliacaoBtnSecondary: React.CSSProperties = { display: "none" };
