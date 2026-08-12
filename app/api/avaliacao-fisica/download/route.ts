@@ -1,9 +1,24 @@
+// app/api/avaliacao-fisica/download/route.ts
+// Botão "Download do PDF" — gera o PDF, DEVOLVE para download e
+// TAMBÉM salva no histórico (regra do produto: histórico só grava
+// quando o nutri baixa; envio por e-mail sozinho não salva).
+
 import { NextRequest, NextResponse } from "next/server";
 import React from "react";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
-import { resumoCompleto } from "@/lib/bodyComposition";
+import {
+  resumoCompleto,
+  imagemFrontalUrl,
+  imagemLateralUrl,
+} from "@/lib/bodyComposition";
+import {
+  salvarAvaliacaoHistorico,
+  listarUltimasTresAvaliacoes,
+  primeiraAvaliacao,
+  extrairSnapshotDeEvolucao,
+} from "@/lib/avaliacaoHistorico";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,27 +33,22 @@ type BodyShape = {
   massaMuscularKg?: number | null;
   massaAdiposaKg?: number | null;
   aguaPct?: number | null;
-  vo2max?: number | null;
-  vo2ClassLabel?: string | null;
   protocolLabel?: string;
   compareResults?: boolean;
   currentDobras?: Record<string, number>;
   currentCircunferencias?: Record<string, number>;
   previousDobras?: Record<string, number>;
   previousCircunferencias?: Record<string, number>;
-  previousSummary?: {
-    pesoKg?: number | null;
-    bodyFatPct?: number | null;
-    massaMuscularKg?: number | null;
-    massaAdiposaKg?: number | null;
-    aguaPct?: number | null;
-    imme?: number | null;
-    img?: number | null;
-    ffmi?: number | null;
-    createdAt?: string | null;
-    protocolLabel?: string | null;
-  } | null;
 };
+
+function fmtData(d: Date | string | null | undefined) {
+  if (!d) return "";
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return "";
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}`;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -55,22 +65,72 @@ export async function POST(req: NextRequest) {
 
     const session = await getServerSession(authOptions).catch(() => null);
     const sessionNutri: any = (session as any)?.user ?? {};
-    const nutricionista = {
+    let nutricionista = {
       nome: sessionNutri?.name || "Nutricionista",
       crn: sessionNutri?.crn || "—",
       email: sessionNutri?.email,
     };
+    if (!sessionNutri?.crn && nutricionista.email) {
+      const nutriRow = await prisma.nutricionistas
+        .findUnique({ where: { email: nutricionista.email } })
+        .catch(() => null);
+      if (nutriRow) nutricionista = { nome: nutriRow.nome, crn: nutriRow.crn || "—", email: nutriRow.email };
+    }
+
+    const sexo = body.sex === "F" || body.sex === "feminino" ? "F" : "M";
 
     const resumo = resumoCompleto({
       pesoKg: Number(body.pesoKg) || 0,
       alturaCm: Number(body.alturaCm) || 0,
       idade: Number(body.idade) || 0,
-      sexo: body.sex === "F" || body.sex === "feminino" ? "F" : "M",
+      sexo,
       pctAgua: Number(body.aguaPct) || 0,
       massaMagraKg: Number(body.massaMuscularKg) || 0,
       massaGordaKg: Number(body.massaAdiposaKg) || 0,
       bfPct: Number(body.bodyFatPct) || 0,
     });
+
+    // ==============================
+    // 1) SALVA no histórico ANTES de renderizar o PDF (rotação 1ª/2ª/3ª)
+    // ==============================
+    await salvarAvaliacaoHistorico({
+      pacienteId,
+      protocolLabel: body.protocolLabel || "",
+      currentDobras: body.currentDobras || {},
+      currentCircunferencias: body.currentCircunferencias || {},
+      resumo: {
+        pesoKg: resumo.pesoKg,
+        bodyFatPct: resumo.bfPct,
+        massaMuscularKg: resumo.massaMagraKg,
+        massaAdiposaKg: resumo.massaGordaKg,
+        aguaPct: resumo.pctAgua,
+        imme: resumo.imme,
+        img: resumo.img,
+        ffmi: resumo.ffmi,
+        protocolLabel: body.protocolLabel || "",
+      },
+    });
+
+    // ==============================
+    // 2) Monta evolução com os 3 registros já rotacionados
+    // ==============================
+    const rotativas = await listarUltimasTresAvaliacoes(pacienteId);
+    const evolucao = rotativas.map((r) => {
+      const snap = extrairSnapshotDeEvolucao(r);
+      return {
+        data: fmtData(r.created_at),
+        peso: snap?.resumo.pesoKg ?? Number(r.peso ?? 0) || null,
+        massaMuscular: snap?.resumo.massaMuscularKg ?? Number(r.massa_muscular ?? 0) || null,
+        bfPct: snap?.resumo.bodyFatPct ?? Number(r.percentual_gordura ?? 0) || null,
+      };
+    });
+
+    const primeira = await primeiraAvaliacao(pacienteId);
+    const primeiraSnap = primeira ? extrairSnapshotDeEvolucao(primeira) : null;
+    const dataAvaliacaoInicial = primeira?.created_at?.toISOString?.() || null;
+
+    const imagemFrenteUrl = imagemFrontalUrl(sexo, resumo.imagem.codigo);
+    const imagemLateralUrlV = imagemLateralUrl(sexo, resumo.imagem.codigo);
 
     const mod = await import("@react-pdf/renderer").catch(() => null);
     if (!mod) {
@@ -87,17 +147,10 @@ export async function POST(req: NextRequest) {
     }
     const { AvaliacaoPdfDocument } = pdfMod;
 
-    const legendaImagem =
-      resumo.imagem.codigo === 3
-        ? "Excelente composição corporal"
-        : resumo.imagem.codigo === 1
-        ? "Composição corporal equilibrada"
-        : "Atenção: reavalie massa muscular e/ou gordura corporal";
-
     const doc = React.createElement(AvaliacaoPdfDocument, {
       paciente: {
         nome: paciente.nome,
-        sexo: body.sex === "F" || body.sex === "feminino" ? "F" : "M",
+        sexo,
         idade: Number(body.idade) || 0,
         altura_cm: Number(body.alturaCm) || 0,
         nascimento: paciente.data_nascimento ? new Date(paciente.data_nascimento).toISOString() : null,
@@ -112,22 +165,33 @@ export async function POST(req: NextRequest) {
         imme: resumo.imme,
         img: resumo.img,
         ffmi: resumo.ffmi,
-        vo2max: body.vo2max ?? null,
-        vo2ClassLabel: body.vo2ClassLabel ?? null,
         classificacaoAgua: resumo.classificacoes.agua,
-        classificacaoImme: resumo.classificacoes.imme,
         classificacaoImg: resumo.classificacoes.img,
-        imagemUrl: resumo.imagem.url,
-        imagemFrenteUrl: resumo.imagem.frontalUrl,
-        imagemLateralUrl: resumo.imagem.lateralUrl,
-        legendaImagem,
-        protocolLabel: body.protocolLabel || "",
+        classificacaoFfmi: resumo.classificacoes.ffmi,
+        classificacaoGordura: resumo.classificacoes.gordura,
+        imagemFrenteUrl,
+        imagemLateralUrl: imagemLateralUrlV,
         compareResults: Boolean(body.compareResults),
         currentDobras: body.currentDobras || {},
         currentCircunferencias: body.currentCircunferencias || {},
         previousDobras: body.previousDobras || {},
         previousCircunferencias: body.previousCircunferencias || {},
-        previousSummary: body.previousSummary || null,
+        previousSummary: primeiraSnap
+          ? {
+              pesoKg: primeiraSnap.resumo.pesoKg,
+              bodyFatPct: primeiraSnap.resumo.bodyFatPct,
+              massaMuscularKg: primeiraSnap.resumo.massaMuscularKg,
+              massaAdiposaKg: primeiraSnap.resumo.massaAdiposaKg,
+              aguaPct: primeiraSnap.resumo.aguaPct,
+              imme: primeiraSnap.resumo.imme,
+              img: primeiraSnap.resumo.img,
+              ffmi: primeiraSnap.resumo.ffmi,
+              createdAt: primeira?.created_at?.toISOString?.() || null,
+              protocolLabel: primeiraSnap.resumo.protocolLabel || "",
+            }
+          : null,
+        evolucao,
+        dataAvaliacaoInicial,
       },
       nutricionista,
     });
@@ -155,4 +219,4 @@ function slugify(s: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-}
+          }
