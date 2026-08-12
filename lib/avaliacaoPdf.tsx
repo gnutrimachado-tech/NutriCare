@@ -229,10 +229,10 @@ const BLUE = "#2563eb";
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 20,
-    paddingBottom: 20,
-    paddingHorizontal: 22,
-    fontSize: 9,
+    paddingTop: 14,
+    paddingBottom: 14,
+    paddingHorizontal: 18,
+    fontSize: 8,
     color: "#1c2712",
     backgroundColor: "#ffffff",
   },
@@ -240,103 +240,103 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    marginBottom: 4,
+    gap: 8,
+    marginBottom: 2,
   },
-  logo: { width: 42, height: 42, objectFit: "contain" },
+  logo: { width: 34, height: 34, objectFit: "contain" },
   headerText: { flexGrow: 1 },
-  patientName: { fontSize: 13, fontWeight: 800, color: "#111" },
-  patientMeta: { fontSize: 8.6, color: "#334", marginTop: 1 },
-  divider: { height: 1, backgroundColor: "#8a9a6b", marginTop: 4, marginBottom: 10 },
+  patientName: { fontSize: 11, fontWeight: 800, color: "#111" },
+  patientMeta: { fontSize: 7.6, color: "#334", marginTop: 0.5 },
+  divider: { height: 0.8, backgroundColor: "#8a9a6b", marginTop: 3, marginBottom: 5 },
   title: {
-    fontSize: 22,
+    fontSize: 17,
     fontWeight: 800,
     textAlign: "center",
     color: "#000000",
     letterSpacing: 1,
-    marginBottom: 12,
+    marginBottom: 6,
   },
-  row: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
+  row: { flexDirection: "row", justifyContent: "space-between", marginBottom: 5 },
   card: {
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 10,
-    padding: 8,
+    borderRadius: 8,
+    padding: 5,
     backgroundColor: "#ffffff",
   },
   compTop: { width: "63%" },
-  compRight: { width: "35%", alignItems: "center", justifyContent: "center", padding: 6 },
+  compRight: { width: "35%", alignItems: "center", justifyContent: "center", padding: 4 },
 
   cardTitle: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: 700,
     color: GREEN,
-    marginBottom: 6,
-    letterSpacing: 0.6,
+    marginBottom: 3,
+    letterSpacing: 0.5,
   },
   tHead: {
     flexDirection: "row",
-    paddingBottom: 3,
-    marginBottom: 3,
+    paddingBottom: 2,
+    marginBottom: 2,
   },
-  tHeadTxt: { fontSize: 8, color: "#4b5c37", fontWeight: 700 },
+  tHeadTxt: { fontSize: 7, color: "#4b5c37", fontWeight: 700 },
   tRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 2.5,
-    borderBottomWidth: 0.4,
+    paddingVertical: 1.4,
+    borderBottomWidth: 0.3,
     borderBottomColor: "#eef1e6",
   },
-  colParam: { width: "38%", flexDirection: "row", alignItems: "center", gap: 4 },
-  colParamText: { fontSize: 8.4, color: "#1c2712" },
-  colResult: { width: "22%", fontSize: 8.4, color: "#111", textAlign: "left" },
-  colRef: { width: "20%", fontSize: 8.4, color: "#334", textAlign: "left" },
+  colParam: { width: "38%", flexDirection: "row", alignItems: "center", gap: 3 },
+  colParamText: { fontSize: 7.4, color: "#1c2712" },
+  colResult: { width: "22%", fontSize: 7.4, color: "#111", textAlign: "left" },
+  colRef: { width: "20%", fontSize: 7.4, color: "#334", textAlign: "left" },
   colEval: { width: "20%", textAlign: "left" },
 
   pill: {
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
     alignSelf: "flex-start",
-    fontSize: 7.6,
+    fontSize: 6.8,
     fontWeight: 700,
   },
   pillGreen: { backgroundColor: GREEN_BG, color: GREEN_TXT },
   pillYellow: { backgroundColor: YELLOW_BG, color: YELLOW_TXT },
   pillNeutral: { backgroundColor: "#eef1e6", color: "#4b5c37" },
 
-  emoji: { fontSize: 9.5 },
+  emoji: { fontSize: 8.4 },
 
   // Circunf / Dobras
-  colParam2: { width: "44%", flexDirection: "row", alignItems: "center", gap: 4 },
-  colVal2: { width: "28%", fontSize: 8.2, color: "#111", textAlign: "center" },
+  colParam2: { width: "44%", flexDirection: "row", alignItems: "center", gap: 3 },
+  colVal2: { width: "28%", fontSize: 7.2, color: "#111", textAlign: "center" },
 
   // Evolução charts
-  chartTitle: { fontSize: 8, color: "#334", fontWeight: 700, marginBottom: 2 },
-  chartBlock: { marginBottom: 6 },
+  chartTitle: { fontSize: 7.2, color: "#334", fontWeight: 700, marginBottom: 1 },
+  chartBlock: { marginBottom: 3 },
 
   // Rodapé comparativo
-  footerRow: { flexDirection: "row", justifyContent: "space-between", gap: 6 },
+  footerRow: { flexDirection: "row", justifyContent: "space-between", gap: 5 },
   footerCard: {
     flexGrow: 1,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 10,
-    padding: 8,
+    borderRadius: 8,
+    padding: 5,
     alignItems: "center",
     backgroundColor: "#fff",
   },
-  footerLabel: { fontSize: 9, color: "#334", marginBottom: 3, fontWeight: 700 },
-  footerBig: { fontSize: 15, fontWeight: 800, color: "#111" },
-  footerDelta: { fontSize: 8, marginTop: 2 },
-  footerSince: { fontSize: 7.6, color: "#64748b", marginTop: 2 },
+  footerLabel: { fontSize: 8, color: "#334", marginBottom: 2, fontWeight: 700 },
+  footerBig: { fontSize: 12, fontWeight: 800, color: "#111" },
+  footerDelta: { fontSize: 7.2, marginTop: 1 },
+  footerSince: { fontSize: 6.8, color: "#64748b", marginTop: 1 },
 
-  signWrap: { marginTop: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
-  signName: { fontSize: 15, fontFamily: "GreatVibes", color: "#111" },
-  signCrn: { fontSize: 9, color: "#111", fontFamily: "GreatVibes" },
-  footerLogo: { width: 38, height: 38, objectFit: "contain" },
+  signWrap: { marginTop: 6, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
+  signName: { fontSize: 13, fontFamily: "GreatVibes", color: "#111" },
+  signCrn: { fontSize: 8, color: "#111", fontFamily: "GreatVibes" },
+  footerLogo: { width: 30, height: 30, objectFit: "contain" },
 
-  bodyFront: { width: 150, height: 240, objectFit: "contain" },
+  bodyFront: { width: 110, height: 180, objectFit: "contain" },
 });
 
 // ---------- Pills ----------
@@ -360,12 +360,12 @@ function EvolutionChart({
   colorDot: string;
   unit?: string;
 }) {
-  const width = 240;
-  const height = 78;
-  const left = 22;
-  const top = 8;
-  const chartW = 200;
-  const chartH = 44;
+  const width = 190;
+  const height = 56;
+  const left = 18;
+  const top = 6;
+  const chartW = 160;
+  const chartH = 32;
 
   const filtered = points.filter((p) => hasPositive(p.value));
   const vals = filtered.map((p) => Number(p.value));
@@ -400,13 +400,13 @@ function EvolutionChart({
           <React.Fragment key={i}>
             {hasPositive(p.value) ? (
               <>
-                <Circle cx={p.x} cy={p.y} r={2.6} fill={colorDot} />
+                <Circle cx={p.x} cy={p.y} r={2.2} fill={colorDot} />
                 <Text
                   style={{
                     position: "absolute",
-                    left: p.x - 14,
-                    top: p.y - 12,
-                    fontSize: 7.4,
+                    left: p.x - 12,
+                    top: p.y - 10,
+                    fontSize: 6.6,
                     color: "#111",
                     fontWeight: 700,
                   }}
@@ -419,9 +419,9 @@ function EvolutionChart({
             <Text
               style={{
                 position: "absolute",
-                left: p.x - 14,
-                top: top + chartH + 6,
-                fontSize: 7,
+                left: p.x - 12,
+                top: top + chartH + 4,
+                fontSize: 6.4,
                 color: "#64748b",
               }}
             >
