@@ -224,8 +224,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
     fontFamily: "Helvetica",
   },
-  bg: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, opacity: 0.04 },
-  bgFixed: { position: "absolute", top: -30, left: -44, width: 595.28 + 88, height: 841.89 + 56, opacity: 0.04 },
+  bg: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, opacity: 0.18 },
+  bgFixed: { position: "absolute", top: -30, left: -44, width: 595.28 + 88, height: 841.89 + 56, opacity: 0.18 },
 
   // Cabeçalho
   header: { flexDirection: "row", alignItems: "center" },
@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
   signName: { fontSize: 16, fontFamily: "GreatVibes", color: "#111" },
   signLine: { height: 0.7, backgroundColor: "#999", marginTop: 1, width: 220 },
   signCrn: { fontSize: 12, fontFamily: "GreatVibes", color: "#111", marginTop: 3 },
-  footerLogoBox: { alignItems: "center" },
+  footerLogoBox: { alignItems: "center", opacity: 0.28 },
   footerLogo: { width: 36, height: 36, objectFit: "contain" },
   footerLogoText: { fontSize: 7, color: "#3e5c34", fontFamily: "Times-Roman", marginTop: 1 },
 });
