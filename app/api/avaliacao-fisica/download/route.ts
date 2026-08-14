@@ -119,9 +119,9 @@ export async function POST(req: NextRequest) {
       const snap = extrairSnapshotDeEvolucao(r);
       return {
         data: fmtData(r.created_at),
-        peso: snap?.resumo.pesoKg ?? Number(r.peso ?? 0) || null,
-        massaMuscular: snap?.resumo.massaMuscularKg ?? Number(r.massa_muscular ?? 0) || null,
-        bfPct: snap?.resumo.bodyFatPct ?? Number(r.percentual_gordura ?? 0) || null,
+        peso: snap?.resumo.pesoKg ?? (Number(r.peso ?? 0) || null),
+        massaMuscular: snap?.resumo.massaMuscularKg ?? (Number(r.massa_muscular ?? 0) || null),
+        bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
       };
     });
 
