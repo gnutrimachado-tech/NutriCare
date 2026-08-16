@@ -1,3 +1,15 @@
+// lib/avaliacaoHistorico.ts
+// Persistência da avaliação física com REGRA ROTATIVA 1ª / 2ª / 3ª:
+// - A 1ª avaliação (mais antiga) NUNCA muda.
+// - Quando chega uma nova, ela vira a "3ª" e a antiga 3ª desce para "2ª".
+// - Ou seja: mantemos exatamente 3 registros → [1ª fixa, 2ª, 3ª].
+//   Ex.: [20/06], [20/07], [20/08] → nova em 20/09 → [20/06], [20/08], [20/09].
+//
+// Como o schema atual só tem prisma.evolucao_corporal, guardamos o snapshot
+// completo dentro de `observacoes` como JSON. A rotação é aplicada apagando
+// o registro "do meio" (2º mais antigo) ANTES de inserir a nova avaliação,
+// quando já existirem 3 registros.
+
 import { prisma } from "@/lib/prisma";
 
 export type AvaliacaoHistoricoResumo = {
@@ -39,10 +51,10 @@ export function buildAvaliacaoSnapshot(args: PersistArgs): AvaliacaoHistoricoSna
     createdAt: new Date().toISOString(),
     protocolLabel: args.protocolLabel || "",
     dobras: Object.fromEntries(
-      Object.entries(args.currentDobras || {}).map(([key, value]) => [key, String(value).replace(".", ",")])
+      Object.entries(args.currentDobras || {}).map(([k, v]) => [k, String(v).replace(".", ",")])
     ),
     circunferencias: Object.fromEntries(
-      Object.entries(args.currentCircunferencias || {}).map(([key, value]) => [key, String(value).replace(".", ",")])
+      Object.entries(args.currentCircunferencias || {}).map(([k, v]) => [k, String(v).replace(".", ",")])
     ),
     resumo: {
       pesoKg: toNullableNumber(args.resumo.pesoKg),
@@ -59,56 +71,6 @@ export function buildAvaliacaoSnapshot(args: PersistArgs): AvaliacaoHistoricoSna
   };
 }
 
-function normalizeSnapshotForCompare(snapshot: AvaliacaoHistoricoSnapshot | null) {
-  if (!snapshot) return null;
-  return {
-    protocolLabel: snapshot.protocolLabel || "",
-    dobras: snapshot.dobras || {},
-    circunferencias: snapshot.circunferencias || {},
-    resumo: {
-      pesoKg: toNullableNumber(snapshot.resumo?.pesoKg),
-      bodyFatPct: toNullableNumber(snapshot.resumo?.bodyFatPct),
-      massaMuscularKg: toNullableNumber(snapshot.resumo?.massaMuscularKg),
-      massaAdiposaKg: toNullableNumber(snapshot.resumo?.massaAdiposaKg),
-      aguaPct: toNullableNumber(snapshot.resumo?.aguaPct),
-      imme: toNullableNumber(snapshot.resumo?.imme),
-      img: toNullableNumber(snapshot.resumo?.img),
-      ffmi: toNullableNumber(snapshot.resumo?.ffmi),
-      protocolLabel: snapshot.resumo?.protocolLabel || snapshot.protocolLabel || "",
-    },
-  };
-}
-
-export async function salvarAvaliacaoHistorico(args: PersistArgs) {
-  const snapshot = buildAvaliacaoSnapshot(args);
-  const abdomen = toNullableNumber(args.currentCircunferencias?.abdomen);
-  const cintura = toNullableNumber(args.currentCircunferencias?.cintura);
-  const snapshotJson = JSON.stringify(normalizeSnapshotForCompare(snapshot));
-
-  const ultimoRegistro = await prisma.evolucao_corporal.findFirst({
-    where: { paciente_id: args.pacienteId },
-    orderBy: { created_at: "desc" },
-  });
-
-  const ultimoSnapshot = extrairSnapshotDeEvolucao(ultimoRegistro || {});
-  if (ultimoSnapshot && JSON.stringify(normalizeSnapshotForCompare(ultimoSnapshot)) === snapshotJson) {
-    return ultimoSnapshot;
-  }
-
-  await prisma.evolucao_corporal.create({
-    data: {
-      paciente_id: args.pacienteId,
-      peso: snapshot.resumo.pesoKg,
-      percentual_gordura: snapshot.resumo.bodyFatPct,
-      massa_muscular: snapshot.resumo.massaMuscularKg,
-      circunferencia_abdominal: abdomen ?? cintura,
-      observacoes: JSON.stringify({ tipo: "avaliacao_fisica", snapshot }),
-    },
-  });
-
-  return snapshot;
-}
-
 export function extrairSnapshotDeEvolucao(item: {
   observacoes?: string | null;
   created_at?: Date | null;
@@ -116,7 +78,7 @@ export function extrairSnapshotDeEvolucao(item: {
   percentual_gordura?: unknown;
   massa_muscular?: unknown;
   circunferencia_abdominal?: unknown;
-}) {
+}): AvaliacaoHistoricoSnapshot | null {
   const raw = item?.observacoes;
   if (raw) {
     try {
@@ -125,7 +87,7 @@ export function extrairSnapshotDeEvolucao(item: {
         return parsed.snapshot as AvaliacaoHistoricoSnapshot;
       }
     } catch {
-      // ignore e usa fallback abaixo
+      // fallback abaixo
     }
   }
 
@@ -141,7 +103,9 @@ export function extrairSnapshotDeEvolucao(item: {
     createdAt: item?.created_at?.toISOString?.() || new Date().toISOString(),
     protocolLabel: "",
     dobras: {},
-    circunferencias: item?.circunferencia_abdominal ? { abdomen: String(item.circunferencia_abdominal) } : {},
+    circunferencias: item?.circunferencia_abdominal
+      ? { abdomen: String(item.circunferencia_abdominal) }
+      : {},
     resumo: {
       pesoKg: toNullableNumber(item?.peso),
       bodyFatPct: toNullableNumber(item?.percentual_gordura),
@@ -154,5 +118,77 @@ export function extrairSnapshotDeEvolucao(item: {
       createdAt: item?.created_at?.toISOString?.() || null,
       protocolLabel: "",
     },
-  } as AvaliacaoHistoricoSnapshot;
+  };
+}
+
+// -------------------- LEITURA (usada pelo page.tsx e pelas rotas) --------------------
+
+export async function listarUltimasTresAvaliacoes(pacienteId: string) {
+  const rows = await prisma.evolucao_corporal.findMany({
+    where: { paciente_id: pacienteId },
+    orderBy: { created_at: "asc" },
+  });
+
+  // Regra: mantém 1ª (mais antiga) + últimas 2 (rotativas).
+  if (rows.length <= 3) return rows;
+  const first = rows[0];
+  const lastTwo = rows.slice(-2);
+  return [first, ...lastTwo];
+}
+
+export async function primeiraAvaliacao(pacienteId: string) {
+  return prisma.evolucao_corporal.findFirst({
+    where: { paciente_id: pacienteId },
+    orderBy: { created_at: "asc" },
+  });
+}
+
+export async function ultimaAvaliacao(pacienteId: string) {
+  return prisma.evolucao_corporal.findFirst({
+    where: { paciente_id: pacienteId },
+    orderBy: { created_at: "desc" },
+  });
+}
+
+// -------------------- ESCRITA COM ROTAÇÃO --------------------
+
+export async function salvarAvaliacaoHistorico(args: PersistArgs) {
+  const snapshot = buildAvaliacaoSnapshot(args);
+  const abdomen = toNullableNumber(args.currentCircunferencias?.abdomen);
+  const cintura = toNullableNumber(args.currentCircunferencias?.cintura);
+
+  // Aplica a rotação ANTES de inserir:
+  // Se já existirem >= 3, apaga o "do meio" (2º mais antigo) — os últimos 2 são
+  // os que continuam vivos (o mais antigo é a 1ª e não sai).
+  const existentes = await prisma.evolucao_corporal.findMany({
+    where: { paciente_id: args.pacienteId },
+    orderBy: { created_at: "asc" },
+    select: { id: true, created_at: true },
+  });
+
+  if (existentes.length >= 3) {
+    // remove todos exceto o primeiro (1ª fixa) e o último (3ª atual)
+    // — se houver mais que 3 por qualquer motivo, limpa o meio inteiro.
+    const meio = existentes.slice(1, existentes.length - 1);
+    if (meio.length > 0) {
+      await prisma.evolucao_corporal.deleteMany({
+        where: { id: { in: meio.map((r) => r.id) } },
+      });
+    }
+    // Após a limpeza, a antiga "3ª" vira "2ª" naturalmente pois o novo insert
+    // passa a ocupar a posição de "3ª" (created_at mais recente).
+  }
+
+  await prisma.evolucao_corporal.create({
+    data: {
+      paciente_id: args.pacienteId,
+      peso: snapshot.resumo.pesoKg,
+      percentual_gordura: snapshot.resumo.bodyFatPct,
+      massa_muscular: snapshot.resumo.massaMuscularKg,
+      circunferencia_abdominal: abdomen ?? cintura,
+      observacoes: JSON.stringify({ tipo: "avaliacao_fisica", snapshot }),
+    },
+  });
+
+  return snapshot;
 }

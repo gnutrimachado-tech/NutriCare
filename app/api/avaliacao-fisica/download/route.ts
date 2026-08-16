@@ -39,19 +39,6 @@ type BodyShape = {
   currentCircunferencias?: Record<string, number>;
   previousDobras?: Record<string, number>;
   previousCircunferencias?: Record<string, number>;
-  previousSummary?: {
-    pesoKg?: number | null;
-    bodyFatPct?: number | null;
-    massaMuscularKg?: number | null;
-    massaAdiposaKg?: number | null;
-    aguaPct?: number | null;
-    imme?: number | null;
-    img?: number | null;
-    ffmi?: number | null;
-    createdAt?: string | null;
-    protocolLabel?: string | null;
-  } | null;
-  compareMode?: "primeira" | "ultimas-2" | "ultimas-3" | string;
 };
 
 function fmtData(d: Date | string | null | undefined) {
@@ -61,13 +48,6 @@ function fmtData(d: Date | string | null | undefined) {
   const dd = String(date.getDate()).padStart(2, "0");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   return `${dd}/${mm}`;
-}
-
-function aplicarJanelaEvolucao<T>(pontos: T[], modo?: string) {
-  if (!Array.isArray(pontos) || pontos.length <= 1) return pontos;
-  if (modo === "primeira") return [pontos[0], pontos[pontos.length - 1]].filter(Boolean);
-  if (modo === "ultimas-2") return pontos.slice(-2);
-  return pontos.slice(-3);
 }
 
 export async function POST(req: NextRequest) {
@@ -135,7 +115,7 @@ export async function POST(req: NextRequest) {
     // 2) Monta evolução com os 3 registros já rotacionados
     // ==============================
     const rotativas = await listarUltimasTresAvaliacoes(pacienteId);
-    const evolucao = aplicarJanelaEvolucao(rotativas.map((r) => {
+    const evolucao = rotativas.map((r) => {
       const snap = extrairSnapshotDeEvolucao(r);
       return {
         data: fmtData(r.created_at),
@@ -143,14 +123,11 @@ export async function POST(req: NextRequest) {
         massaMuscular: snap?.resumo.massaMuscularKg ?? (Number(r.massa_muscular ?? 0) || null),
         bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
       };
-    }), body.compareResults ? body.compareMode : undefined);
+    });
 
     const primeira = await primeiraAvaliacao(pacienteId);
-    const previousSummary = body.compareResults ? body.previousSummary || null : null;
-    const dataAvaliacaoInicial =
-      (body.compareResults ? body.previousSummary?.createdAt || null : null) ||
-      primeira?.created_at?.toISOString?.() ||
-      null;
+    const primeiraSnap = primeira ? extrairSnapshotDeEvolucao(primeira) : null;
+    const dataAvaliacaoInicial = primeira?.created_at?.toISOString?.() || null;
 
     const imagemFrenteUrl = imagemFrontalUrl(sexo, resumo.imagem.codigo);
     const imagemLateralUrlV = imagemLateralUrl(sexo, resumo.imagem.codigo);
@@ -199,7 +176,20 @@ export async function POST(req: NextRequest) {
         currentCircunferencias: body.currentCircunferencias || {},
         previousDobras: body.previousDobras || {},
         previousCircunferencias: body.previousCircunferencias || {},
-        previousSummary,
+        previousSummary: primeiraSnap
+          ? {
+              pesoKg: primeiraSnap.resumo.pesoKg,
+              bodyFatPct: primeiraSnap.resumo.bodyFatPct,
+              massaMuscularKg: primeiraSnap.resumo.massaMuscularKg,
+              massaAdiposaKg: primeiraSnap.resumo.massaAdiposaKg,
+              aguaPct: primeiraSnap.resumo.aguaPct,
+              imme: primeiraSnap.resumo.imme,
+              img: primeiraSnap.resumo.img,
+              ffmi: primeiraSnap.resumo.ffmi,
+              createdAt: primeira?.created_at?.toISOString?.() || null,
+              protocolLabel: primeiraSnap.resumo.protocolLabel || "",
+            }
+          : null,
         evolucao,
         dataAvaliacaoInicial,
       },

@@ -240,12 +240,12 @@ const styles = StyleSheet.create({
   },
   headerText: { flexGrow: 1 },
   patientName: {
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: 700,
     color: INK,
     fontFamily: "Times-Roman",
   },
-  patientMeta: { fontSize: 10, color: "#333", marginTop: 1 },
+  patientMeta: { fontSize: 8.6, color: "#333", marginTop: 2 },
   rule: { height: 1.1, backgroundColor: RULE, marginTop: 8, marginBottom: 12 },
 
   // Título / subtítulo
@@ -261,8 +261,8 @@ const styles = StyleSheet.create({
     fontFamily: "Times-Italic",
     textAlign: "center",
     color: "#333",
-    marginTop: 2,
-    marginBottom: 10,
+    marginTop: 3,
+    marginBottom: 11,
   },
 
   // Cards genéricos
@@ -293,18 +293,19 @@ const styles = StyleSheet.create({
 
   // Bloco topo (tabela + figura)
   topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
-  topLeft: { width: "61.5%" },
-  topRight: { width: "36.5%", alignItems: "center" },
+  topLeft: { width: "63.5%" },
+  topRight: { width: "34.5%", alignItems: "center" },
 
   // Tabela composição corporal
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   ccHeadTxt: { fontSize: 7.4, color: MUTED, fontWeight: 700 },
   ccRow: { flexDirection: "row", alignItems: "center", paddingVertical: 3 },
-  ccColParam: { width: "42%", flexDirection: "row", alignItems: "center" },
+  ccColParam: { width: "38%", flexDirection: "row", alignItems: "center" },
   ccIcon: { width: 13 },
   ccColParamText: { fontSize: 8.2, color: INK },
   ccColRes: { width: "23%", fontSize: 8.2, color: INK },
-  ccColEval: { width: "35%" },
+  ccColRef: { width: "19%", fontSize: 7.8, color: REF },
+  ccColEval: { width: "20%" },
 
   pill: {
     borderRadius: 4,
@@ -319,7 +320,7 @@ const styles = StyleSheet.create({
   pillRed: { backgroundColor: RED_BG, color: RED_TXT },
   pillNeutral: { color: MUTED, fontSize: 8 },
 
-  bodyFront: { width: 150, height: 238, objectFit: "contain", marginTop: 0 },
+  bodyFront: { width: 126, height: 205, objectFit: "contain", marginTop: 4 },
 
   // Bloco meio (3 cards)
   midRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
@@ -336,10 +337,9 @@ const styles = StyleSheet.create({
   mHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   mHeadTxt: { fontSize: 7.2, color: MUTED, fontWeight: 700 },
   mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 2.8 },
-  mColLabel: { width: "52%", flexDirection: "row", alignItems: "center" },
+  mColLabel: { width: "62%", flexDirection: "row", alignItems: "center" },
   mColLabelText: { fontSize: 7.9, color: INK },
-  mColBefore: { width: "24%", fontSize: 7.9, color: INK, textAlign: "center" },
-  mColCurrent: { width: "24%", fontSize: 7.9, color: INK, textAlign: "center" },
+  mColRes: { width: "38%", fontSize: 7.9, color: INK, textAlign: "center" },
 
   // Evolução (mini-charts)
   evoBlock: { marginBottom: 5 },
@@ -374,15 +374,15 @@ const styles = StyleSheet.create({
 
   // Assinatura
   signWrap: {
-    marginTop: 2,
+    marginTop: 4,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-end",
   },
   signCol: {},
-  signName: { fontSize: 18, fontFamily: "GreatVibes", color: "#111" },
-  signLine: { height: 0.8, backgroundColor: "#999", marginTop: 1, width: 240 },
-  signCrn: { fontSize: 16, fontFamily: "GreatVibes", color: "#111", marginTop: 1 },
+  signName: { fontSize: 16, fontFamily: "GreatVibes", color: "#111" },
+  signLine: { height: 0.7, backgroundColor: "#999", marginTop: 1, width: 220 },
+  signCrn: { fontSize: 12, fontFamily: "GreatVibes", color: "#111", marginTop: 3 },
   footerLogoBox: { alignItems: "center", opacity: 0.28 },
   footerLogo: { width: 36, height: 36, objectFit: "contain" },
   footerLogoText: { fontSize: 7, color: "#3e5c34", fontFamily: "Times-Roman", marginTop: 1 },
@@ -570,9 +570,10 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             <Text style={styles.cardTitle}>COMPOSIÇÃO CORPORAL</Text>
 
             <View style={styles.ccHead}>
-              <Text style={[styles.ccHeadTxt, { width: "42%" }]}>Parâmetro</Text>
+              <Text style={[styles.ccHeadTxt, { width: "38%" }]}>Parâmetro</Text>
               <Text style={[styles.ccHeadTxt, { width: "23%" }]}>Resultado</Text>
-              <Text style={[styles.ccHeadTxt, { width: "35%" }]}>Avaliação</Text>
+              <Text style={[styles.ccHeadTxt, { width: "19%" }]}>Referência</Text>
+              <Text style={[styles.ccHeadTxt, { width: "20%" }]}>Avaliação</Text>
             </View>
 
             {/* Peso */}
@@ -582,6 +583,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.ccColParamText}>Peso</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.pesoKg)} kg</Text>
+              <Text style={styles.ccColRef}>—</Text>
               <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
@@ -592,6 +594,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.ccColParamText}>% de água{"\n"}corporal</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.pctAgua)} %</Text>
+              <Text style={styles.ccColRef}>{refAgua}</Text>
               <View style={styles.ccColEval}>
                 <EvalPill
                   cor={dados.classificacaoAgua?.cor}
@@ -607,6 +610,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.ccColParamText}>Massa{"\n"}muscular</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
+              <Text style={styles.ccColRef}>—</Text>
               <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
@@ -617,6 +621,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.ccColParamText}>Músculo{"\n"}esquelético</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.imme)} kg</Text>
+              <Text style={styles.ccColRef}>—</Text>
               <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
@@ -627,6 +632,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.ccColParamText}>Massa livre{"\n"}de gordura</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
+              <Text style={styles.ccColRef}>—</Text>
               <View style={styles.ccColEval}>
                 <EvalPill cor={dados.classificacaoFfmi?.cor} label={dados.classificacaoFfmi?.label} />
               </View>
@@ -639,6 +645,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.ccColParamText}>Massa{"\n"}adiposa</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.imme, 2)} kg/m²</Text>
+              <Text style={styles.ccColRef}>—</Text>
               <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
@@ -649,6 +656,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.ccColParamText}>Índice de{"\n"}massa gorda</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
+              <Text style={styles.ccColRef}>—</Text>
               <View style={styles.ccColEval}>
                 {dados.classificacaoImg?.label ? (
                   <EvalPill cor={dados.classificacaoImg.cor} label={dados.classificacaoImg.label} />
@@ -665,6 +673,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.ccColParamText}>% de gordura</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.bfPct)} %</Text>
+              <Text style={styles.ccColRef}>{refBf}</Text>
               <View style={styles.ccColEval}>
                 {dados.classificacaoGordura?.label ? (
                   <EvalPill cor={dados.classificacaoGordura.cor} label={dados.classificacaoGordura.label} />
@@ -688,36 +697,32 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
           <View style={styles.cardMid}>
             <Text style={styles.cardTitle}>CIRCUNFERÊNCIAS</Text>
             <View style={styles.mHead}>
-              <Text style={[styles.mHeadTxt, { width: "52%" }]}>Medida</Text>
-              <Text style={[styles.mHeadTxt, { width: "24%", textAlign: "center" }]}>Antes</Text>
-              <Text style={[styles.mHeadTxt, { width: "24%", textAlign: "center" }]}>Atual</Text>
+              <Text style={[styles.mHeadTxt, { width: "62%" }]}>Medida</Text>
+              <Text style={[styles.mHeadTxt, { width: "38%", textAlign: "center" }]}>Resultado (cm)</Text>
             </View>
             {circRows.map((r) => (
               <View key={r.key} style={styles.mRow}>
                 <View style={styles.mColLabel}>
                   <Text style={styles.mColLabelText}>{r.label}</Text>
                 </View>
-                <Text style={styles.mColBefore}>{hasPositive(r.antes) ? toFixedPt(r.antes) : "—"}</Text>
-                <Text style={styles.mColCurrent}>{hasPositive(r.atual) ? toFixedPt(r.atual) : "—"}</Text>
+                <Text style={styles.mColRes}>{valorOu(r.atual, r.antes)}</Text>
               </View>
             ))}
           </View>
 
-          {/* Dobras — colunas Antes/Atual */}
+          {/* Dobras — uma coluna "Resultado (mm)", 10 linhas */}
           <View style={styles.cardMid}>
             <Text style={styles.cardTitle}>DOBRAS CUTÂNEAS (mm)</Text>
             <View style={styles.mHead}>
-              <Text style={[styles.mHeadTxt, { width: "52%" }]}>Dobra</Text>
-              <Text style={[styles.mHeadTxt, { width: "24%", textAlign: "center" }]}>Antes</Text>
-              <Text style={[styles.mHeadTxt, { width: "24%", textAlign: "center" }]}>Atual</Text>
+              <Text style={[styles.mHeadTxt, { width: "62%" }]}>Dobra</Text>
+              <Text style={[styles.mHeadTxt, { width: "38%", textAlign: "center" }]}>Resultado (mm)</Text>
             </View>
             {dobraRows.map((r) => (
               <View key={r.key} style={styles.mRow}>
                 <View style={styles.mColLabel}>
                   <Text style={styles.mColLabelText}>{r.label}</Text>
                 </View>
-                <Text style={styles.mColBefore}>{hasPositive(r.antes) ? toFixedPt(r.antes) : "—"}</Text>
-                <Text style={styles.mColCurrent}>{hasPositive(r.atual) ? toFixedPt(r.atual) : "—"}</Text>
+                <Text style={styles.mColRes}>{valorOu(r.atual, r.antes)}</Text>
               </View>
             ))}
           </View>

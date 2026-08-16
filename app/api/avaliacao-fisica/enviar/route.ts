@@ -38,19 +38,6 @@ type BodyShape = {
   currentCircunferencias?: Record<string, number>;
   previousDobras?: Record<string, number>;
   previousCircunferencias?: Record<string, number>;
-  previousSummary?: {
-    pesoKg?: number | null;
-    bodyFatPct?: number | null;
-    massaMuscularKg?: number | null;
-    massaAdiposaKg?: number | null;
-    aguaPct?: number | null;
-    imme?: number | null;
-    img?: number | null;
-    ffmi?: number | null;
-    createdAt?: string | null;
-    protocolLabel?: string | null;
-  } | null;
-  compareMode?: "primeira" | "ultimas-2" | "ultimas-3" | string;
 };
 
 function fmtData(d: Date | string | null | undefined) {
@@ -60,13 +47,6 @@ function fmtData(d: Date | string | null | undefined) {
   const dd = String(date.getDate()).padStart(2, "0");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   return `${dd}/${mm}`;
-}
-
-function aplicarJanelaEvolucao<T>(pontos: T[], modo?: string) {
-  if (!Array.isArray(pontos) || pontos.length <= 1) return pontos;
-  if (modo === "primeira") return [pontos[0], pontos[pontos.length - 1]].filter(Boolean);
-  if (modo === "ultimas-2") return pontos.slice(-2);
-  return pontos.slice(-3);
 }
 
 export async function POST(req: NextRequest) {
@@ -138,14 +118,10 @@ export async function POST(req: NextRequest) {
       const lastTwo = evolucao.slice(-2);
       evolucao = [first, ...lastTwo];
     }
-    evolucao = aplicarJanelaEvolucao(evolucao, body.compareResults ? body.compareMode : undefined);
 
     const primeira = await primeiraAvaliacao(pacienteId);
-    const previousSummary = body.compareResults ? body.previousSummary || null : null;
-    const dataAvaliacaoInicial =
-      (body.compareResults ? body.previousSummary?.createdAt || null : null) ||
-      primeira?.created_at?.toISOString?.() ||
-      null;
+    const primeiraSnap = primeira ? extrairSnapshotDeEvolucao(primeira) : null;
+    const dataAvaliacaoInicial = primeira?.created_at?.toISOString?.() || null;
 
     // Imagem do biotipo pela regra FFMI + BF%
     const imagemFrenteUrl = imagemFrontalUrl(sexo, resumo.imagem.codigo);
@@ -195,7 +171,20 @@ export async function POST(req: NextRequest) {
         currentCircunferencias: body.currentCircunferencias || {},
         previousDobras: body.previousDobras || {},
         previousCircunferencias: body.previousCircunferencias || {},
-        previousSummary,
+        previousSummary: primeiraSnap
+          ? {
+              pesoKg: primeiraSnap.resumo.pesoKg,
+              bodyFatPct: primeiraSnap.resumo.bodyFatPct,
+              massaMuscularKg: primeiraSnap.resumo.massaMuscularKg,
+              massaAdiposaKg: primeiraSnap.resumo.massaAdiposaKg,
+              aguaPct: primeiraSnap.resumo.aguaPct,
+              imme: primeiraSnap.resumo.imme,
+              img: primeiraSnap.resumo.img,
+              ffmi: primeiraSnap.resumo.ffmi,
+              createdAt: primeira?.created_at?.toISOString?.() || null,
+              protocolLabel: primeiraSnap.resumo.protocolLabel || "",
+            }
+          : null,
         evolucao,
         dataAvaliacaoInicial,
       },
@@ -203,70 +192,26 @@ export async function POST(req: NextRequest) {
     });
 
     const buffer = await renderToBuffer(doc);
+
     const destino = paciente.email;
     if (!destino) {
       return NextResponse.json({ ok: false, erro: "Paciente sem e-mail cadastrado" }, { status: 400 });
     }
 
     const slug = slugify(paciente.nome);
-
-    const originHeader = req.headers.get("origin") || req.headers.get("referer") || "";
-    let originHost = "";
-    try {
-      if (originHeader) originHost = new URL(originHeader).origin;
-    } catch {}
-
-    const rawBase =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      process.env.NEXTAUTH_URL ||
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
-      originHost ||
-      "http://localhost:3000";
-
-    const baseUrl = rawBase.replace(/\/+$/, "");
-    const logoUrl = `${baseUrl}/logo-nutricare.png`;
-
-    const resumoItems = [
-      `Peso: ${resumo.pesoKg.toFixed(1)} kg`,
-      `Músculo Esquelético: ${resumo.imme.toFixed(2)} kg/m² (${esc(resumo.classificacoes.imme.label)})`,
-      `Índice de Massa Gorda: ${resumo.img.toFixed(2)} kg/m² (${esc(resumo.classificacoes.img.label)})`,
-      `Massa Livre de Gordura: ${resumo.ffmi.toFixed(2)} kg/m²`,
-      `% de Gordura: ${resumo.bfPct.toFixed(1)}% (${esc(resumo.classificacoes.gordura.label)})`,
-      `% de Água corporal: ${resumo.pctAgua.toFixed(1)}% (${esc(resumo.classificacoes.agua.label)})`,
-    ];
-
     const html = `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="margin:0;padding:24px;background:#eef3f8;font-family:'Segoe UI',Arial,sans-serif;">
-  <div style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #dbe3ec;">
-    <div style="padding:24px 28px;background:linear-gradient(180deg, #3f6faa 0%, #265d99 45%, #183865 100%);color:#ffffff;text-align:center;">
-      <img src="${logoUrl}" alt="NutriCare" style="display:block;margin:0 auto 10px;max-width:200px;height:auto;" />
-      <div style="font-size:16px;font-weight:600;margin-top:4px;">Avaliação física enviada para download</div>
-      <div style="font-size:13px;line-height:1.7;margin-top:8px;color:#dbe8f7;">
-        Paciente: ${esc(paciente.nome)}
-      </div>
-    </div>
-
-    <div style="margin:18px 28px 0;padding:16px 18px;border:1px solid #d7e3ef;border-radius:12px;background:#f8fbff;">
-      <div style="font-size:13px;line-height:1.7;color:#334155;">
-        Olá <strong>${esc(paciente.nome)}</strong>,<br>
-        Segue em anexo sua <strong>Avaliação Física</strong>.<br>
-        Em caso de dúvidas, entre em contato com seu nutricionista.
-      </div>
-    </div>
-
-    <div style="margin:18px 28px 28px;padding:16px 18px;border-radius:12px;background:#f0fdf4;border:1px solid #bbf7d0;">
-      <div style="font-size:15px;font-weight:700;color:#166534;margin-bottom:8px;">Resumo principal</div>
-      <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.8;color:#166534;">
-        ${resumoItems.map((item) => `<li>${item}</li>`).join("")}
-      </ul>
-      <div style="font-size:13px;line-height:1.7;color:#166534;margin-top:12px;">${esc(nutricionista.nome)} · CRN ${esc(nutricionista.crn)}</div>
-    </div>
-  </div>
-</body>
-</html>`;
+      <p>Olá <strong>${esc(paciente.nome)}</strong>,</p>
+      <p>Segue em anexo sua <strong>Avaliação Física</strong>.</p>
+      <p><strong>Resumo principal</strong><br/>
+      • Peso: <strong>${resumo.pesoKg.toFixed(1)} kg</strong><br/>
+      • Músculo Esquelético: <strong>${resumo.imme.toFixed(2)} kg/m²</strong> (${esc(resumo.classificacoes.imme.label)})<br/>
+      • Índice de Massa Gorda: <strong>${resumo.img.toFixed(2)} kg/m²</strong> (${esc(resumo.classificacoes.img.label)})<br/>
+      • Massa Livre de Gordura: <strong>${resumo.ffmi.toFixed(2)} kg/m²</strong><br/>
+      • % de Gordura: <strong>${resumo.bfPct.toFixed(1)}%</strong> (${esc(resumo.classificacoes.gordura.label)})<br/>
+      • % de Água corporal: <strong>${resumo.pctAgua.toFixed(1)}%</strong> (${esc(resumo.classificacoes.agua.label)})</p>
+      <p>Em caso de dúvidas, entre em contato com seu nutricionista.</p>
+      <p>${esc(nutricionista.nome)} · CRN ${esc(nutricionista.crn)}</p>
+    `;
 
     await sendBrevoEmail({
       to: [{ email: destino, name: paciente.nome }],

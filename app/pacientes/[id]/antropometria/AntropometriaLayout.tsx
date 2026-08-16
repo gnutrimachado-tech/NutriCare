@@ -1059,14 +1059,13 @@ export default function AntropometriaLayout({
     arr.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
     return arr;
   }, [historicoAvaliacoes]);
-  const [compareMode, setCompareMode] = useState<"primeira" | "ultimas-2" | "ultimas-3">("primeira");
-
-  const snapshotBaseComparacao = useMemo(() => {
-    if (!compararResultados) return null;
-    if (compareMode === "primeira") return historicoOrdenado[0]?.snapshot ?? avaliacaoAnterior ?? null;
-    if (compareMode === "ultimas-2") return historicoOrdenado[historicoOrdenado.length - 1]?.snapshot ?? avaliacaoAnterior ?? null;
-    return historicoOrdenado[Math.max(0, historicoOrdenado.length - 2)]?.snapshot ?? historicoOrdenado[0]?.snapshot ?? avaliacaoAnterior ?? null;
-  }, [compararResultados, compareMode, historicoOrdenado, avaliacaoAnterior]);
+  const [avaliacaoBaseId, setAvaliacaoBaseId] = useState<string>("");
+  useEffect(() => {
+    // Padrão: comparar contra a 1ª avaliação (mais antiga), se existir.
+    if (!avaliacaoBaseId && historicoOrdenado[0]?.id) {
+      setAvaliacaoBaseId(historicoOrdenado[0].id);
+    }
+  }, [historicoOrdenado, avaliacaoBaseId]);
 
   function classifPill(c: { cor: "verde" | "amarelo" }) {
     return {
@@ -1198,8 +1197,8 @@ export default function AntropometriaLayout({
   const currentDobras = useMemo(() => filterNumericEntries(dobras), [dobras]);
   const currentCircunferencias = useMemo(() => filterNumericEntries(circunferencias), [circunferencias]);
 
-  const previousDobras = useMemo(() => parseSnapshotValues(snapshotBaseComparacao?.dobras as Record<string, string> | undefined), [snapshotBaseComparacao]);
-  const previousCircunferencias = useMemo(() => parseSnapshotValues(snapshotBaseComparacao?.circunferencias as Record<string, string> | undefined), [snapshotBaseComparacao]);
+  const previousDobras = useMemo(() => parseSnapshotValues(avaliacaoAnterior?.dobras as Record<string, string> | undefined), [avaliacaoAnterior]);
+  const previousCircunferencias = useMemo(() => parseSnapshotValues(avaliacaoAnterior?.circunferencias as Record<string, string> | undefined), [avaliacaoAnterior]);
 
   function buildCurrentSnapshot(): AvaliacaoHistoricoSnapshot {
     return {
@@ -1246,7 +1245,6 @@ export default function AntropometriaLayout({
       protocolLabel: protocoloAtual?.label ?? "",
       vo2max: vo2maxAtual,
       compareResults: compararResultados,
-      compareMode,
       currentDobras: Object.fromEntries(
         Object.entries(snapshot.dobras).map(([key, value]) => [key, parsePtNumber(String(value ?? ""))])
       ),
@@ -1255,18 +1253,18 @@ export default function AntropometriaLayout({
       ),
       previousDobras: compararResultados ? previousDobras : {},
       previousCircunferencias: compararResultados ? previousCircunferencias : {},
-      previousSummary: compararResultados && snapshotBaseComparacao
+      previousSummary: compararResultados && avaliacaoAnterior
         ? {
-            pesoKg: parseStorageFloat(snapshotBaseComparacao.resumo?.pesoKg),
-            bodyFatPct: parseStorageFloat(snapshotBaseComparacao.resumo?.bodyFatPct),
-            massaMuscularKg: parseStorageFloat(snapshotBaseComparacao.resumo?.massaMuscularKg),
-            massaAdiposaKg: parseStorageFloat(snapshotBaseComparacao.resumo?.massaAdiposaKg),
-            aguaPct: parseStorageFloat(snapshotBaseComparacao.resumo?.aguaPct),
-            imme: parseStorageFloat(snapshotBaseComparacao.resumo?.imme),
-            img: parseStorageFloat(snapshotBaseComparacao.resumo?.img),
-            ffmi: parseStorageFloat(snapshotBaseComparacao.resumo?.ffmi),
-            createdAt: snapshotBaseComparacao.createdAt,
-            protocolLabel: snapshotBaseComparacao.protocolLabel,
+            pesoKg: parseStorageFloat(avaliacaoAnterior.resumo?.pesoKg),
+            bodyFatPct: parseStorageFloat(avaliacaoAnterior.resumo?.bodyFatPct),
+            massaMuscularKg: parseStorageFloat(avaliacaoAnterior.resumo?.massaMuscularKg),
+            massaAdiposaKg: parseStorageFloat(avaliacaoAnterior.resumo?.massaAdiposaKg),
+            aguaPct: parseStorageFloat(avaliacaoAnterior.resumo?.aguaPct),
+            imme: parseStorageFloat(avaliacaoAnterior.resumo?.imme),
+            img: parseStorageFloat(avaliacaoAnterior.resumo?.img),
+            ffmi: parseStorageFloat(avaliacaoAnterior.resumo?.ffmi),
+            createdAt: avaliacaoAnterior.createdAt,
+            protocolLabel: avaliacaoAnterior.protocolLabel,
           }
         : null,
     };
@@ -1673,38 +1671,32 @@ export default function AntropometriaLayout({
             </label>
 
             {compararResultados ? (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+              <div style={avaliacaoCompareSelectWrapStyle}>
                 <span style={compareHintStyle}>Comparar com:</span>
-                <label style={avaliacaoCompareToggleStyle}>
-                  <input
-                    type="radio"
-                    name="avaliacao-compare-mode"
-                    value="primeira"
-                    checked={compareMode === "primeira"}
-                    onChange={() => setCompareMode("primeira")}
-                  />
-                  <span>Somente 1ª avaliação</span>
-                </label>
-                <label style={avaliacaoCompareToggleStyle}>
-                  <input
-                    type="radio"
-                    name="avaliacao-compare-mode"
-                    value="ultimas-2"
-                    checked={compareMode === "ultimas-2"}
-                    onChange={() => setCompareMode("ultimas-2")}
-                  />
-                  <span>2 avaliações</span>
-                </label>
-                <label style={avaliacaoCompareToggleStyle}>
-                  <input
-                    type="radio"
-                    name="avaliacao-compare-mode"
-                    value="ultimas-3"
-                    checked={compareMode === "ultimas-3"}
-                    onChange={() => setCompareMode("ultimas-3")}
-                  />
-                  <span>3 avaliações</span>
-                </label>
+                <select
+                  value={avaliacaoBaseId}
+                  onChange={(e) => setAvaliacaoBaseId(e.target.value)}
+                  style={avaliacaoCompareSelectStyle}
+                >
+                  {historicoOrdenado.length === 0 ? (
+                    <option value="">Sem avaliações anteriores</option>
+                  ) : (
+                    historicoOrdenado.map((h, idx) => {
+                      const label =
+                        idx === 0
+                          ? "1ª avaliação"
+                          : idx === 1
+                          ? "2ª avaliação"
+                          : "3ª avaliação";
+                      const d = h.createdAt ? new Date(h.createdAt).toLocaleDateString("pt-BR") : "—";
+                      return (
+                        <option key={h.id} value={h.id}>
+                          {label} — {d}
+                        </option>
+                      );
+                    })
+                  )}
+                </select>
               </div>
             ) : null}
           </div>
