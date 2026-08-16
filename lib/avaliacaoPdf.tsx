@@ -52,6 +52,16 @@ export type EvolucaoPonto = {
   bfPct?: number | null;
 };
 
+// Pontos de evolução vinculados a cada avaliação do histórico (1ª, 2ª, 3ª),
+// usados quando o nutri marca as caixas de seleção de comparação.
+export type EvolucaoHistoricoPonto = {
+  id: string;
+  data: string;
+  peso?: number | null;
+  massaMuscular?: number | null;
+  bfPct?: number | null;
+};
+
 type PdfProps = {
   paciente: {
     nome: string;
@@ -83,6 +93,9 @@ type PdfProps = {
     previousCircunferencias?: MeasurementMap;
     previousSummary?: SummarySnapshot | null;
     evolucao?: EvolucaoPonto[];
+    // Histórico (1ª/2ª/3ª) + seleção feita na aba Antropometria:
+    evolucaoHistorico?: EvolucaoHistoricoPonto[];
+    evolucaoSelecionadaIds?: string[];
     dataAvaliacaoInicial?: string | null;
   };
   nutricionista: {
@@ -204,7 +217,6 @@ const TITLE_GREEN = "#5a7a4e";  // títulos dos cards (verde-oliva do mock)
 const RULE = "#3c3c3c";         // régua escura sob o cabeçalho
 const BORDER = "#b9c4ae";       // borda verde-acinzentada dos cards
 const MUTED = "#8a8f85";
-const REF = "#6b7066";
 const GREEN_BG = "#e7f3e0";
 const GREEN_TXT = "#2e7d32";
 const RED_BG = "#fdecea";
@@ -216,8 +228,8 @@ const CHART_RED = "#c62828";
 // ---------- Estilos ----------
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 26,
-    paddingBottom: 22,
+    paddingTop: 22,
+    paddingBottom: 18,
     paddingHorizontal: 44, // respiro lateral do mock (rabisco vermelho)
     fontSize: 8.4,
     color: INK,
@@ -261,8 +273,8 @@ const styles = StyleSheet.create({
     fontFamily: "Times-Italic",
     textAlign: "center",
     color: "#333",
-    marginTop: 3,
-    marginBottom: 11,
+    marginTop: 2,
+    marginBottom: 8,
   },
 
   // Cards genéricos
@@ -291,21 +303,20 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // Bloco topo (tabela + figura)
-  topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
-  topLeft: { width: "63.5%" },
-  topRight: { width: "34.5%", alignItems: "center" },
+  // Bloco topo (tabela + figura) — biotipo ampliado após remoção da coluna Referência
+  topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  topLeft: { width: "57%" },
+  topRight: { width: "41%", alignItems: "center" },
 
   // Tabela composição corporal
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   ccHeadTxt: { fontSize: 7.4, color: MUTED, fontWeight: 700 },
-  ccRow: { flexDirection: "row", alignItems: "center", paddingVertical: 3 },
-  ccColParam: { width: "38%", flexDirection: "row", alignItems: "center" },
+  ccRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.2 },
+  ccColParam: { width: "52%", flexDirection: "row", alignItems: "center" },
   ccIcon: { width: 13 },
   ccColParamText: { fontSize: 8.2, color: INK },
-  ccColRes: { width: "23%", fontSize: 8.2, color: INK },
-  ccColRef: { width: "19%", fontSize: 7.8, color: REF },
-  ccColEval: { width: "20%" },
+  ccColRes: { width: "24%", fontSize: 8.2, color: INK },
+  ccColEval: { width: "24%" },
 
   pill: {
     borderRadius: 4,
@@ -320,10 +331,10 @@ const styles = StyleSheet.create({
   pillRed: { backgroundColor: RED_BG, color: RED_TXT },
   pillNeutral: { color: MUTED, fontSize: 8 },
 
-  bodyFront: { width: 126, height: 205, objectFit: "contain", marginTop: 4 },
+  bodyFront: { width: 132, height: 216, objectFit: "contain", marginTop: 4 },
 
   // Bloco meio (3 cards)
-  midRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
+  midRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
   cardMid: {
     width: "32.4%",
     borderWidth: 1,
@@ -336,13 +347,13 @@ const styles = StyleSheet.create({
   },
   mHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   mHeadTxt: { fontSize: 7.2, color: MUTED, fontWeight: 700 },
-  mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 2.8 },
-  mColLabel: { width: "62%", flexDirection: "row", alignItems: "center" },
+  mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.4 },
+  mColLabel: { width: "52%", flexDirection: "row", alignItems: "center" },
   mColLabelText: { fontSize: 7.9, color: INK },
-  mColRes: { width: "38%", fontSize: 7.9, color: INK, textAlign: "center" },
+  mColRes: { width: "24%", fontSize: 7.9, color: INK, textAlign: "center" },
 
   // Evolução (mini-charts)
-  evoBlock: { marginBottom: 5 },
+  evoBlock: { marginBottom: 3 },
   evoHead: { flexDirection: "row", alignItems: "center", marginBottom: 2 },
 
   // Evolução comparativa
@@ -352,9 +363,9 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     paddingTop: 9,
     paddingHorizontal: 11,
-    paddingBottom: 10,
+    paddingBottom: 8,
     backgroundColor: "rgba(255,255,255,0.92)",
-    marginBottom: 10,
+    marginBottom: 6,
   },
   footRow: { flexDirection: "row", justifyContent: "space-between" },
   footBox: {
@@ -362,17 +373,19 @@ const styles = StyleSheet.create({
     borderWidth: 0.8,
     borderColor: BORDER,
     borderRadius: 6,
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: 6,
     alignItems: "center",
     backgroundColor: "#fff",
   },
-  footLabel: { fontSize: 8.8, fontWeight: 700, color: INK, marginBottom: 3 },
-  footBig: { fontSize: 15, fontWeight: 800, color: INK },
+  footLabel: { fontSize: 8.8, fontWeight: 700, color: INK, marginBottom: 2 },
+  footBig: { fontSize: 13, fontWeight: 800, color: INK },
   footDelta: { fontSize: 7.8, marginTop: 3 },
   footSince: { fontSize: 7, color: MUTED, marginTop: 2 },
 
-  // Assinatura
+  // Assinatura — mesmo tamanho/espaçamento dos outros PDFs (plano, orientações,
+  // lista de compras): nome GreatVibes 18, linha acompanhando o texto, CRN 16,
+  // logo 42 com opacidade 0.15.
   signWrap: {
     marginTop: 4,
     flexDirection: "row",
@@ -380,11 +393,11 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   signCol: {},
-  signName: { fontSize: 16, fontFamily: "GreatVibes", color: "#111" },
-  signLine: { height: 0.7, backgroundColor: "#999", marginTop: 1, width: 220 },
-  signCrn: { fontSize: 12, fontFamily: "GreatVibes", color: "#111", marginTop: 3 },
-  footerLogoBox: { alignItems: "center", opacity: 0.28 },
-  footerLogo: { width: 36, height: 36, objectFit: "contain" },
+  signName: { fontSize: 18, fontFamily: "GreatVibes", color: "#1f1f1f" },
+  signLine: { height: 0.8, backgroundColor: "#333", marginTop: 1, width: 240 },
+  signCrn: { fontSize: 16, fontFamily: "GreatVibes", color: "#404040", marginTop: 3 },
+  footerLogoBox: { alignItems: "center", opacity: 0.15 },
+  footerLogo: { width: 42, height: 42, objectFit: "contain" },
   footerLogoText: { fontSize: 7, color: "#3e5c34", fontFamily: "Times-Roman", marginTop: 1 },
 });
 
@@ -420,11 +433,11 @@ function MiniChart({
   color: string;
 }) {
   const W = 148;
-  const H = 54;
+  const H = 44;
   const left = 20;
   const right = 20;
-  const top = 13;
-  const chartH = 24;
+  const top = 10;
+  const chartH = 20;
   const chartW = W - left - right;
 
   const valid = points.filter((p) => hasPositive(p.value));
@@ -436,6 +449,7 @@ function MiniChart({
   const min = minRaw - pad;
   const max = maxRaw + pad;
 
+  // Com 1 ponto, centraliza (x = meio do gráfico); com 2+, distribui.
   const n = Math.max(1, points.length - 1);
   const proj = points.map((p, i) => {
     const x = left + (i * chartW) / n;
@@ -498,13 +512,28 @@ function MiniChart({
 export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProps) {
   const logo = fileToDataUri("/logo-nutricare.png");
   const fundo = fileToDataUri("/layouts/fundo-layout.jpg") || fileToDataUri("/fundo-layout.jpg");
-  const frente = fileToDataUri(dados.imagemFrenteUrl);
+  // Biotipo: usa a versão com traço reforçado (mesma arte, contorno mais visível)
+  const frente = fileToDataUri(
+    dados.imagemFrenteUrl
+      ? dados.imagemFrenteUrl.replace("/images/avaliacao/", "/images/avaliacao-forte/")
+      : undefined
+  );
   const previous = dados.previousSummary || null;
 
-  const refAgua = paciente.sexo === "F" ? "50 - 65 %" : "50 - 65 %";
-  const refBf = paciente.sexo === "F" ? "20 - 30 %" : "16 - 28 %";
-
-  const evolucao = (dados.evolucao || []).slice(-3);
+  // Evolução: responde às caixas de seleção da aba Antropometria.
+  // - Nenhuma avaliação marcada ("somente a primeira"): gráfico mostra só a atual.
+  // - 1 ou 2 marcadas: gráfico mostra as marcadas + a atual (até 3 pontos).
+  const historicoSel = (dados.evolucaoHistorico || []).filter((h) =>
+    (dados.evolucaoSelecionadaIds || []).includes(h.id)
+  );
+  let evolucao: EvolucaoPonto[];
+  if (dados.compareResults && historicoSel.length > 0) {
+    const atual = (dados.evolucao || []).slice(-1);
+    evolucao = [...historicoSel.slice(-2), ...atual];
+  } else {
+    evolucao = (dados.evolucao || []).slice(-1);
+  }
+  const showEvoCard = dados.compareResults && evolucao.length > 1;
   const pesoPontos = evolucao.map((p) => ({ data: p.data, value: p.peso }));
   const musculoPontos = evolucao.map((p) => ({ data: p.data, value: p.massaMuscular }));
   const bfPontos = evolucao.map((p) => ({ data: p.data, value: p.bfPct }));
@@ -522,8 +551,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
     atual: dados.currentDobras?.[k],
     antes: dados.previousDobras?.[k],
   }));
-  const valorOu = (atual: any, antes: any) =>
-    hasPositive(atual) ? toFixedPt(atual) : hasPositive(antes) ? toFixedPt(antes) : "—";
+  const valorOu = (v: any) => (hasPositive(v) ? toFixedPt(v) : "—");
 
   // Comparativos vs 1ª avaliação
   const base = previous;
@@ -570,10 +598,9 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             <Text style={styles.cardTitle}>COMPOSIÇÃO CORPORAL</Text>
 
             <View style={styles.ccHead}>
-              <Text style={[styles.ccHeadTxt, { width: "38%" }]}>Parâmetro</Text>
-              <Text style={[styles.ccHeadTxt, { width: "23%" }]}>Resultado</Text>
-              <Text style={[styles.ccHeadTxt, { width: "19%" }]}>Referência</Text>
-              <Text style={[styles.ccHeadTxt, { width: "20%" }]}>Avaliação</Text>
+              <Text style={[styles.ccHeadTxt, { width: "52%" }]}>Parâmetro</Text>
+              <Text style={[styles.ccHeadTxt, { width: "24%" }]}>Resultado</Text>
+              <Text style={[styles.ccHeadTxt, { width: "24%" }]}>Avaliação</Text>
             </View>
 
             {/* Peso */}
@@ -583,7 +610,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.ccColParamText}>Peso</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.pesoKg)} kg</Text>
-              <Text style={styles.ccColRef}>—</Text>
               <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
@@ -594,7 +620,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.ccColParamText}>% de água{"\n"}corporal</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.pctAgua)} %</Text>
-              <Text style={styles.ccColRef}>{refAgua}</Text>
               <View style={styles.ccColEval}>
                 <EvalPill
                   cor={dados.classificacaoAgua?.cor}
@@ -610,7 +635,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.ccColParamText}>Massa{"\n"}muscular</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
-              <Text style={styles.ccColRef}>—</Text>
               <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
@@ -621,7 +645,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.ccColParamText}>Músculo{"\n"}esquelético</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.imme)} kg</Text>
-              <Text style={styles.ccColRef}>—</Text>
               <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
@@ -632,7 +655,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.ccColParamText}>Massa livre{"\n"}de gordura</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
-              <Text style={styles.ccColRef}>—</Text>
               <View style={styles.ccColEval}>
                 <EvalPill cor={dados.classificacaoFfmi?.cor} label={dados.classificacaoFfmi?.label} />
               </View>
@@ -645,7 +667,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.ccColParamText}>Massa{"\n"}adiposa</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.imme, 2)} kg/m²</Text>
-              <Text style={styles.ccColRef}>—</Text>
               <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
@@ -656,7 +677,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.ccColParamText}>Índice de{"\n"}massa gorda</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
-              <Text style={styles.ccColRef}>—</Text>
               <View style={styles.ccColEval}>
                 {dados.classificacaoImg?.label ? (
                   <EvalPill cor={dados.classificacaoImg.cor} label={dados.classificacaoImg.label} />
@@ -673,7 +693,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.ccColParamText}>% de gordura</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.bfPct)} %</Text>
-              <Text style={styles.ccColRef}>{refBf}</Text>
               <View style={styles.ccColEval}>
                 {dados.classificacaoGordura?.label ? (
                   <EvalPill cor={dados.classificacaoGordura.cor} label={dados.classificacaoGordura.label} />
@@ -693,47 +712,54 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
         {/* ============ BLOCO MEIO: 3 CARDS ============ */}
         <View style={styles.midRow}>
-          {/* Circunferências — uma coluna "Resultado (cm)", 11 linhas */}
+          {/* Circunferências — duas colunas: Antes (avaliação anterior) / Atual */}
           <View style={styles.cardMid}>
-            <Text style={styles.cardTitle}>CIRCUNFERÊNCIAS</Text>
+            <Text style={styles.cardTitle}>CIRCUNFERÊNCIAS (cm)</Text>
             <View style={styles.mHead}>
-              <Text style={[styles.mHeadTxt, { width: "62%" }]}>Medida</Text>
-              <Text style={[styles.mHeadTxt, { width: "38%", textAlign: "center" }]}>Resultado (cm)</Text>
+              <Text style={[styles.mHeadTxt, { width: "52%" }]}>Medida</Text>
+              <Text style={[styles.mHeadTxt, { width: "24%", textAlign: "center" }]}>Antes</Text>
+              <Text style={[styles.mHeadTxt, { width: "24%", textAlign: "center" }]}>Atual</Text>
             </View>
             {circRows.map((r) => (
               <View key={r.key} style={styles.mRow}>
                 <View style={styles.mColLabel}>
                   <Text style={styles.mColLabelText}>{r.label}</Text>
                 </View>
-                <Text style={styles.mColRes}>{valorOu(r.atual, r.antes)}</Text>
+                <Text style={styles.mColRes}>{valorOu(r.antes)}</Text>
+                <Text style={styles.mColRes}>{valorOu(r.atual)}</Text>
               </View>
             ))}
           </View>
 
-          {/* Dobras — uma coluna "Resultado (mm)", 10 linhas */}
+          {/* Dobras — duas colunas: Antes (avaliação anterior) / Atual */}
           <View style={styles.cardMid}>
             <Text style={styles.cardTitle}>DOBRAS CUTÂNEAS (mm)</Text>
             <View style={styles.mHead}>
-              <Text style={[styles.mHeadTxt, { width: "62%" }]}>Dobra</Text>
-              <Text style={[styles.mHeadTxt, { width: "38%", textAlign: "center" }]}>Resultado (mm)</Text>
+              <Text style={[styles.mHeadTxt, { width: "52%" }]}>Dobra</Text>
+              <Text style={[styles.mHeadTxt, { width: "24%", textAlign: "center" }]}>Antes</Text>
+              <Text style={[styles.mHeadTxt, { width: "24%", textAlign: "center" }]}>Atual</Text>
             </View>
             {dobraRows.map((r) => (
               <View key={r.key} style={styles.mRow}>
                 <View style={styles.mColLabel}>
                   <Text style={styles.mColLabelText}>{r.label}</Text>
                 </View>
-                <Text style={styles.mColRes}>{valorOu(r.atual, r.antes)}</Text>
+                <Text style={styles.mColRes}>{valorOu(r.antes)}</Text>
+                <Text style={styles.mColRes}>{valorOu(r.atual)}</Text>
               </View>
             ))}
           </View>
 
-          {/* Evolução — 3 mini-gráficos */}
-          <View style={styles.cardMid}>
-            <Text style={styles.cardTitle}>EVOLUÇÃO</Text>
-            <MiniChart title="Peso (kg)" points={pesoPontos} color={CHART_GREEN} />
-            <MiniChart title="Massa Muscular (kg)" points={musculoPontos} color={CHART_BLUE} />
-            <MiniChart title="% de Gordura (%)" points={bfPontos} color={CHART_RED} />
-          </View>
+          {/* Evolução — 3 mini-gráficos (só quando a comparação está ativa e há
+              avaliações marcadas nas caixas de seleção da aba Antropometria) */}
+          {showEvoCard ? (
+            <View style={styles.cardMid}>
+              <Text style={styles.cardTitle}>EVOLUÇÃO</Text>
+              <MiniChart title="Peso (kg)" points={pesoPontos} color={CHART_GREEN} />
+              <MiniChart title="Massa Muscular (kg)" points={musculoPontos} color={CHART_BLUE} />
+              <MiniChart title="% de Gordura (%)" points={bfPontos} color={CHART_RED} />
+            </View>
+          ) : null}
         </View>
 
         {/* ============ EVOLUÇÃO COMPARATIVA ============ */}
