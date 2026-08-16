@@ -38,6 +38,8 @@ type BodyShape = {
   currentCircunferencias?: Record<string, number>;
   previousDobras?: Record<string, number>;
   previousCircunferencias?: Record<string, number>;
+  // Ids das avaliações (1ª/2ª/3ª) marcadas nas caixas de seleção da aba Antropometria
+  evolucaoSelecionadaIds?: string[];
 };
 
 function fmtData(d: Date | string | null | undefined) {
@@ -95,6 +97,17 @@ export async function POST(req: NextRequest) {
     const evolucaoBanco = rotativas.map((r) => {
       const snap = extrairSnapshotDeEvolucao(r);
       return {
+        data: fmtData(r.created_at),
+        peso: snap?.resumo.pesoKg ?? (Number(r.peso ?? 0) || null),
+        massaMuscular: snap?.resumo.massaMuscularKg ?? (Number(r.massa_muscular ?? 0) || null),
+        bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
+      };
+    });
+    // Mesma lista com o id de cada avaliação — alimenta as caixas de seleção
+    const evolucaoHistorico = rotativas.map((r) => {
+      const snap = extrairSnapshotDeEvolucao(r);
+      return {
+        id: r.id,
         data: fmtData(r.created_at),
         peso: snap?.resumo.pesoKg ?? (Number(r.peso ?? 0) || null),
         massaMuscular: snap?.resumo.massaMuscularKg ?? (Number(r.massa_muscular ?? 0) || null),
@@ -186,6 +199,10 @@ export async function POST(req: NextRequest) {
             }
           : null,
         evolucao,
+        evolucaoHistorico,
+        evolucaoSelecionadaIds: Array.isArray(body.evolucaoSelecionadaIds)
+          ? body.evolucaoSelecionadaIds
+          : [],
         dataAvaliacaoInicial,
       },
       nutricionista,
@@ -199,19 +216,57 @@ export async function POST(req: NextRequest) {
     }
 
     const slug = slugify(paciente.nome);
+
+    // Mesmo padrão visual do e-mail de plano alimentar / orientações /
+    // lista de compras: card azul com a logo NutriCare no topo.
+    const rawBase =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.NEXTAUTH_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+      req.headers.get("origin") ||
+      "http://localhost:3000";
+    const baseUrl = String(rawBase).replace(/\/+$/, "");
+    const logoUrl = `${baseUrl}/logo-nutricare.png`;
+
     const html = `
-      <p>Olá <strong>${esc(paciente.nome)}</strong>,</p>
-      <p>Segue em anexo sua <strong>Avaliação Física</strong>.</p>
-      <p><strong>Resumo principal</strong><br/>
-      • Peso: <strong>${resumo.pesoKg.toFixed(1)} kg</strong><br/>
-      • Músculo Esquelético: <strong>${resumo.imme.toFixed(2)} kg/m²</strong> (${esc(resumo.classificacoes.imme.label)})<br/>
-      • Índice de Massa Gorda: <strong>${resumo.img.toFixed(2)} kg/m²</strong> (${esc(resumo.classificacoes.img.label)})<br/>
-      • Massa Livre de Gordura: <strong>${resumo.ffmi.toFixed(2)} kg/m²</strong><br/>
-      • % de Gordura: <strong>${resumo.bfPct.toFixed(1)}%</strong> (${esc(resumo.classificacoes.gordura.label)})<br/>
-      • % de Água corporal: <strong>${resumo.pctAgua.toFixed(1)}%</strong> (${esc(resumo.classificacoes.agua.label)})</p>
-      <p>Em caso de dúvidas, entre em contato com seu nutricionista.</p>
-      <p>${esc(nutricionista.nome)} · CRN ${esc(nutricionista.crn)}</p>
-    `;
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:24px;background:#eef3f8;font-family:'Segoe UI',Arial,sans-serif;">
+  <div style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #dbe3ec;">
+    <div style="padding:24px 28px;background:linear-gradient(180deg, #3f6faa 0%, #265d99 45%, #183865 100%);color:#ffffff;text-align:center;">
+      <img src="${logoUrl}" alt="NutriCare" style="display:block;margin:0 auto 10px;max-width:200px;height:auto;" />
+      <div style="font-size:16px;font-weight:600;margin-top:4px;">Avaliação física enviada para download</div>
+      <div style="font-size:13px;line-height:1.7;margin-top:8px;color:#dbe8f7;">
+        Paciente: ${esc(paciente.nome)}
+      </div>
+    </div>
+
+    <div style="margin:18px 28px 0;padding:16px 18px;border:1px solid #d7e3ef;border-radius:12px;background:#f8fbff;">
+      <div style="font-size:13px;line-height:1.7;color:#334155;">
+        Olá <strong>${esc(paciente.nome)}</strong>, segue em anexo sua <strong>Avaliação Física</strong>.
+      </div>
+    </div>
+
+    <div style="margin:18px 28px 28px;padding:16px 18px;border-radius:12px;background:#f0fdf4;border:1px solid #bbf7d0;">
+      <div style="font-size:15px;font-weight:700;color:#166534;margin-bottom:8px;">Resumo principal</div>
+      <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.8;color:#166534;">
+        <li>Peso: <strong>${resumo.pesoKg.toFixed(1).replace(".", ",")} kg</strong></li>
+        <li>Músculo Esquelético: <strong>${resumo.imme.toFixed(2).replace(".", ",")} kg/m²</strong> (${esc(resumo.classificacoes.imme.label)})</li>
+        <li>Índice de Massa Gorda: <strong>${resumo.img.toFixed(2).replace(".", ",")} kg/m²</strong> (${esc(resumo.classificacoes.img.label)})</li>
+        <li>Massa Livre de Gordura: <strong>${resumo.ffmi.toFixed(2).replace(".", ",")} kg/m²</strong></li>
+        <li>% de Gordura: <strong>${resumo.bfPct.toFixed(1).replace(".", ",")}%</strong> (${esc(resumo.classificacoes.gordura.label)})</li>
+        <li>% de Água corporal: <strong>${resumo.pctAgua.toFixed(1).replace(".", ",")}%</strong> (${esc(resumo.classificacoes.agua.label)})</li>
+      </ul>
+    </div>
+
+    <div style="margin:0 28px 28px;font-size:12px;line-height:1.7;color:#64748b;">
+      Em caso de dúvidas, entre em contato com seu nutricionista.<br/>
+      ${esc(nutricionista.nome)} · CRN ${esc(nutricionista.crn)}
+    </div>
+  </div>
+</body>
+</html>`;
 
     await sendBrevoEmail({
       to: [{ email: destino, name: paciente.nome }],
