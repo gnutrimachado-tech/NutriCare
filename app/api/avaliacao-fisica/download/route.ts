@@ -39,6 +39,8 @@ type BodyShape = {
   currentCircunferencias?: Record<string, number>;
   previousDobras?: Record<string, number>;
   previousCircunferencias?: Record<string, number>;
+  // Ids das avaliações (1ª/2ª/3ª) marcadas nas caixas de seleção da aba Antropometria
+  evolucaoSelecionadaIds?: string[];
 };
 
 function fmtData(d: Date | string | null | undefined) {
@@ -124,6 +126,17 @@ export async function POST(req: NextRequest) {
         bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
       };
     });
+    // Mesma lista com o id de cada avaliação — alimenta as caixas de seleção
+    const evolucaoHistorico = rotativas.map((r) => {
+      const snap = extrairSnapshotDeEvolucao(r);
+      return {
+        id: r.id,
+        data: fmtData(r.created_at),
+        peso: snap?.resumo.pesoKg ?? (Number(r.peso ?? 0) || null),
+        massaMuscular: snap?.resumo.massaMuscularKg ?? (Number(r.massa_muscular ?? 0) || null),
+        bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
+      };
+    });
 
     const primeira = await primeiraAvaliacao(pacienteId);
     const primeiraSnap = primeira ? extrairSnapshotDeEvolucao(primeira) : null;
@@ -191,6 +204,10 @@ export async function POST(req: NextRequest) {
             }
           : null,
         evolucao,
+        evolucaoHistorico,
+        evolucaoSelecionadaIds: Array.isArray(body.evolucaoSelecionadaIds)
+          ? body.evolucaoSelecionadaIds
+          : [],
         dataAvaliacaoInicial,
       },
       nutricionista,
