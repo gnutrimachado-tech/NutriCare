@@ -305,17 +305,18 @@ const styles = StyleSheet.create({
 
   // Bloco topo (tabela + figura) — biotipo ampliado após remoção da coluna Referência
   topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
-  topLeft: { width: "57%" },
-  topRight: { width: "41%", alignItems: "center" },
+  topLeft: { width: "54%" },
+  topRight: { width: "44%", alignItems: "center" },
 
   // Tabela composição corporal
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   ccHeadTxt: { fontSize: 7.4, color: MUTED, fontWeight: 700 },
   ccRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.2 },
-  ccColParam: { width: "52%", flexDirection: "row", alignItems: "center" },
+  // Sem coluna "Referência": Parâmetro 54% / Resultado 22% / Avaliação 24%
+  ccColParam: { width: "54%", flexDirection: "row", alignItems: "center" },
   ccIcon: { width: 13 },
   ccColParamText: { fontSize: 8.2, color: INK },
-  ccColRes: { width: "24%", fontSize: 8.2, color: INK },
+  ccColRes: { width: "22%", fontSize: 8.2, color: INK },
   ccColEval: { width: "24%" },
 
   pill: {
@@ -331,7 +332,8 @@ const styles = StyleSheet.create({
   pillRed: { backgroundColor: RED_BG, color: RED_TXT },
   pillNeutral: { color: MUTED, fontSize: 8 },
 
-  bodyFront: { width: 132, height: 216, objectFit: "contain", marginTop: 4 },
+  // Biotipo ampliado após remoção da coluna Referência (compensa o espaço)
+  bodyFront: { width: 168, height: 268, objectFit: "contain", marginTop: 4 },
 
   // Bloco meio (3 cards)
   midRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
@@ -383,19 +385,25 @@ const styles = StyleSheet.create({
   footDelta: { fontSize: 7.8, marginTop: 3 },
   footSince: { fontSize: 7, color: MUTED, marginTop: 2 },
 
-  // Assinatura — mesmo tamanho/espaçamento dos outros PDFs (plano, orientações,
-  // lista de compras): nome GreatVibes 18, linha acompanhando o texto, CRN 16,
-  // logo 42 com opacidade 0.15.
+  // Assinatura — replica 1:1 o rodapé de send-plano/route.ts:
+  //   Linha 1 "Nutricionista: {nome}" GreatVibes 18pt em y=68 (footerY+12).
+  //   Linha (0.8pt) do X=PAGE_MARGIN_X até o fim do texto do nutricionista.
+  //   Linha 2 CRN em GreatVibes 16pt em y=48 (footerY-8).
+  //   Logo 42x42, opacidade 0.15, ancorada no canto inferior direito (y=54).
+  //   Distância vertical entre nome e linha ≈ 2pt; entre linha e CRN ≈ 18pt.
   signWrap: {
-    marginTop: 4,
+    position: "absolute",
+    left: 44,
+    right: 44,
+    bottom: 18,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-end",
   },
   signCol: {},
   signName: { fontSize: 18, fontFamily: "GreatVibes", color: "#1f1f1f" },
-  signLine: { height: 0.8, backgroundColor: "#333", marginTop: 1, width: 240 },
-  signCrn: { fontSize: 16, fontFamily: "GreatVibes", color: "#404040", marginTop: 3 },
+  signLine: { height: 0.8, backgroundColor: "#333", marginTop: 2, width: 260 },
+  signCrn: { fontSize: 16, fontFamily: "GreatVibes", color: "#404040", marginTop: 8 },
   footerLogoBox: { alignItems: "center", opacity: 0.15 },
   footerLogo: { width: 42, height: 42, objectFit: "contain" },
   footerLogoText: { fontSize: 7, color: "#3e5c34", fontFamily: "Times-Roman", marginTop: 1 },
@@ -512,12 +520,9 @@ function MiniChart({
 export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProps) {
   const logo = fileToDataUri("/logo-nutricare.png");
   const fundo = fileToDataUri("/layouts/fundo-layout.jpg") || fileToDataUri("/fundo-layout.jpg");
-  // Biotipo: usa a versão com traço reforçado (mesma arte, contorno mais visível)
-  const frente = fileToDataUri(
-    dados.imagemFrenteUrl
-      ? dados.imagemFrenteUrl.replace("/images/avaliacao/", "/images/avaliacao-forte/")
-      : undefined
-  );
+  // Biotipo: lê direto de /public/images/avaliacao (as imagens desta pasta já
+  // vêm com o contorno reforçado). Nunca aponta para /avaliacao-forte.
+  const frente = fileToDataUri(dados.imagemFrenteUrl);
   const previous = dados.previousSummary || null;
 
   // Evolução: responde às caixas de seleção da aba Antropometria.
@@ -597,9 +602,11 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
           <View style={[styles.card, styles.topLeft]}>
             <Text style={styles.cardTitle}>COMPOSIÇÃO CORPORAL</Text>
 
+            {/* Sem coluna "Referência": Parâmetro / Resultado / Avaliação
+                (Avaliação = Bom / Ótimo / Atenção — o que já é mostrado nas pills) */}
             <View style={styles.ccHead}>
-              <Text style={[styles.ccHeadTxt, { width: "52%" }]}>Parâmetro</Text>
-              <Text style={[styles.ccHeadTxt, { width: "24%" }]}>Resultado</Text>
+              <Text style={[styles.ccHeadTxt, { width: "54%" }]}>Parâmetro</Text>
+              <Text style={[styles.ccHeadTxt, { width: "22%" }]}>Resultado</Text>
               <Text style={[styles.ccHeadTxt, { width: "24%" }]}>Avaliação</Text>
             </View>
 
@@ -703,9 +710,10 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             </View>
           </View>
 
-          {/* Card direito — figura do biotipo */}
+          {/* Card direito — figura do biotipo (ampliada). Título distinto
+              ("BIOTIPO CORPORAL") para não repetir o título do card esquerdo. */}
           <View style={[styles.card, styles.topRight]}>
-            <Text style={styles.cardTitleCentered}>COMPOSIÇÃO CORPORAL</Text>
+            <Text style={styles.cardTitleCentered}>BIOTIPO CORPORAL</Text>
             {frente ? <Image src={frente} style={styles.bodyFront} /> : <View style={styles.bodyFront} />}
           </View>
         </View>
@@ -762,7 +770,10 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
           ) : null}
         </View>
 
-        {/* ============ EVOLUÇÃO COMPARATIVA ============ */}
+        {/* ============ EVOLUÇÃO COMPARATIVA ============
+            Só renderiza quando a comparação está ativa e há avaliações
+            marcadas nas caixas de seleção (mesma regra do card EVOLUÇÃO). */}
+        {showEvoCard ? (
         <View style={styles.footCard}>
           <Text style={styles.cardTitle}>EVOLUÇÃO COMPARATIVA</Text>
           <View style={styles.footRow}>
@@ -815,6 +826,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             </View>
           </View>
         </View>
+        ) : null}
 
         {/* ============ ASSINATURA ============ */}
         <View style={styles.signWrap}>
