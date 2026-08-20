@@ -5,15 +5,28 @@
 // Página A4 retrato (595.28 x 841.89 pt).
 // Margens laterais = 30pt (idênticas às do send-plano/route.ts — PDF de Orientações).
 //
-// Ordem vertical:
-//   1) Cabeçalho: logo (68pt) | nome/nascimento/peso/altura/sexo
-//   2) Régua escura fina (HEADER_LINE_Y = HEADER_TOP - 70)
-//   3) Título "AVALIAÇÃO FÍSICA" (Helvetica-Bold 20pt, 28.35pt = 1cm abaixo da linha)
-//   4) Bloco superior: card COMPOSIÇÃO CORPORAL (tabela) + card BIOTIPO CORPORAL (figura ampliada)
-//   5) Bloco médio: CIRCUNFERÊNCIAS (Antes/Atual) | DOBRAS CUTÂNEAS (Antes/Atual) | EVOLUÇÃO
-//   6) Card EVOLUÇÃO COMPARATIVA (3 caixas: Peso / Massa Muscular / % Gordura)
-//   7) Assinatura GreatVibes (Nutricionista + CRN) no rodapé — idêntica ao PDF de Orientações
-
+// Ordem vertical (padrão idêntico ao PDF de Orientações):
+//   HEADER_TOP    = PAGE_HEIGHT - 20  (= 821.89)
+//   HEADER_LINE_Y = HEADER_TOP  - 70  (= 751.89)   ← régua escura sob o cabeçalho
+//   TITLE_Y       = HEADER_LINE_Y - 28.35          ← 1cm abaixo da linha
+//   CONTENT_TOP   = TITLE_Y      - 28.35           ← 1cm abaixo do título
+//   footerY = 56 (Nutricionista GreatVibes 18pt em y+12; CRN GreatVibes 16pt em y-8)
+//
+// Ajustes desta versão (sem tocar em mais nada):
+//   1) Removido o quadro/coluna "Referência" da tabela Composição Corporal;
+//      a coluna "Avaliação" (Bom / Ótimo / Atenção) assume o espaço.
+//   2) Biotipo Corporal (imagem do corpo) aumentada para preencher melhor o card.
+//   3) Circunferências e Dobras Cutâneas: 2 colunas de valores — Antes / Atual.
+//   4) Cabeçalho, título "AVALIAÇÃO FÍSICA", rodapé (Nutricionista + CRN) e
+//      espaçamentos alinhados 1:1 com o PDF de Orientações.
+//   5) Card EVOLUÇÃO: se for a 1ª avaliação, mostra Peso / Massa Muscular /
+//      % Gordura atuais em destaque (nunca vazio). Se houver comparação
+//      selecionada na aba Antropometria, mostra os mini-gráficos de linha.
+//
+// Nada de setas/quadrados vermelhos é desenhado no PDF (as marcações vermelhas
+// da referência eram apenas anotações do print — não faziam parte do layout).
+//
+// ---------------------------------------------------------------------------
 import fs from "node:fs";
 import path from "node:path";
 import React from "react";
@@ -213,7 +226,7 @@ function pct(a: number, b: number) {
 }
 
 // ---------- Paleta ----------
-const INK = "#1a1a1a";          // preto suave dos textos
+const INK = "#0d0d0d";          // preto do texto (mesmo do send-plano)
 const TITLE_GREEN = "#5a7a4e";  // títulos dos cards (verde-oliva do mock)
 const RULE = "#262626";         // régua escura sob o cabeçalho (mesma do send-plano)
 const BORDER = "#b9c4ae";       // borda verde-acinzentada dos cards
@@ -305,20 +318,21 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // Bloco topo (tabela + figura) — biotipo ampliado após remoção da coluna Referência
+  // Bloco topo (tabela + figura) — biotipo ampliado após remoção da coluna Referência.
+  // A tabela fica um pouco mais estreita para dar mais espaço ao BIOTIPO CORPORAL.
   topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
-  topLeft: { width: "54%" },
-  topRight: { width: "44%", alignItems: "center" },
+  topLeft: { width: "52%" },
+  topRight: { width: "46%", alignItems: "center" },
 
-  // Tabela composição corporal
+  // Tabela composição corporal (sem coluna "Referência")
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   ccHeadTxt: { fontSize: 7.4, color: MUTED, fontWeight: 700 },
   ccRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.6 },
-  // Sem coluna "Referência": Parâmetro 54% / Resultado 22% / Avaliação 24%
-  ccColParam: { width: "54%", flexDirection: "row", alignItems: "center" },
+  // Colunas: Parâmetro 52% / Resultado 24% / Avaliação 24%
+  ccColParam: { width: "52%", flexDirection: "row", alignItems: "center" },
   ccIcon: { width: 13 },
   ccColParamText: { fontSize: 8.2, color: INK },
-  ccColRes: { width: "22%", fontSize: 8.2, color: INK },
+  ccColRes: { width: "24%", fontSize: 8.2, color: INK },
   ccColEval: { width: "24%" },
 
   pill: {
@@ -335,8 +349,9 @@ const styles = StyleSheet.create({
   pillNeutral: { color: MUTED, fontSize: 8 },
 
   // Biotipo — aumentado para aproveitar melhor o quadrado do card.
-  // Aumento leve (≈8%) sem tocar em traço/contorno das imagens em /public/images/avaliacao.
-  bodyFront: { width: 190, height: 300, objectFit: "contain", marginTop: 4 },
+  // As 6 imagens em /public/images/avaliacao mantêm proporção original;
+  // apenas escalamos a caixa para dentro do card, sem alterar o contorno.
+  bodyFront: { width: 230, height: 340, objectFit: "contain", marginTop: 2 },
 
   // Bloco meio (3 cards)
   midRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
@@ -656,8 +671,8 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             {/* Colunas: Parâmetro / Resultado / Avaliação (Bom / Ótimo / Atenção) */}
             <View style={styles.ccHead}>
-              <Text style={[styles.ccHeadTxt, { width: "54%" }]}>Parâmetro</Text>
-              <Text style={[styles.ccHeadTxt, { width: "22%" }]}>Resultado</Text>
+              <Text style={[styles.ccHeadTxt, { width: "52%" }]}>Parâmetro</Text>
+              <Text style={[styles.ccHeadTxt, { width: "24%" }]}>Resultado</Text>
               <Text style={[styles.ccHeadTxt, { width: "24%" }]}>Avaliação</Text>
             </View>
 
@@ -761,7 +776,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             </View>
           </View>
 
-          {/* Card direito — figura do biotipo (ampliada). */}
+          {/* Card direito — figura do biotipo (ampliada para preencher o card). */}
           <View style={[styles.card, styles.topRight]}>
             <Text style={styles.cardTitleCentered}>BIOTIPO CORPORAL</Text>
             {frente ? <Image src={frente} style={styles.bodyFront} /> : <View style={styles.bodyFront} />}
@@ -809,9 +824,10 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
           </View>
 
           {/* Evolução — SEMPRE aparece:
-              • 1ª avaliação (sem comparação): mostra valores atuais em destaque.
-              • Comparação ativa com 2/3 pontos: mostra o gráfico de linha.
-              Assim o card nunca fica vazio. */}
+              • 1ª avaliação (sem comparação): mostra valores atuais em destaque
+                (Peso / Massa Muscular / % de Gordura), para o card nunca ficar vazio.
+              • Comparação ativa com 2/3 pontos: mostra o gráfico de linha,
+                respondendo às caixas selecionadas na aba Antropometria. */}
           <View style={styles.cardMid}>
             <Text style={styles.cardTitle}>EVOLUÇÃO</Text>
             {isComparing ? (
