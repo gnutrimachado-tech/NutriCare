@@ -256,12 +256,15 @@ const styles = StyleSheet.create({
   rule: { height: 1.1, backgroundColor: RULE, marginTop: 8, marginBottom: 12 },
 
   // Título / subtítulo
+  // Ajuste 3: mesma fonte do PDF de Orientações (sans-serif bold),
+  // sem o subtítulo "Composição Corporal" abaixo.
   title: {
     fontSize: 20,
-    fontFamily: "Times-Bold",
+    fontFamily: "Helvetica-Bold",
     textAlign: "center",
     color: "#000",
     letterSpacing: 1.4,
+    marginBottom: 8,
   },
   subtitle: {
     fontSize: 12.5,
@@ -310,7 +313,8 @@ const styles = StyleSheet.create({
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   ccHeadTxt: { fontSize: 7.4, color: MUTED, fontWeight: 700 },
   ccRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.2 },
-  ccColParam: { width: "52%", flexDirection: "row", alignItems: "center" },
+  // Ajuste 2: coluna Parâmetro deslocada um pouco para a direita.
+  ccColParam: { width: "52%", flexDirection: "row", alignItems: "center", paddingLeft: 10 },
   ccColParamText: { fontSize: 8.2, color: INK },
   ccColRes: { width: "24%", fontSize: 8.2, color: INK },
   ccColEval: { width: "24%" },
@@ -330,6 +334,19 @@ const styles = StyleSheet.create({
 
   // Espaço reservado para imagens do paciente (sem desenho placeholder)
   bodyPlaceholder: { width: 132, height: 216, marginTop: 4 },
+
+  // Ajuste 1/4: card de evolução exibido na 1ª avaliação (sem comparação)
+  evoInfoRow: { flexDirection: "row", alignItems: "center", marginTop: 2 },
+  evoFigure: { width: 46, height: 100, objectFit: "contain", marginRight: 8 },
+  evoInfoText: { flexGrow: 1, flexShrink: 1, fontSize: 8.4, color: "#333", lineHeight: 1.35 },
+  evoNoteBox: {
+    backgroundColor: GREEN_BG,
+    borderRadius: 5,
+    paddingVertical: 5,
+    paddingHorizontal: 7,
+    marginTop: 7,
+  },
+  evoNoteText: { fontSize: 7.2, color: "#2e4630", lineHeight: 1.3 },
 
   // Bloco meio (3 cards)
   midRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
@@ -497,28 +514,23 @@ function MiniChart({
   );
 }
 
-// Gráfico vazio (mesmo tamanho do MiniChart): apenas os eixos, sem pontos.
-// Quando a comparação é ativada, o MiniChart entra no lugar com os valores.
-function EmptyChart({ title }: { title: string }) {
-  const W = 148;
-  const H = 44;
-  const left = 20;
-  const top = 10;
-  const chartH = 20;
-  const chartW = W - 40;
+// Ajuste 1/4: card informativo de evolução (silhueta + texto), exibido no
+// lugar do gráfico vazio quando é a primeira avaliação / sem comparação.
+function EvolucaoInfoCard({ figureSrc }: { figureSrc: string | null }) {
   return (
-    <View style={styles.evoBlock}>
-      <Text style={{ fontSize: 7.8, fontWeight: 700, color: INK, marginBottom: 1 }}>
-        {title}
-      </Text>
-      <Svg width={W} height={H}>
-        <Polyline
-          points={`${left},${top} ${left},${top + chartH} ${left + chartW},${top + chartH}`}
-          stroke="#d7ddd2"
-          strokeWidth={1}
-          fill="none"
-        />
-      </Svg>
+    <View>
+      <View style={styles.evoInfoRow}>
+        {figureSrc ? <Image src={figureSrc} style={styles.evoFigure} /> : null}
+        <Text style={styles.evoInfoText}>
+          Acompanhe aqui seus resultados ao longo do tempo, com base nos parâmetros avaliados.
+        </Text>
+      </View>
+      <View style={styles.evoNoteBox}>
+        <Text style={styles.evoNoteText}>
+          Na sua próxima avaliação, este espaço exibirá um gráfico com a sua evolução de peso,
+          massa muscular e % de gordura.
+        </Text>
+      </View>
     </View>
   );
 }
@@ -528,6 +540,12 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   const logo = fileToDataUri("/logo-nutricare.png");
   const fundo = fileToDataUri("/layouts/fundo-layout.jpg") || fileToDataUri("/fundo-layout.jpg");
   const previous = dados.previousSummary || null;
+  // Silhueta do card de evolução (1ª avaliação), conforme o sexo do paciente.
+  const silhueta = fileToDataUri(
+    paciente.sexo === "F"
+      ? "/images/avaliacao/fem-frente-1.png.jpg"
+      : "/images/avaliacao/masc-frente-1.png.jpg"
+  );
 
   // Evolução: responde às caixas de seleção da aba Antropometria.
   // - Nenhuma avaliação marcada ("somente a primeira"): gráfico mostra só a atual.
@@ -595,7 +613,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
         {/* ============ TÍTULO ============ */}
         <Text style={styles.title}>AVALIAÇÃO FÍSICA</Text>
-        <Text style={styles.subtitle}>Composição Corporal</Text>
 
         {/* ============ BLOCO TOPO: 2 CARDS ============ */}
         <View style={styles.topRow}>
@@ -604,7 +621,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             <Text style={styles.cardTitle}>COMPOSIÇÃO CORPORAL</Text>
 
             <View style={styles.ccHead}>
-              <Text style={[styles.ccHeadTxt, { width: "52%" }]}>Parâmetro</Text>
+              <Text style={[styles.ccHeadTxt, { width: "52%", paddingLeft: 10 }]}>Parâmetro</Text>
               <Text style={[styles.ccHeadTxt, { width: "24%" }]}>Resultado</Text>
               <Text style={[styles.ccHeadTxt, { width: "24%" }]}>Avaliação</Text>
             </View>
@@ -748,7 +765,8 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
           </View>
 
           {/* Evolução — 3 mini-gráficos (só quando a comparação está ativa e há
-              avaliações marcadas nas caixas de seleção da aba Antropometria) */}
+              avaliações marcadas nas caixas de seleção da aba Antropometria).
+              Na 1ª avaliação / sem comparação: card informativo com silhueta. */}
           <View style={styles.cardMid}>
             <Text style={styles.cardTitle}>EVOLUÇÃO</Text>
             {showEvoCard ? (
@@ -758,11 +776,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <MiniChart title="% de Gordura (%)" points={bfPontos} color={CHART_RED} />
               </>
             ) : (
-              <>
-                <EmptyChart title="Peso (kg)" />
-                <EmptyChart title="Massa Muscular (kg)" />
-                <EmptyChart title="% de Gordura (%)" />
-              </>
+              <EvolucaoInfoCard figureSrc={silhueta} />
             )}
           </View>
         </View>
