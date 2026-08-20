@@ -25,6 +25,7 @@ import {
   StyleSheet,
   Svg,
   Circle,
+  Rect,
   Polyline,
   Font,
 } from "@react-pdf/renderer";
@@ -338,15 +339,21 @@ const styles = StyleSheet.create({
   // Ajuste 1/4: card de evolução exibido na 1ª avaliação (sem comparação)
   evoInfoRow: { flexDirection: "row", alignItems: "center", marginTop: 2 },
   evoFigure: { width: 46, height: 100, objectFit: "contain", marginRight: 8 },
-  evoInfoText: { flexGrow: 1, flexShrink: 1, fontSize: 8.4, color: "#333", lineHeight: 1.35 },
+  evoFigureSvg: { width: 46, height: 100, marginRight: 8 },
+  evoInfoTextWrap: { flexGrow: 1, flexShrink: 1 },
+  evoInfoText: { fontSize: 9.2, color: "#333", lineHeight: 1.4 },
   evoNoteBox: {
     backgroundColor: GREEN_BG,
     borderRadius: 5,
     paddingVertical: 5,
     paddingHorizontal: 7,
     marginTop: 7,
+    flexDirection: "row",
+    alignItems: "center",
   },
-  evoNoteText: { fontSize: 7.2, color: "#2e4630", lineHeight: 1.3 },
+  evoNoteIcon: { width: 14, height: 14, marginRight: 6 },
+  evoNoteTextWrap: { flexGrow: 1, flexShrink: 1 },
+  evoNoteText: { fontSize: 7.6, color: "#2e4630", lineHeight: 1.3 },
 
   // Bloco meio (3 cards)
   midRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
@@ -514,22 +521,59 @@ function MiniChart({
   );
 }
 
+// Ajuste 2: silhueta verde em duas tonalidades (igual ao modelo de referência),
+// desenhada em SVG — não depende mais da imagem .jpg.
+function SilhuetaSvg() {
+  const VERDE = "#8fae7f";        // tom principal (tronco, cabeça, pernas)
+  const VERDE_CLARO = "#c2d6b5";  // tom mais claro (braços)
+  return (
+    <Svg width={46} height={100} viewBox="0 0 100 220" style={styles.evoFigureSvg}>
+      {/* cabeça */}
+      <Circle cx={50} cy={20} r={13} fill={VERDE} />
+      {/* tronco */}
+      <Rect x={35} y={38} width={30} height={72} rx={12} fill={VERDE} />
+      {/* braços (tom mais claro) */}
+      <Rect x={19} y={42} width={11} height={62} rx={5.5} fill={VERDE_CLARO} />
+      <Rect x={70} y={42} width={11} height={62} rx={5.5} fill={VERDE_CLARO} />
+      {/* pernas */}
+      <Rect x={36} y={112} width={12} height={100} rx={6} fill={VERDE} />
+      <Rect x={52} y={112} width={12} height={100} rx={6} fill={VERDE} />
+    </Svg>
+  );
+}
+
+// Ajuste 2: desenho do mini-gráfico de barras que antecede o texto da caixa verde.
+function GraficoIconeSvg() {
+  return (
+    <Svg width={14} height={14} viewBox="0 0 14 14" style={styles.evoNoteIcon}>
+      <Rect x={1} y={8} width={3} height={6} rx={0.6} fill="#5a7a4e" />
+      <Rect x={5.5} y={5} width={3} height={9} rx={0.6} fill="#5a7a4e" />
+      <Rect x={10} y={2} width={3} height={12} rx={0.6} fill="#5a7a4e" />
+    </Svg>
+  );
+}
+
 // Ajuste 1/4: card informativo de evolução (silhueta + texto), exibido no
 // lugar do gráfico vazio quando é a primeira avaliação / sem comparação.
-function EvolucaoInfoCard({ figureSrc }: { figureSrc: string | null }) {
+function EvolucaoInfoCard() {
   return (
     <View>
       <View style={styles.evoInfoRow}>
-        {figureSrc ? <Image src={figureSrc} style={styles.evoFigure} /> : null}
-        <Text style={styles.evoInfoText}>
-          Acompanhe aqui seus resultados ao longo do tempo, com base nos parâmetros avaliados.
-        </Text>
+        <SilhuetaSvg />
+        <View style={styles.evoInfoTextWrap}>
+          <Text style={styles.evoInfoText}>
+            Acompanhe aqui seus resultados ao longo do tempo, com base nos parâmetros avaliados.
+          </Text>
+        </View>
       </View>
       <View style={styles.evoNoteBox}>
-        <Text style={styles.evoNoteText}>
-          Na sua próxima avaliação, este espaço exibirá um gráfico com a sua evolução de peso,
-          massa muscular e % de gordura.
-        </Text>
+        <GraficoIconeSvg />
+        <View style={styles.evoNoteTextWrap}>
+          <Text style={styles.evoNoteText}>
+            Na sua próxima avaliação, este espaço exibirá um gráfico com a sua evolução de peso,
+            massa muscular e % de gordura.
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -540,12 +584,8 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   const logo = fileToDataUri("/logo-nutricare.png");
   const fundo = fileToDataUri("/layouts/fundo-layout.jpg") || fileToDataUri("/fundo-layout.jpg");
   const previous = dados.previousSummary || null;
-  // Silhueta do card de evolução (1ª avaliação), conforme o sexo do paciente.
-  const silhueta = fileToDataUri(
-    paciente.sexo === "F"
-      ? "/images/avaliacao/fem-frente-1.png.jpg"
-      : "/images/avaliacao/masc-frente-1.png.jpg"
-  );
+  // Ajuste 2: a silhueta do card de evolução agora é o SVG verde em duas
+  // tonalidades (componente SilhuetaSvg), não depende mais das imagens .jpg.
 
   // Evolução: responde às caixas de seleção da aba Antropometria.
   // - Nenhuma avaliação marcada ("somente a primeira"): gráfico mostra só a atual.
@@ -638,7 +678,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             {/* % de água corporal */}
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>% de água{"\n"}corporal</Text>
+                <Text style={styles.ccColParamText}>% de água corporal</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.pctAgua)} %</Text>
               <View style={styles.ccColEval}>
@@ -652,7 +692,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             {/* Massa muscular */}
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>Massa{"\n"}muscular</Text>
+                <Text style={styles.ccColParamText}>Massa muscular</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
               <View style={styles.ccColEval}><EvalPill /></View>
@@ -661,7 +701,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             {/* Músculo esquelético */}
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>Músculo{"\n"}esquelético</Text>
+                <Text style={styles.ccColParamText}>Músculo esquelético</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.imme)} kg</Text>
               <View style={styles.ccColEval}><EvalPill /></View>
@@ -670,7 +710,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             {/* Massa livre de gordura */}
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>Massa livre{"\n"}de gordura</Text>
+                <Text style={styles.ccColParamText}>Massa livre de gordura</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
               <View style={styles.ccColEval}>
@@ -681,7 +721,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             {/* Massa adiposa */}
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>Massa{"\n"}adiposa</Text>
+                <Text style={styles.ccColParamText}>Massa adiposa</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.imme, 2)} kg/m²</Text>
               <View style={styles.ccColEval}><EvalPill /></View>
@@ -690,7 +730,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             {/* Índice de massa gorda */}
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>Índice de{"\n"}massa gorda</Text>
+                <Text style={styles.ccColParamText}>Índice de massa gorda</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
               <View style={styles.ccColEval}>
@@ -776,7 +816,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <MiniChart title="% de Gordura (%)" points={bfPontos} color={CHART_RED} />
               </>
             ) : (
-              <EvolucaoInfoCard figureSrc={silhueta} />
+              <EvolucaoInfoCard />
             )}
           </View>
         </View>
