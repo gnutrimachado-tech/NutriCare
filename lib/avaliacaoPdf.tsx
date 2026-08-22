@@ -381,26 +381,28 @@ const styles = StyleSheet.create({
   pillNeutral: { color: MUTED, fontSize: 8 },
 
   // Espaço reservado para imagens do paciente
-  bodyPlaceholder: { width: 132, height: 216, marginTop: 4 },
+  // Reduzido para subir os cards "Composição Corporal" e o card em branco ao
+  // lado direito, deixando-os na mesma altura do PDF de referência.
+  bodyPlaceholder: { width: 132, height: 176, marginTop: 4 },
 
   // Evolução info
-  evoInfoRow: { flexDirection: "row", alignItems: "center", marginTop: 2 },
-  evoFigure: { width: 46, height: 100, objectFit: "contain", marginRight: 8 },
-  evoFigureSvg: { width: 46, height: 100, marginRight: 8 },
-  evoInfoTextWrap: { flexGrow: 1, flexShrink: 1 },
-  evoInfoText: { fontSize: 9.2, color: "#333", lineHeight: 1.4 },
+  evoInfoRow: { flexDirection: "row", alignItems: "flex-start", marginTop: 2 },
+  evoFigure: { width: 40, height: 84, objectFit: "contain", marginRight: 6 },
+  evoFigureSvg: { width: 40, height: 84, marginRight: 6 },
+  evoInfoTextWrap: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 2 },
+  evoInfoText: { fontSize: 7.6, color: "#333", lineHeight: 1.3 },
   evoNoteBox: {
     backgroundColor: GREEN_BG,
     borderRadius: 5,
     paddingVertical: 5,
-    paddingHorizontal: 7,
+    paddingHorizontal: 6,
     marginTop: 7,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
   },
-  evoNoteIcon: { width: 14, height: 14, marginRight: 6 },
-  evoNoteTextWrap: { flexGrow: 1, flexShrink: 1 },
-  evoNoteText: { fontSize: 7.6, color: "#2e4630", lineHeight: 1.3 },
+  evoNoteIcon: { width: 12, height: 12, marginRight: 5, marginTop: 1 },
+  evoNoteTextWrap: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 2 },
+  evoNoteText: { fontSize: 6.6, color: "#2e4630", lineHeight: 1.3 },
 
   // Bloco meio (3 cards)
   midRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
