@@ -386,10 +386,12 @@ const styles = StyleSheet.create({
   bodyPlaceholder: { width: 132, height: 150, marginTop: 0 },
 
   // Evolução info
+  evoInfoWrapper: { flexGrow: 1, flexShrink: 1, flexBasis: 0, flexDirection: "column" },
+  evoInfoSpacer: { flexGrow: 1 },
   evoInfoRow: { flexDirection: "row", alignItems: "flex-start", marginTop: 2 },
-  evoFigure: { width: 34, height: 74, objectFit: "contain", marginRight: 5 },
-  evoFigureSvg: { width: 34, height: 74, marginRight: 5 },
-  evoInfoTextWrap: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 1 },
+  evoFigure: { width: 44, height: 96, objectFit: "contain", marginRight: 5 },
+  evoFigureSvg: { width: 44, height: 96, marginRight: 5 },
+  evoInfoTextWrap: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 0 },
   evoInfoText: { fontSize: 6.8, color: "#333", lineHeight: 1.25 },
   evoNoteBox: {
     backgroundColor: GREEN_BG,
@@ -405,7 +407,7 @@ const styles = StyleSheet.create({
   evoNoteText: { fontSize: 6.2, color: "#2e4630", lineHeight: 1.25 },
 
   // Bloco meio (3 cards)
-  midRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  midRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "stretch", marginBottom: 8 },
   cardMid: {
     width: "32.4%",
     borderWidth: 1,
@@ -416,6 +418,7 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     backgroundColor: "rgba(255,255,255,0.92)",
   },
+  cardMidEvo: { flexDirection: "column" },
   mHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   mHeadTxt: { fontSize: 7.2, color: MUTED, fontWeight: 700 },
   mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.4 },
@@ -614,7 +617,7 @@ function SilhuetaImgOrSvg() {
   const VERDE = "#8fae7f";
   const VERDE_CLARO = "#c2d6b5";
   return (
-    <Svg width={34} height={74} viewBox="0 0 100 220" style={styles.evoFigureSvg}>
+    <Svg width={44} height={96} viewBox="0 0 100 220" style={styles.evoFigureSvg}>
       <Circle cx={50} cy={20} r={13} fill={VERDE} />
       <Rect x={35} y={38} width={30} height={72} rx={12} fill={VERDE} />
       <Rect x={19} y={42} width={11} height={62} rx={5.5} fill={VERDE_CLARO} />
@@ -637,7 +640,7 @@ function GraficoIconeSvg() {
 
 function EvolucaoInfoCard() {
   return (
-    <View>
+    <View style={styles.evoInfoWrapper}>
       <View style={styles.evoInfoRow}>
         <SilhuetaImgOrSvg />
         <View style={styles.evoInfoTextWrap}>
@@ -646,6 +649,7 @@ function EvolucaoInfoCard() {
           </Text>
         </View>
       </View>
+      <View style={styles.evoInfoSpacer} />
       <View style={styles.evoNoteBox}>
         <GraficoIconeSvg />
         <View style={styles.evoNoteTextWrap}>
@@ -873,7 +877,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             ))}
           </View>
 
-          <View style={styles.cardMid}>
+          <View style={[styles.cardMid, styles.cardMidEvo]}>
             <Text style={styles.cardTitle}>EVOLUÇÃO</Text>
             {showEvoCard ? (
               <>
