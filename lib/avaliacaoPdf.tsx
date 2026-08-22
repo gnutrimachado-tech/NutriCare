@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
   // Card esquerdo ocupa mais espaço agora que a coluna Referência foi removida,
   // ficando visualmente centralizado; card direito preserva o mesmo tamanho de
   // antes para receber as imagens do paciente posteriormente.
-  topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 },
   topLeft: { width: "56%" },
   topRight: { width: "42%", alignItems: "center", justifyContent: "center" },
 
@@ -340,8 +340,8 @@ const styles = StyleSheet.create({
   evoInfoRow: { flexDirection: "row", alignItems: "center", marginTop: 2 },
   evoFigure: { width: 46, height: 100, objectFit: "contain", marginRight: 8 },
   evoFigureSvg: { width: 46, height: 100, marginRight: 8 },
-  evoInfoTextWrap: { flexGrow: 1, flexShrink: 1 },
-  evoInfoText: { fontSize: 9.2, color: "#333", lineHeight: 1.4 },
+  evoInfoTextWrap: { width: "58%", flexGrow: 0, flexShrink: 1 },
+  evoInfoText: { fontSize: 8.6, color: "#333", lineHeight: 1.3 },
   evoNoteBox: {
     backgroundColor: GREEN_BG,
     borderRadius: 5,
@@ -352,8 +352,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   evoNoteIcon: { width: 14, height: 14, marginRight: 6 },
-  evoNoteTextWrap: { flexGrow: 1, flexShrink: 1 },
-  evoNoteText: { fontSize: 7.6, color: "#2e4630", lineHeight: 1.3 },
+  evoNoteTextWrap: { width: "88%", flexGrow: 0, flexShrink: 1 },
+  evoNoteText: { fontSize: 7.2, color: "#2e4630", lineHeight: 1.25 },
 
   // Bloco meio (3 cards)
   midRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
