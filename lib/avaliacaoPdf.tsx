@@ -383,14 +383,14 @@ const styles = StyleSheet.create({
   // Espaço reservado para imagens do paciente
   // Reduzido para subir os cards "Composição Corporal" e o card em branco ao
   // lado direito, deixando-os na mesma altura do PDF de referência.
-  bodyPlaceholder: { width: 132, height: 176, marginTop: 4 },
+  bodyPlaceholder: { width: 132, height: 150, marginTop: 0 },
 
   // Evolução info
   evoInfoRow: { flexDirection: "row", alignItems: "flex-start", marginTop: 2 },
-  evoFigure: { width: 40, height: 84, objectFit: "contain", marginRight: 6 },
-  evoFigureSvg: { width: 40, height: 84, marginRight: 6 },
-  evoInfoTextWrap: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 2 },
-  evoInfoText: { fontSize: 7.6, color: "#333", lineHeight: 1.3 },
+  evoFigure: { width: 34, height: 74, objectFit: "contain", marginRight: 5 },
+  evoFigureSvg: { width: 34, height: 74, marginRight: 5 },
+  evoInfoTextWrap: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 1 },
+  evoInfoText: { fontSize: 6.8, color: "#333", lineHeight: 1.25 },
   evoNoteBox: {
     backgroundColor: GREEN_BG,
     borderRadius: 5,
@@ -401,8 +401,8 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   evoNoteIcon: { width: 12, height: 12, marginRight: 5, marginTop: 1 },
-  evoNoteTextWrap: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 2 },
-  evoNoteText: { fontSize: 6.6, color: "#2e4630", lineHeight: 1.3 },
+  evoNoteTextWrap: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 1 },
+  evoNoteText: { fontSize: 6.2, color: "#2e4630", lineHeight: 1.25 },
 
   // Bloco meio (3 cards)
   midRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
@@ -600,6 +600,8 @@ function SilhuetaImgOrSvg() {
     "/images/avaliacao/silueta.jpg",
     "/images/avaliacao/silueta.jpeg",
     "/images/avaliacao/silueta.webp",
+    "/images/avaliacao/silueta.png.jpg",
+    "/images/avaliacao/silueta.jpg.png",
   ];
   let silhuetaUri: string | null = null;
   for (const rel of silhuetaCandidates) {
@@ -612,7 +614,7 @@ function SilhuetaImgOrSvg() {
   const VERDE = "#8fae7f";
   const VERDE_CLARO = "#c2d6b5";
   return (
-    <Svg width={46} height={100} viewBox="0 0 100 220" style={styles.evoFigureSvg}>
+    <Svg width={34} height={74} viewBox="0 0 100 220" style={styles.evoFigureSvg}>
       <Circle cx={50} cy={20} r={13} fill={VERDE} />
       <Rect x={35} y={38} width={30} height={72} rx={12} fill={VERDE} />
       <Rect x={19} y={42} width={11} height={62} rx={5.5} fill={VERDE_CLARO} />
@@ -648,8 +650,7 @@ function EvolucaoInfoCard() {
         <GraficoIconeSvg />
         <View style={styles.evoNoteTextWrap}>
           <Text style={styles.evoNoteText}>
-            Na sua próxima avaliação, este espaço exibirá um gráfico com a sua evolução de peso,
-            massa muscular e % de gordura.
+            Na sua próxima avaliação, este espaço exibirá um gráfico com a sua evolução de peso, massa muscular e % de gordura.
           </Text>
         </View>
       </View>
