@@ -1,17 +1,20 @@
 // lib/avaliacaoPdf.tsx
-// Layout do PDF de Avaliação Física — reproduz o mock 1:1.
+// Layout do PDF de Avaliação Física.
 //
-// Página A4 retrato (595.28 x 841.89 pt) com margens laterais de 44pt
-// (o "respiro" marcado em vermelho no mock).
-// Ordem vertical (mesma do mock):
-//   1) Cabeçalho: logo + "Nutricare" | nome/nascimento/peso/altura/sexo
-//   2) Régua escura fina
-//   3) Título "AVALIAÇÃO FÍSICA" (serifado, preto, centralizado)
-//   4) Subtítulo "Composição Corporal" (serifado, centralizado)
-//   5) Bloco superior: card COMPOSIÇÃO CORPORAL (tabela) + card com a figura
-//   6) Bloco médio: CIRCUNFERÊNCIAS | DOBRAS CUTÂNEAS (mm) | EVOLUÇÃO
-//   7) Card EVOLUÇÃO COMPARATIVA (3 caixas: Peso / Massa Muscular / % Gordura)
-//   8) Assinatura GreatVibes sublinhada + logo pequena à direita
+// AJUSTE (setas do mock):
+//   1) Rodapé "Nutricionista" idêntico ao PDF de Orientações: traço fino
+//      acompanhando o texto, CRN em GreatVibes 16pt logo abaixo.
+//   2) Logo do rodapé com a mesma altura/localização do PDF de Orientações
+//      (width 42, opacidade 0.15, canto inferior direito).
+//   3) Cabeçalho — traço fino, altura do logo e posição dos dados do paciente
+//      exatamente iguais ao PDF de Orientações (PAGE_MARGIN_X=30, logo em
+//      HEADER_LINE_Y+6 com targetWidth<=68, nome/nascimento/altura na mesma
+//      grade x=PAGE_MARGIN_X+76).
+//   4) Título "AVALIAÇÃO FÍSICA" na mesma altura e mesmo tamanho do PDF de
+//      Orientações (Helvetica-Bold 20, TITLE_Y = HEADER_LINE_Y - 28.35).
+//
+// Nada dos cards internos (Composição Corporal, Circunferências, Dobras,
+// Evolução e Evolução Comparativa) foi alterado.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -138,7 +141,6 @@ const DOBRAS_LABELS: Record<string, string> = {
   biceps: "Bíceps",
   coxa_proximal: "Coxa proximal",
 };
-// Mesma ordem e mesma quantidade de linhas do mock (11 circunf., 10 dobras)
 const CIRC_ORDER = [
   "pescoco",
   "cintura",
@@ -207,11 +209,29 @@ function fileToDataUri(rel?: string) {
 function hasPositive(v: any) {
   return v !== null && v !== undefined && Number(v) > 0;
 }
+
+// ---------- Constantes de página (idênticas ao PDF de Orientações) ----------
+// A4 retrato + mesmo respiro lateral (30pt) usado no PDF de Orientações.
+const PAGE_WIDTH = 595.28;
+const PAGE_HEIGHT = 841.89;
+const PAGE_MARGIN_X = 30;
+const HEADER_TOP = PAGE_HEIGHT - 20;
+const HEADER_LINE_Y = HEADER_TOP - 70;          // linha fina abaixo dos dados
+const TITLE_Y = HEADER_LINE_Y - 28.35;          // 1cm abaixo da linha
+const CONTENT_TOP = TITLE_Y - 28.35;            // 1cm abaixo do título
+const BACKGROUND_OPACITY = 0.15;
+const FOOTER_LOGO_OPACITY = 0.15;
+
+// Como @react-pdf trabalha com fluxo top-down (paddingTop), converto os
+// valores acima em paddings verticais equivalentes ao layout do PDF de
+// Orientações (mesma altura de logo/dados/traço/título).
+const PAGE_PADDING_TOP = PAGE_HEIGHT - CONTENT_TOP; // ≈ 761.51 - 720 = 121.51pt
+
 // ---------- Paleta ----------
-const INK = "#1a1a1a";          // preto suave dos textos
-const TITLE_GREEN = "#5a7a4e";  // títulos dos cards (verde-oliva do mock)
-const RULE = "#3c3c3c";         // régua escura sob o cabeçalho
-const BORDER = "#b9c4ae";       // borda verde-acinzentada dos cards
+const INK = "#1a1a1a";
+const TITLE_GREEN = "#5a7a4e";
+const RULE = "#262626";           // preto do traço (igual ao PDF de Orientações)
+const BORDER = "#b9c4ae";
 const MUTED = "#8a8f85";
 const GREEN_BG = "#e7f3e0";
 const GREEN_TXT = "#2e7d32";
@@ -224,56 +244,87 @@ const CHART_RED = "#c62828";
 // ---------- Estilos ----------
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 22,
-    paddingBottom: 18,
-    paddingHorizontal: 44, // respiro lateral do mock (rabisco vermelho)
+    paddingTop: PAGE_PADDING_TOP,
+    paddingBottom: 90,             // reserva espaço p/ rodapé fixo (assinatura + logo)
+    paddingHorizontal: PAGE_MARGIN_X,
     fontSize: 8.4,
     color: INK,
     backgroundColor: "#ffffff",
     fontFamily: "Helvetica",
   },
-  bg: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, opacity: 0.18 },
-  bgFixed: { position: "absolute", top: -30, left: -44, width: 595.28 + 88, height: 841.89 + 56, opacity: 0.18 },
-
-  // Cabeçalho
-  header: { flexDirection: "row", alignItems: "center" },
-  logoBox: { width: 60, alignItems: "center", marginRight: 10 },
-  logo: { width: 58, height: 58, objectFit: "contain" },
-  logoText: {
-    fontSize: 9,
-    color: "#3e5c34",
-    fontFamily: "Times-Roman",
-    marginTop: 1,
-    letterSpacing: 0.5,
+  // Fundo cobre a página inteira, respeitando as margens da página.
+  bgFixed: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: PAGE_WIDTH,
+    height: PAGE_HEIGHT,
+    opacity: BACKGROUND_OPACITY,
   },
-  headerText: { flexGrow: 1 },
-  patientName: {
-    fontSize: 14.5,
-    fontWeight: 700,
-    color: INK,
-    fontFamily: "Times-Roman",
-  },
-  patientMeta: { fontSize: 8.6, color: "#333", marginTop: 2 },
-  rule: { height: 1.1, backgroundColor: RULE, marginTop: 8, marginBottom: 12 },
 
-  // Título / subtítulo
-  // Ajuste 3: mesma fonte do PDF de Orientações (sans-serif bold),
-  // sem o subtítulo "Composição Corporal" abaixo.
-  title: {
+  // ============ CABEÇALHO FIXO (igual ao PDF de Orientações) ============
+  headerFixed: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: PAGE_PADDING_TOP,
+  },
+  headerLogo: {
+    position: "absolute",
+    // No PDF de Orientações, o logo é ancorado em y=HEADER_LINE_Y+6 (coord de
+    // baixo). Convertendo para top: PAGE_HEIGHT - (HEADER_LINE_Y+6) - altura.
+    // targetWidth=68 e a logo é quadrada (mantemos width=height=68).
+    top: PAGE_HEIGHT - (HEADER_LINE_Y + 6) - 68,
+    left: PAGE_MARGIN_X,
+    width: 68,
+    height: 68,
+    objectFit: "contain",
+  },
+  headerName: {
+    position: "absolute",
+    // No PDF de Orientações: y = HEADER_TOP - 28 (baseline). O texto tem 15pt.
+    top: PAGE_HEIGHT - HEADER_TOP + 28 - 15,
+    left: PAGE_MARGIN_X + 76,
+    fontSize: 15,
+    fontFamily: "Helvetica-Bold",
+    color: "#0d0d0d",
+  },
+  headerInfoLine1: {
+    position: "absolute",
+    top: PAGE_HEIGHT - HEADER_TOP + 46 - 10,
+    left: PAGE_MARGIN_X + 76,
+    fontSize: 10,
+    fontFamily: "Helvetica-Bold",
+    color: "#0d0d0d",
+  },
+  headerInfoLine2: {
+    position: "absolute",
+    top: PAGE_HEIGHT - HEADER_TOP + 60 - 10,
+    left: PAGE_MARGIN_X + 76,
+    fontSize: 10,
+    fontFamily: "Helvetica-Bold",
+    color: "#0d0d0d",
+  },
+  headerRule: {
+    position: "absolute",
+    top: PAGE_HEIGHT - HEADER_LINE_Y,
+    left: PAGE_MARGIN_X,
+    right: PAGE_MARGIN_X,
+    height: 1,                    // traço FINO (thickness: 1) igual Orientações
+    backgroundColor: RULE,
+  },
+  headerTitle: {
+    position: "absolute",
+    // No PDF de Orientações: y = TITLE_Y (baseline), fonte 20 bold.
+    top: PAGE_HEIGHT - TITLE_Y - 20,
+    left: 0,
+    right: 0,
+    textAlign: "center",
     fontSize: 20,
     fontFamily: "Helvetica-Bold",
-    textAlign: "center",
-    color: "#000",
-    letterSpacing: 1.4,
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 12.5,
-    fontFamily: "Times-Italic",
-    textAlign: "center",
-    color: "#333",
-    marginTop: 2,
-    marginBottom: 8,
+    color: "#0d0d0d",
+    letterSpacing: 0,
   },
 
   // Cards genéricos
@@ -303,10 +354,7 @@ const styles = StyleSheet.create({
   },
 
   // Bloco topo (tabela + espaço reservado p/ imagens)
-  // Card esquerdo ocupa mais espaço agora que a coluna Referência foi removida,
-  // ficando visualmente centralizado; card direito preserva o mesmo tamanho de
-  // antes para receber as imagens do paciente posteriormente.
-  topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 },
+  topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
   topLeft: { width: "56%" },
   topRight: { width: "42%", alignItems: "center", justifyContent: "center" },
 
@@ -314,7 +362,6 @@ const styles = StyleSheet.create({
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   ccHeadTxt: { fontSize: 7.4, color: MUTED, fontWeight: 700 },
   ccRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.2 },
-  // Ajuste 2: coluna Parâmetro deslocada um pouco para a direita.
   ccColParam: { width: "52%", flexDirection: "row", alignItems: "center", paddingLeft: 10 },
   ccColParamText: { fontSize: 8.2, color: INK },
   ccColRes: { width: "24%", fontSize: 8.2, color: INK },
@@ -333,15 +380,15 @@ const styles = StyleSheet.create({
   pillRed: { backgroundColor: RED_BG, color: RED_TXT },
   pillNeutral: { color: MUTED, fontSize: 8 },
 
-  // Espaço reservado para imagens do paciente (sem desenho placeholder)
+  // Espaço reservado para imagens do paciente
   bodyPlaceholder: { width: 132, height: 216, marginTop: 4 },
 
-  // Ajuste 1/4: card de evolução exibido na 1ª avaliação (sem comparação)
+  // Evolução info
   evoInfoRow: { flexDirection: "row", alignItems: "center", marginTop: 2 },
   evoFigure: { width: 46, height: 100, objectFit: "contain", marginRight: 8 },
   evoFigureSvg: { width: 46, height: 100, marginRight: 8 },
-  evoInfoTextWrap: { width: "58%", flexGrow: 0, flexShrink: 1 },
-  evoInfoText: { fontSize: 8.6, color: "#333", lineHeight: 1.3 },
+  evoInfoTextWrap: { flexGrow: 1, flexShrink: 1 },
+  evoInfoText: { fontSize: 9.2, color: "#333", lineHeight: 1.4 },
   evoNoteBox: {
     backgroundColor: GREEN_BG,
     borderRadius: 5,
@@ -352,8 +399,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   evoNoteIcon: { width: 14, height: 14, marginRight: 6 },
-  evoNoteTextWrap: { width: "88%", flexGrow: 0, flexShrink: 1 },
-  evoNoteText: { fontSize: 7.2, color: "#2e4630", lineHeight: 1.25 },
+  evoNoteTextWrap: { flexGrow: 1, flexShrink: 1 },
+  evoNoteText: { fontSize: 7.6, color: "#2e4630", lineHeight: 1.3 },
 
   // Bloco meio (3 cards)
   midRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
@@ -374,7 +421,6 @@ const styles = StyleSheet.create({
   mColLabelText: { fontSize: 7.9, color: INK },
   mColRes: { width: "24%", fontSize: 7.9, color: INK, textAlign: "center" },
 
-  // Evolução (mini-charts)
   evoBlock: { marginBottom: 3 },
   evoHead: { flexDirection: "row", alignItems: "center", marginBottom: 2 },
 
@@ -405,22 +451,50 @@ const styles = StyleSheet.create({
   footDelta: { fontSize: 7.8, marginTop: 3 },
   footSince: { fontSize: 7, color: MUTED, marginTop: 2 },
 
-  // Assinatura — mesmo tamanho/espaçamento dos outros PDFs (plano, orientações,
-  // lista de compras): nome GreatVibes 18, linha acompanhando o texto, CRN 16,
-  // logo 42 com opacidade 0.15.
-  signWrap: {
-    marginTop: 4,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
+  // ============ RODAPÉ FIXO (igual ao PDF de Orientações) ============
+  // footerY (Orientações) = 56.  Nome fica em y=footerY+12 (baseline).
+  // Convertendo para top: PAGE_HEIGHT - (footerY + 12) - fontSize.
+  footerFixed: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
   },
-  signCol: {},
-  signName: { fontSize: 18, fontFamily: "GreatVibes", color: "#1f1f1f" },
-  signLine: { height: 0.8, backgroundColor: "#333", marginTop: 1, width: 240 },
-  signCrn: { fontSize: 16, fontFamily: "GreatVibes", color: "#404040", marginTop: 3 },
-  footerLogoBox: { alignItems: "center", opacity: 0.15 },
-  footerLogo: { width: 42, height: 42, objectFit: "contain" },
-  footerLogoText: { fontSize: 7, color: "#3e5c34", fontFamily: "Times-Roman", marginTop: 1 },
+  signName: {
+    position: "absolute",
+    top: PAGE_HEIGHT - (56 + 12) - 18,
+    left: PAGE_MARGIN_X,
+    fontSize: 18,
+    fontFamily: "GreatVibes",
+    color: "#1f1f1f",
+  },
+  signLine: {
+    position: "absolute",
+    top: PAGE_HEIGHT - (56 + 10),
+    left: PAGE_MARGIN_X,
+    height: 0.8,
+    backgroundColor: "#333",
+    // width é definida em tempo de render conforme o comprimento do texto.
+  },
+  signCrn: {
+    position: "absolute",
+    top: PAGE_HEIGHT - (56 - 8) - 16,
+    left: PAGE_MARGIN_X,
+    fontSize: 16,
+    fontFamily: "GreatVibes",
+    color: "#404040",
+  },
+  footerLogo: {
+    position: "absolute",
+    // logo em y=footerY-2 no PDF de Orientações, altura 42 → top = PAGE_HEIGHT - (footerY-2) - 42
+    top: PAGE_HEIGHT - (56 - 2) - 42,
+    left: PAGE_WIDTH - PAGE_MARGIN_X - 42,
+    width: 42,
+    height: 42,
+    objectFit: "contain",
+    opacity: FOOTER_LOGO_OPACITY,
+  },
 });
 
 // ---------- Componentes ----------
@@ -433,9 +507,6 @@ function AcimaPill() {
   return <Text style={[styles.pill, styles.pillRed]}>Acima</Text>;
 }
 
-// Mini-gráfico de evolução (mesmo padrão visual do mock: valor acima do
-// ponto, linha fina colorida, data abaixo — tudo dentro do próprio SVG,
-// sem colisão de labels).
 function MiniChart({
   title,
   points,
@@ -462,7 +533,6 @@ function MiniChart({
   const min = minRaw - pad;
   const max = maxRaw + pad;
 
-  // Com 1 ponto, centraliza (x = meio do gráfico); com 2+, distribui.
   const n = Math.max(1, points.length - 1);
   const proj = points.map((p, i) => {
     const x = left + (i * chartW) / n;
@@ -521,28 +591,36 @@ function MiniChart({
   );
 }
 
-// Ajuste 2: silhueta verde em duas tonalidades (igual ao modelo de referência),
-// desenhada em SVG — não depende mais da imagem .jpg.
-function SilhuetaSvg() {
-  const VERDE = "#8fae7f";        // tom principal (tronco, cabeça, pernas)
-  const VERDE_CLARO = "#c2d6b5";  // tom mais claro (braços)
+// Silhueta (usa /public/images/avaliacao/silueta.* se existir; senão SVG).
+function SilhuetaImgOrSvg() {
+  const silhuetaCandidates = [
+    "/images/avaliacao/silueta.png",
+    "/images/avaliacao/silueta.jpg",
+    "/images/avaliacao/silueta.jpeg",
+    "/images/avaliacao/silueta.webp",
+  ];
+  let silhuetaUri: string | null = null;
+  for (const rel of silhuetaCandidates) {
+    silhuetaUri = fileToDataUri(rel);
+    if (silhuetaUri) break;
+  }
+  if (silhuetaUri) {
+    return <Image src={silhuetaUri} style={styles.evoFigure} />;
+  }
+  const VERDE = "#8fae7f";
+  const VERDE_CLARO = "#c2d6b5";
   return (
     <Svg width={46} height={100} viewBox="0 0 100 220" style={styles.evoFigureSvg}>
-      {/* cabeça */}
       <Circle cx={50} cy={20} r={13} fill={VERDE} />
-      {/* tronco */}
       <Rect x={35} y={38} width={30} height={72} rx={12} fill={VERDE} />
-      {/* braços (tom mais claro) */}
       <Rect x={19} y={42} width={11} height={62} rx={5.5} fill={VERDE_CLARO} />
       <Rect x={70} y={42} width={11} height={62} rx={5.5} fill={VERDE_CLARO} />
-      {/* pernas */}
       <Rect x={36} y={112} width={12} height={100} rx={6} fill={VERDE} />
       <Rect x={52} y={112} width={12} height={100} rx={6} fill={VERDE} />
     </Svg>
   );
 }
 
-// Ajuste 2: desenho do mini-gráfico de barras que antecede o texto da caixa verde.
 function GraficoIconeSvg() {
   return (
     <Svg width={14} height={14} viewBox="0 0 14 14" style={styles.evoNoteIcon}>
@@ -553,13 +631,11 @@ function GraficoIconeSvg() {
   );
 }
 
-// Ajuste 1/4: card informativo de evolução (silhueta + texto), exibido no
-// lugar do gráfico vazio quando é a primeira avaliação / sem comparação.
 function EvolucaoInfoCard() {
   return (
     <View>
       <View style={styles.evoInfoRow}>
-        <SilhuetaSvg />
+        <SilhuetaImgOrSvg />
         <View style={styles.evoInfoTextWrap}>
           <Text style={styles.evoInfoText}>
             Acompanhe aqui seus resultados ao longo do tempo, com base nos parâmetros avaliados.
@@ -584,12 +660,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   const logo = fileToDataUri("/logo-nutricare.png");
   const fundo = fileToDataUri("/layouts/fundo-layout.jpg") || fileToDataUri("/fundo-layout.jpg");
   const previous = dados.previousSummary || null;
-  // Ajuste 2: a silhueta do card de evolução agora é o SVG verde em duas
-  // tonalidades (componente SilhuetaSvg), não depende mais das imagens .jpg.
 
-  // Evolução: responde às caixas de seleção da aba Antropometria.
-  // - Nenhuma avaliação marcada ("somente a primeira"): gráfico mostra só a atual.
-  // - 1 ou 2 marcadas: gráfico mostra as marcadas + a atual (até 3 pontos).
   const historicoSel = (dados.evolucaoHistorico || []).filter((h) =>
     (dados.evolucaoSelecionadaIds || []).includes(h.id)
   );
@@ -605,7 +676,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   const musculoPontos = evolucao.map((p) => ({ data: p.data, value: p.massaMuscular }));
   const bfPontos = evolucao.map((p) => ({ data: p.data, value: p.bfPct }));
 
-  // Todas as linhas do mock, sempre visíveis; "—" quando não medido
   const circRows = CIRC_ORDER.map((k) => ({
     key: k,
     label: CIRC_LABELS[k],
@@ -620,7 +690,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   }));
   const valorOu = (v: any) => (hasPositive(v) ? toFixedPt(v) : "—");
 
-  // Comparativos vs 1ª avaliação
   const base = previous;
   const dPeso = base?.pesoKg != null ? dados.pesoKg - Number(base.pesoKg) : null;
   const dMM = base?.massaMuscularKg != null ? dados.massaMagraKg - Number(base.massaMuscularKg) : null;
@@ -629,34 +698,41 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
     ? `desde ${new Date(dados.dataAvaliacaoInicial).toLocaleDateString("pt-BR")}`
     : "";
 
+  // Cálculo da largura do traço da assinatura (mesma lógica do PDF de Orientações:
+  // linha acompanha exatamente o comprimento do texto "Nutricionista: {nome}").
+  const nomeBase = (nutricionista?.nome || "").trim();
+  const fullNutriText = nomeBase ? `Nutricionista: ${nomeBase}` : "Nutricionista:";
+  // Estimativa de largura em GreatVibes 18pt (~0.42 * fontSize por char).
+  const estWidth = Math.min(
+    fullNutriText.length * 18 * 0.42,
+    PAGE_WIDTH - PAGE_MARGIN_X * 2 - 70
+  );
+
+  const crnRodape = (nutricionista?.crn ? `CRN: ${nutricionista.crn}` : "CRN:").trim();
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
+        {/* Fundo cobrindo a página inteira */}
         {fundo ? <Image src={fundo} style={styles.bgFixed} fixed /> : null}
 
-        {/* ============ CABEÇALHO ============ */}
-        <View style={styles.header}>
-          <View style={styles.logoBox}>
-            {logo ? <Image src={logo} style={styles.logo} /> : <View style={styles.logo} />}
-          </View>
-          <View style={styles.headerText}>
-            <Text style={styles.patientName}>{paciente.nome}</Text>
-            <Text style={styles.patientMeta}>
-              nascimento: {formatBirth(paciente.nascimento)} | peso: {toFixedPt(dados.pesoKg)}kg
-            </Text>
-            <Text style={styles.patientMeta}>
-              altura: {toFixedPt(paciente.altura_cm, 0)}cm | sexo: {labelSexo(paciente.sexo)}
-            </Text>
-          </View>
+        {/* ============ CABEÇALHO FIXO ============ */}
+        <View style={styles.headerFixed} fixed>
+          {logo ? <Image src={logo} style={styles.headerLogo} /> : null}
+          <Text style={styles.headerName}>{paciente.nome}</Text>
+          <Text style={styles.headerInfoLine1}>
+            {`nascimento: ${formatBirth(paciente.nascimento)} | peso: ${toFixedPt(dados.pesoKg)}kg`}
+          </Text>
+          <Text style={styles.headerInfoLine2}>
+            {`altura: ${toFixedPt(paciente.altura_cm, 0)}cm | sexo: ${labelSexo(paciente.sexo)}`}
+          </Text>
+          <View style={styles.headerRule} />
+          <Text style={styles.headerTitle}>AVALIAÇÃO FÍSICA</Text>
         </View>
-        <View style={styles.rule} />
-
-        {/* ============ TÍTULO ============ */}
-        <Text style={styles.title}>AVALIAÇÃO FÍSICA</Text>
 
         {/* ============ BLOCO TOPO: 2 CARDS ============ */}
         <View style={styles.topRow}>
-          {/* Card esquerdo — tabela */}
+          {/* Card esquerdo — tabela COMPOSIÇÃO CORPORAL */}
           <View style={[styles.card, styles.topLeft]}>
             <Text style={styles.cardTitle}>COMPOSIÇÃO CORPORAL</Text>
 
@@ -666,7 +742,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               <Text style={[styles.ccHeadTxt, { width: "24%" }]}>Avaliação</Text>
             </View>
 
-            {/* Peso */}
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
                 <Text style={styles.ccColParamText}>Peso</Text>
@@ -675,7 +750,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
-            {/* % de água corporal */}
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
                 <Text style={styles.ccColParamText}>% de água corporal</Text>
@@ -689,7 +763,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               </View>
             </View>
 
-            {/* Massa muscular */}
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
                 <Text style={styles.ccColParamText}>Massa muscular</Text>
@@ -698,7 +771,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
-            {/* Músculo esquelético */}
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
                 <Text style={styles.ccColParamText}>Músculo esquelético</Text>
@@ -707,7 +779,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
-            {/* Massa livre de gordura */}
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
                 <Text style={styles.ccColParamText}>Massa livre de gordura</Text>
@@ -718,7 +789,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               </View>
             </View>
 
-            {/* Massa adiposa */}
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
                 <Text style={styles.ccColParamText}>Massa adiposa</Text>
@@ -727,7 +797,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
-            {/* Índice de massa gorda */}
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
                 <Text style={styles.ccColParamText}>Índice de massa gorda</Text>
@@ -742,7 +811,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               </View>
             </View>
 
-            {/* % de gordura */}
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
                 <Text style={styles.ccColParamText}>% de gordura</Text>
@@ -766,7 +834,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
         {/* ============ BLOCO MEIO: 3 CARDS ============ */}
         <View style={styles.midRow}>
-          {/* Circunferências — duas colunas: Antes (avaliação anterior) / Atual */}
           <View style={styles.cardMid}>
             <Text style={styles.cardTitle}>CIRCUNFERÊNCIAS (cm)</Text>
             <View style={styles.mHead}>
@@ -785,7 +852,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             ))}
           </View>
 
-          {/* Dobras — duas colunas: Antes (avaliação anterior) / Atual */}
           <View style={styles.cardMid}>
             <Text style={styles.cardTitle}>DOBRAS CUTÂNEAS (mm)</Text>
             <View style={styles.mHead}>
@@ -804,9 +870,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             ))}
           </View>
 
-          {/* Evolução — 3 mini-gráficos (só quando a comparação está ativa e há
-              avaliações marcadas nas caixas de seleção da aba Antropometria).
-              Na 1ª avaliação / sem comparação: card informativo com silhueta. */}
           <View style={styles.cardMid}>
             <Text style={styles.cardTitle}>EVOLUÇÃO</Text>
             {showEvoCard ? (
@@ -825,7 +888,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
         <View style={styles.footCard}>
           <Text style={styles.cardTitle}>EVOLUÇÃO COMPARATIVA</Text>
           <View style={styles.footRow}>
-            {/* Peso */}
             <View style={styles.footBox}>
               <Text style={styles.footLabel}>Peso</Text>
               <Text style={styles.footBig}>{toFixedPt(dados.pesoKg)} kg</Text>
@@ -840,7 +902,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               {desde ? <Text style={styles.footSince}>{desde}</Text> : null}
             </View>
 
-            {/* Massa muscular */}
             <View style={styles.footBox}>
               <Text style={[styles.footLabel, { color: CHART_BLUE }]}>Massa Muscular</Text>
               <Text style={styles.footBig}>{toFixedPt(dados.massaMagraKg)} kg</Text>
@@ -855,7 +916,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               {desde ? <Text style={styles.footSince}>{desde}</Text> : null}
             </View>
 
-            {/* % de Gordura */}
             <View style={styles.footBox}>
               <Text style={[styles.footLabel, { color: CHART_RED }]}>% de Gordura</Text>
               <Text style={styles.footBig}>{toFixedPt(dados.bfPct)} %</Text>
@@ -872,16 +932,12 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
           </View>
         </View>
 
-        {/* ============ ASSINATURA ============ */}
-        <View style={styles.signWrap}>
-          <View style={styles.signCol}>
-            <Text style={styles.signName}>Nutricionista: {nutricionista?.nome || "Nutricionista"}</Text>
-            <View style={styles.signLine} />
-            <Text style={styles.signCrn}>CRN: {nutricionista?.crn || "—"}</Text>
-          </View>
-          <View style={styles.footerLogoBox}>
-            {logo ? <Image src={logo} style={styles.footerLogo} /> : <View style={styles.footerLogo} />}
-          </View>
+        {/* ============ RODAPÉ FIXO (idêntico ao PDF de Orientações) ============ */}
+        <View style={styles.footerFixed} fixed>
+          <Text style={styles.signName}>{fullNutriText}</Text>
+          <View style={[styles.signLine, { width: estWidth }]} />
+          <Text style={styles.signCrn}>{crnRodape}</Text>
+          {logo ? <Image src={logo} style={styles.footerLogo} /> : null}
         </View>
       </Page>
     </Document>
