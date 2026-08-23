@@ -204,7 +204,7 @@ function fileToDataUri(rel?: string) {
   const full = absPublic(rel);
   if (!full || !fs.existsSync(full)) return null;
   const buf = fs.readFileSync(full);
-  return `data:${guessMime(full)};base64,${buf.toString("base64")}`;
+  return data:${guessMime(full)};base64,${buf.toString("base64")};
 }
 function hasPositive(v: any) {
   return v !== null && v !== undefined && Number(v) > 0;
@@ -381,38 +381,28 @@ const styles = StyleSheet.create({
   pillNeutral: { color: MUTED, fontSize: 8 },
 
   // Espaço reservado para imagens do paciente
-  bodyPlaceholder: { width: 132, height: 216, marginTop: 4 },
+  // Reduzido para subir os cards "Composição Corporal" e o card em branco ao
+  // lado direito, deixando-os na mesma altura do PDF de referência.
+  bodyPlaceholder: { width: 132, height: 150, marginTop: 0 },
 
-  // Evolução info — silhueta CENTRALIZADA acima e texto CENTRALIZADO abaixo
-  // (layout da imagem da direita indicada pelas setas vermelhas).
-  evoInfoCol: { flexDirection: "column", alignItems: "center", marginTop: 6 },
-  evoFigure: { width: 78, height: 62, objectFit: "contain", marginBottom: 8 },
-  evoFigureSvg: { width: 78, height: 62, marginBottom: 8 },
-  evoInfoTextWrap: { width: "100%" },
-  evoInfoText: {
-    fontSize: 9,
-    color: "#333",
-    lineHeight: 1.35,
-    textAlign: "center",
-    hyphens: "none",
-  },
+  // Evolução info
+  evoInfoRow: { flexDirection: "row", alignItems: "flex-start", marginTop: 2 },
+  evoFigure: { width: 34, height: 74, objectFit: "contain", marginRight: 5 },
+  evoFigureSvg: { width: 34, height: 74, marginRight: 5 },
+  evoInfoTextWrap: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 1 },
+  evoInfoText: { fontSize: 6.8, color: "#333", lineHeight: 1.25 },
   evoNoteBox: {
     backgroundColor: GREEN_BG,
     borderRadius: 5,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    marginTop: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 6,
+    marginTop: 7,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
   },
-  evoNoteIcon: { width: 14, height: 14, marginRight: 6 },
-  evoNoteTextWrap: { flexGrow: 1, flexShrink: 1 },
-  evoNoteText: {
-    fontSize: 7.6,
-    color: "#2e4630",
-    lineHeight: 1.35,
-    hyphens: "none",
-  },
+  evoNoteIcon: { width: 12, height: 12, marginRight: 5, marginTop: 1 },
+  evoNoteTextWrap: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 1 },
+  evoNoteText: { fontSize: 6.2, color: "#2e4630", lineHeight: 1.25 },
 
   // Bloco meio (3 cards)
   midRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
@@ -563,7 +553,7 @@ function MiniChart({
       <Svg width={W} height={H}>
         {linePts.length >= 2 ? (
           <Polyline
-            points={linePts.map((p) => `${p.x},${p.y}`).join(" ")}
+            points={linePts.map((p) => ${p.x},${p.y}).join(" ")}
             stroke={color}
             strokeWidth={1.1}
             fill="none"
@@ -571,13 +561,13 @@ function MiniChart({
         ) : null}
         {proj.map((p, i) =>
           hasPositive(p.value) ? (
-            <Circle key={`c${i}`} cx={p.x} cy={p.y} r={2.1} fill="#fff" stroke={color} strokeWidth={1.1} />
+            <Circle key={c${i}} cx={p.x} cy={p.y} r={2.1} fill="#fff" stroke={color} strokeWidth={1.1} />
           ) : null
         )}
         {proj.map((p, i) =>
           hasPositive(p.value) ? (
             <Text
-              key={`v${i}`}
+              key={v${i}}
               x={p.x}
               y={p.y - 5}
               textAnchor="middle"
@@ -589,7 +579,7 @@ function MiniChart({
         )}
         {proj.map((p, i) => (
           <Text
-            key={`d${i}`}
+            key={d${i}}
             x={p.x}
             y={H - 3}
             textAnchor="middle"
@@ -610,6 +600,8 @@ function SilhuetaImgOrSvg() {
     "/images/avaliacao/silueta.jpg",
     "/images/avaliacao/silueta.jpeg",
     "/images/avaliacao/silueta.webp",
+    "/images/avaliacao/silueta.png.jpg",
+    "/images/avaliacao/silueta.jpg.png",
   ];
   let silhuetaUri: string | null = null;
   for (const rel of silhuetaCandidates) {
@@ -622,7 +614,7 @@ function SilhuetaImgOrSvg() {
   const VERDE = "#8fae7f";
   const VERDE_CLARO = "#c2d6b5";
   return (
-    <Svg width={46} height={100} viewBox="0 0 100 220" style={styles.evoFigureSvg}>
+    <Svg width={34} height={74} viewBox="0 0 100 220" style={styles.evoFigureSvg}>
       <Circle cx={50} cy={20} r={13} fill={VERDE} />
       <Rect x={35} y={38} width={30} height={72} rx={12} fill={VERDE} />
       <Rect x={19} y={42} width={11} height={62} rx={5.5} fill={VERDE_CLARO} />
@@ -646,314 +638,13 @@ function GraficoIconeSvg() {
 function EvolucaoInfoCard() {
   return (
     <View>
-      {/* Silhueta CENTRALIZADA acima, texto CENTRALIZADO abaixo. */}
-      <View style={styles.evoInfoCol}>
+      <View style={styles.evoInfoRow}>
         <SilhuetaImgOrSvg />
         <View style={styles.evoInfoTextWrap}>
           <Text style={styles.evoInfoText}>
-            Acompanhe aqui seus resultados ao longo do tempo, com base nos parâmetros avaliados
+            Acompanhe aqui seus resultados ao longo do tempo, com base nos parâmetros avaliados.
           </Text>
         </View>
       </View>
       <View style={styles.evoNoteBox}>
-        <GraficoIconeSvg />
-        <View style={styles.evoNoteTextWrap}>
-          <Text style={styles.evoNoteText}>
-            Na sua próxima avaliação, este espaço exibirá um gráfico com a sua evolução de peso, massa muscular e % de gordura
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-// ---------- Documento ----------
-export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProps) {
-  const logo = fileToDataUri("/logo-nutricare.png");
-  const fundo = fileToDataUri("/layouts/fundo-layout.jpg") || fileToDataUri("/fundo-layout.jpg");
-  const previous = dados.previousSummary || null;
-
-  const historicoSel = (dados.evolucaoHistorico || []).filter((h) =>
-    (dados.evolucaoSelecionadaIds || []).includes(h.id)
-  );
-  let evolucao: EvolucaoPonto[];
-  if (dados.compareResults && historicoSel.length > 0) {
-    const atual = (dados.evolucao || []).slice(-1);
-    evolucao = [...historicoSel.slice(-2), ...atual];
-  } else {
-    evolucao = (dados.evolucao || []).slice(-1);
-  }
-  const showEvoCard = dados.compareResults && evolucao.length > 1;
-  const pesoPontos = evolucao.map((p) => ({ data: p.data, value: p.peso }));
-  const musculoPontos = evolucao.map((p) => ({ data: p.data, value: p.massaMuscular }));
-  const bfPontos = evolucao.map((p) => ({ data: p.data, value: p.bfPct }));
-
-  const circRows = CIRC_ORDER.map((k) => ({
-    key: k,
-    label: CIRC_LABELS[k],
-    atual: dados.currentCircunferencias?.[k],
-    antes: dados.previousCircunferencias?.[k],
-  }));
-  const dobraRows = DOBRAS_ORDER.map((k) => ({
-    key: k,
-    label: DOBRAS_LABELS[k],
-    atual: dados.currentDobras?.[k],
-    antes: dados.previousDobras?.[k],
-  }));
-  const valorOu = (v: any) => (hasPositive(v) ? toFixedPt(v) : "—");
-
-  const base = previous;
-  const dPeso = base?.pesoKg != null ? dados.pesoKg - Number(base.pesoKg) : null;
-  const dMM = base?.massaMuscularKg != null ? dados.massaMagraKg - Number(base.massaMuscularKg) : null;
-  const dBF = base?.bodyFatPct != null ? dados.bfPct - Number(base.bodyFatPct) : null;
-  const desde = dados.dataAvaliacaoInicial
-    ? `desde ${new Date(dados.dataAvaliacaoInicial).toLocaleDateString("pt-BR")}`
-    : "";
-
-  // Cálculo da largura do traço da assinatura (mesma lógica do PDF de Orientações:
-  // linha acompanha exatamente o comprimento do texto "Nutricionista: {nome}").
-  const nomeBase = (nutricionista?.nome || "").trim();
-  const fullNutriText = nomeBase ? `Nutricionista: ${nomeBase}` : "Nutricionista:";
-  // Estimativa de largura em GreatVibes 18pt (~0.42 * fontSize por char).
-  const estWidth = Math.min(
-    fullNutriText.length * 18 * 0.42,
-    PAGE_WIDTH - PAGE_MARGIN_X * 2 - 70
-  );
-
-  const crnRodape = (nutricionista?.crn ? `CRN: ${nutricionista.crn}` : "CRN:").trim();
-
-  return (
-    <Document>
-      <Page size="A4" style={styles.page}>
-        {/* Fundo cobrindo a página inteira */}
-        {fundo ? <Image src={fundo} style={styles.bgFixed} fixed /> : null}
-
-        {/* ============ CABEÇALHO FIXO ============ */}
-        <View style={styles.headerFixed} fixed>
-          {logo ? <Image src={logo} style={styles.headerLogo} /> : null}
-          <Text style={styles.headerName}>{paciente.nome}</Text>
-          <Text style={styles.headerInfoLine1}>
-            {`nascimento: ${formatBirth(paciente.nascimento)} | peso: ${toFixedPt(dados.pesoKg)}kg`}
-          </Text>
-          <Text style={styles.headerInfoLine2}>
-            {`altura: ${toFixedPt(paciente.altura_cm, 0)}cm | sexo: ${labelSexo(paciente.sexo)}`}
-          </Text>
-          <View style={styles.headerRule} />
-          <Text style={styles.headerTitle}>AVALIAÇÃO FÍSICA</Text>
-        </View>
-
-        {/* ============ BLOCO TOPO: 2 CARDS ============ */}
-        <View style={styles.topRow}>
-          {/* Card esquerdo — tabela COMPOSIÇÃO CORPORAL */}
-          <View style={[styles.card, styles.topLeft]}>
-            <Text style={styles.cardTitle}>COMPOSIÇÃO CORPORAL</Text>
-
-            <View style={styles.ccHead}>
-              <Text style={[styles.ccHeadTxt, { width: "52%", paddingLeft: 10 }]}>Parâmetro</Text>
-              <Text style={[styles.ccHeadTxt, { width: "24%" }]}>Resultado</Text>
-              <Text style={[styles.ccHeadTxt, { width: "24%" }]}>Avaliação</Text>
-            </View>
-
-            <View style={styles.ccRow}>
-              <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>Peso</Text>
-              </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.pesoKg)} kg</Text>
-              <View style={styles.ccColEval}><EvalPill /></View>
-            </View>
-
-            <View style={styles.ccRow}>
-              <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>% de água corporal</Text>
-              </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.pctAgua)} %</Text>
-              <View style={styles.ccColEval}>
-                <EvalPill
-                  cor={dados.classificacaoAgua?.cor}
-                  label={dados.classificacaoAgua?.label || "Adequado"}
-                />
-              </View>
-            </View>
-
-            <View style={styles.ccRow}>
-              <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>Massa muscular</Text>
-              </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
-              <View style={styles.ccColEval}><EvalPill /></View>
-            </View>
-
-            <View style={styles.ccRow}>
-              <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>Músculo esquelético</Text>
-              </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.imme)} kg</Text>
-              <View style={styles.ccColEval}><EvalPill /></View>
-            </View>
-
-            <View style={styles.ccRow}>
-              <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>Massa livre de gordura</Text>
-              </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
-              <View style={styles.ccColEval}>
-                <EvalPill cor={dados.classificacaoFfmi?.cor} label={dados.classificacaoFfmi?.label} />
-              </View>
-            </View>
-
-            <View style={styles.ccRow}>
-              <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>Massa adiposa</Text>
-              </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.imme, 2)} kg/m²</Text>
-              <View style={styles.ccColEval}><EvalPill /></View>
-            </View>
-
-            <View style={styles.ccRow}>
-              <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>Índice de massa gorda</Text>
-              </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
-              <View style={styles.ccColEval}>
-                {dados.classificacaoImg?.label ? (
-                  <EvalPill cor={dados.classificacaoImg.cor} label={dados.classificacaoImg.label} />
-                ) : (
-                  <AcimaPill />
-                )}
-              </View>
-            </View>
-
-            <View style={styles.ccRow}>
-              <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>% de gordura</Text>
-              </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.bfPct)} %</Text>
-              <View style={styles.ccColEval}>
-                {dados.classificacaoGordura?.label ? (
-                  <EvalPill cor={dados.classificacaoGordura.cor} label={dados.classificacaoGordura.label} />
-                ) : (
-                  <AcimaPill />
-                )}
-              </View>
-            </View>
-          </View>
-
-          {/* Card direito — espaço reservado para imagens do paciente */}
-          <View style={[styles.card, styles.topRight]}>
-            <View style={styles.bodyPlaceholder} />
-          </View>
-        </View>
-
-        {/* ============ BLOCO MEIO: 3 CARDS ============ */}
-        <View style={styles.midRow}>
-          <View style={styles.cardMid}>
-            <Text style={styles.cardTitle}>CIRCUNFERÊNCIAS (cm)</Text>
-            <View style={styles.mHead}>
-              <Text style={[styles.mHeadTxt, { width: "52%" }]}>Medida</Text>
-              <Text style={[styles.mHeadTxt, { width: "24%", textAlign: "center" }]}>Antes</Text>
-              <Text style={[styles.mHeadTxt, { width: "24%", textAlign: "center" }]}>Atual</Text>
-            </View>
-            {circRows.map((r) => (
-              <View key={r.key} style={styles.mRow}>
-                <View style={styles.mColLabel}>
-                  <Text style={styles.mColLabelText}>{r.label}</Text>
-                </View>
-                <Text style={styles.mColRes}>{valorOu(r.antes)}</Text>
-                <Text style={styles.mColRes}>{valorOu(r.atual)}</Text>
-              </View>
-            ))}
-          </View>
-
-          <View style={styles.cardMid}>
-            <Text style={styles.cardTitle}>DOBRAS CUTÂNEAS (mm)</Text>
-            <View style={styles.mHead}>
-              <Text style={[styles.mHeadTxt, { width: "52%" }]}>Dobra</Text>
-              <Text style={[styles.mHeadTxt, { width: "24%", textAlign: "center" }]}>Antes</Text>
-              <Text style={[styles.mHeadTxt, { width: "24%", textAlign: "center" }]}>Atual</Text>
-            </View>
-            {dobraRows.map((r) => (
-              <View key={r.key} style={styles.mRow}>
-                <View style={styles.mColLabel}>
-                  <Text style={styles.mColLabelText}>{r.label}</Text>
-                </View>
-                <Text style={styles.mColRes}>{valorOu(r.antes)}</Text>
-                <Text style={styles.mColRes}>{valorOu(r.atual)}</Text>
-              </View>
-            ))}
-          </View>
-
-          <View style={styles.cardMid}>
-            <Text style={styles.cardTitle}>EVOLUÇÃO</Text>
-            {showEvoCard ? (
-              <>
-                <MiniChart title="Peso (kg)" points={pesoPontos} color={CHART_GREEN} />
-                <MiniChart title="Massa Muscular (kg)" points={musculoPontos} color={CHART_BLUE} />
-                <MiniChart title="% de Gordura (%)" points={bfPontos} color={CHART_RED} />
-              </>
-            ) : (
-              <EvolucaoInfoCard />
-            )}
-          </View>
-        </View>
-
-        {/* ============ EVOLUÇÃO COMPARATIVA ============ */}
-        <View style={styles.footCard}>
-          <Text style={styles.cardTitle}>EVOLUÇÃO COMPARATIVA</Text>
-          <View style={styles.footRow}>
-            <View style={styles.footBox}>
-              <Text style={styles.footLabel}>Peso</Text>
-              <Text style={styles.footBig}>{toFixedPt(dados.pesoKg)} kg</Text>
-              {dPeso !== null ? (
-                <Text style={[styles.footDelta, { color: dPeso <= 0 ? GREEN_TXT : RED_TXT }]}>
-                  {dPeso > 0 ? "+" : ""}
-                  {toFixedPt(dPeso)} kg
-                </Text>
-              ) : (
-                <Text style={styles.footDelta}>—</Text>
-              )}
-              {desde ? <Text style={styles.footSince}>{desde}</Text> : null}
-            </View>
-
-            <View style={styles.footBox}>
-              <Text style={[styles.footLabel, { color: CHART_BLUE }]}>Massa Muscular</Text>
-              <Text style={styles.footBig}>{toFixedPt(dados.massaMagraKg)} kg</Text>
-              {dMM !== null ? (
-                <Text style={[styles.footDelta, { color: dMM >= 0 ? GREEN_TXT : RED_TXT }]}>
-                  {dMM > 0 ? "+" : ""}
-                  {toFixedPt(dMM)} kg
-                </Text>
-              ) : (
-                <Text style={styles.footDelta}>—</Text>
-              )}
-              {desde ? <Text style={styles.footSince}>{desde}</Text> : null}
-            </View>
-
-            <View style={styles.footBox}>
-              <Text style={[styles.footLabel, { color: CHART_RED }]}>% de Gordura</Text>
-              <Text style={styles.footBig}>{toFixedPt(dados.bfPct)} %</Text>
-              {dBF !== null ? (
-                <Text style={[styles.footDelta, { color: dBF <= 0 ? GREEN_TXT : RED_TXT }]}>
-                  {dBF > 0 ? "+" : ""}
-                  {toFixedPt(dBF)} %
-                </Text>
-              ) : (
-                <Text style={styles.footDelta}>—</Text>
-              )}
-              {desde ? <Text style={styles.footSince}>{desde}</Text> : null}
-            </View>
-          </View>
-        </View>
-
-        {/* ============ RODAPÉ FIXO (idêntico ao PDF de Orientações) ============ */}
-        <View style={styles.footerFixed} fixed>
-          <Text style={styles.signName}>{fullNutriText}</Text>
-          <View style={[styles.signLine, { width: estWidth }]} />
-          <Text style={styles.signCrn}>{crnRodape}</Text>
-          {logo ? <Image src={logo} style={styles.footerLogo} /> : null}
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
-export default AvaliacaoPdfDocument;
+        <GraficoIconeSv
