@@ -381,33 +381,41 @@ const styles = StyleSheet.create({
   pillNeutral: { color: MUTED, fontSize: 8 },
 
   // Espaço reservado para imagens do paciente
-  // Reduzido para subir os cards "Composição Corporal" e o card em branco ao
-  // lado direito, deixando-os na mesma altura do PDF de referência.
-  bodyPlaceholder: { width: 132, height: 150, marginTop: 0 },
+  bodyPlaceholder: { width: 132, height: 216, marginTop: 4 },
 
-  // Evolução info
-  evoInfoWrapper: { flexGrow: 1, flexShrink: 1, flexBasis: 0, flexDirection: "column" },
-  evoInfoSpacer: { flexGrow: 1 },
-  evoInfoRow: { flexDirection: "row", alignItems: "flex-start", marginTop: 2 },
-  evoFigure: { width: 44, height: 96, objectFit: "contain", marginRight: 5 },
-  evoFigureSvg: { width: 44, height: 96, marginRight: 5 },
-  evoInfoTextWrap: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 0 },
-  evoInfoText: { fontSize: 6.8, color: "#333", lineHeight: 1.25 },
+  // Evolução info — silhueta CENTRALIZADA acima e texto CENTRALIZADO abaixo
+  // (layout da imagem da direita indicada pelas setas vermelhas).
+  evoInfoCol: { flexDirection: "column", alignItems: "center", marginTop: 6 },
+  evoFigure: { width: 78, height: 62, objectFit: "contain", marginBottom: 8 },
+  evoFigureSvg: { width: 78, height: 62, marginBottom: 8 },
+  evoInfoTextWrap: { width: "100%" },
+  evoInfoText: {
+    fontSize: 9,
+    color: "#333",
+    lineHeight: 1.35,
+    textAlign: "center",
+    hyphens: "none",
+  },
   evoNoteBox: {
     backgroundColor: GREEN_BG,
     borderRadius: 5,
-    paddingVertical: 5,
-    paddingHorizontal: 6,
-    marginTop: 7,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    marginTop: 10,
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
   },
-  evoNoteIcon: { width: 12, height: 12, marginRight: 5, marginTop: 1 },
-  evoNoteTextWrap: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 1 },
-  evoNoteText: { fontSize: 6.2, color: "#2e4630", lineHeight: 1.25 },
+  evoNoteIcon: { width: 14, height: 14, marginRight: 6 },
+  evoNoteTextWrap: { flexGrow: 1, flexShrink: 1 },
+  evoNoteText: {
+    fontSize: 7.6,
+    color: "#2e4630",
+    lineHeight: 1.35,
+    hyphens: "none",
+  },
 
   // Bloco meio (3 cards)
-  midRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "stretch", marginBottom: 8 },
+  midRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
   cardMid: {
     width: "32.4%",
     borderWidth: 1,
@@ -418,7 +426,6 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     backgroundColor: "rgba(255,255,255,0.92)",
   },
-  cardMidEvo: { flexDirection: "column" },
   mHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   mHeadTxt: { fontSize: 7.2, color: MUTED, fontWeight: 700 },
   mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.4 },
@@ -603,8 +610,6 @@ function SilhuetaImgOrSvg() {
     "/images/avaliacao/silueta.jpg",
     "/images/avaliacao/silueta.jpeg",
     "/images/avaliacao/silueta.webp",
-    "/images/avaliacao/silueta.png.jpg",
-    "/images/avaliacao/silueta.jpg.png",
   ];
   let silhuetaUri: string | null = null;
   for (const rel of silhuetaCandidates) {
@@ -617,7 +622,7 @@ function SilhuetaImgOrSvg() {
   const VERDE = "#8fae7f";
   const VERDE_CLARO = "#c2d6b5";
   return (
-    <Svg width={44} height={96} viewBox="0 0 100 220" style={styles.evoFigureSvg}>
+    <Svg width={46} height={100} viewBox="0 0 100 220" style={styles.evoFigureSvg}>
       <Circle cx={50} cy={20} r={13} fill={VERDE} />
       <Rect x={35} y={38} width={30} height={72} rx={12} fill={VERDE} />
       <Rect x={19} y={42} width={11} height={62} rx={5.5} fill={VERDE_CLARO} />
@@ -640,21 +645,21 @@ function GraficoIconeSvg() {
 
 function EvolucaoInfoCard() {
   return (
-    <View style={styles.evoInfoWrapper}>
-      <View style={styles.evoInfoRow}>
+    <View>
+      {/* Silhueta CENTRALIZADA acima, texto CENTRALIZADO abaixo. */}
+      <View style={styles.evoInfoCol}>
         <SilhuetaImgOrSvg />
         <View style={styles.evoInfoTextWrap}>
           <Text style={styles.evoInfoText}>
-            Acompanhe aqui seus resultados ao longo do tempo, com base nos parâmetros avaliados.
+            Acompanhe aqui seus resultados ao longo do tempo, com base nos parâmetros avaliados
           </Text>
         </View>
       </View>
-      <View style={styles.evoInfoSpacer} />
       <View style={styles.evoNoteBox}>
         <GraficoIconeSvg />
         <View style={styles.evoNoteTextWrap}>
           <Text style={styles.evoNoteText}>
-            Na sua próxima avaliação, este espaço exibirá um gráfico com a sua evolução de peso, massa muscular e % de gordura.
+            Na sua próxima avaliação, este espaço exibirá um gráfico com a sua evolução de peso, massa muscular e % de gordura
           </Text>
         </View>
       </View>
@@ -877,7 +882,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             ))}
           </View>
 
-          <View style={[styles.cardMid, styles.cardMidEvo]}>
+          <View style={styles.cardMid}>
             <Text style={styles.cardTitle}>EVOLUÇÃO</Text>
             {showEvoCard ? (
               <>
