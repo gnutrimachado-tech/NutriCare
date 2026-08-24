@@ -354,9 +354,12 @@ const styles = StyleSheet.create({
   },
 
   // Bloco topo (tabela + espaço reservado p/ imagens)
-  topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  // alignItems: "flex-start" faz os DOIS cards subirem: cada card fecha a
+  // altura no fim do proprio conteudo (base do card 1 logo abaixo da linha
+  // "% de gordura"), em vez de esticar ate a base do card vizinho.
+  topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8, alignItems: "flex-start" },
   topLeft: { width: "56%" },
-  topRight: { width: "42%", alignItems: "center", justifyContent: "center" },
+  topRight: { width: "42%", alignItems: "center" },
 
   // Tabela composição corporal
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
@@ -381,7 +384,9 @@ const styles = StyleSheet.create({
   pillNeutral: { color: MUTED, fontSize: 8 },
 
   // Espaço reservado para imagens do paciente
-  bodyPlaceholder: { width: 132, height: 216, marginTop: 4 },
+  // Altura 130: faz a BASE do card 2 subir e alinhar com a base do card 1
+  // (logo abaixo da linha "% de gordura", posicao do traco vermelho do mock).
+  bodyPlaceholder: { width: 132, height: 130, marginTop: 4 },
 
   // Evolução info — silhueta CENTRALIZADA acima e texto CENTRALIZADO abaixo
   // (layout da imagem da direita indicada pelas setas vermelhas).
@@ -410,9 +415,11 @@ const styles = StyleSheet.create({
   evoNoteIcon: { width: 14, height: 14, marginRight: 6 },
   evoNoteTextWrap: { flexGrow: 1, flexShrink: 1 },
   evoNoteText: {
-    fontSize: 7.6,
+    // Fonte levemente reduzida para o texto caber certinho dentro do
+    // retangulo verde, sem estourar a borda inferior do card.
+    fontSize: 6.9,
     color: "#2e4630",
-    lineHeight: 1.35,
+    lineHeight: 1.25,
     hyphens: "none",
   },
 
