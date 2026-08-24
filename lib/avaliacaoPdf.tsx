@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
   evoInfoRow: { flexDirection: "column", alignItems: "center", marginTop: -12 },
   evoFigure: { width: 66, height: 145, objectFit: "contain", marginBottom: 3 },
   evoFigureSvg: { width: 66, height: 145, marginBottom: 3 },
-  evoInfoTextWrap: { width: "100%", paddingRight: 0, marginTop: -14 },
+  evoInfoTextWrap: { width: "100%", paddingRight: 0, marginTop: -22.5 },
   evoInfoText: { fontSize: 6.8, color: "#333", lineHeight: 1.25, textAlign: "center" },
   evoNoteBox: {
     backgroundColor: GREEN_BG,
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   evoNoteIcon: { width: 12, height: 12, marginRight: 5, marginTop: 1 },
-  evoNoteTextWrap: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 3, marginTop: -2 },
+  evoNoteTextWrap: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 3, marginTop: -4 },
   evoNoteText: { fontSize: 5.2, color: "#2e4630", lineHeight: 1.3 },
 
   // Bloco meio (3 cards)
