@@ -389,8 +389,8 @@ const styles = StyleSheet.create({
   evoInfoWrapper: { flexGrow: 1, flexShrink: 1, flexBasis: 0, flexDirection: "column" },
   evoInfoSpacer: { flexGrow: 1 },
   evoInfoRow: { flexDirection: "column", alignItems: "center", marginTop: 2 },
-  evoFigure: { width: 44, height: 96, objectFit: "contain", marginBottom: 5 },
-  evoFigureSvg: { width: 44, height: 96, marginBottom: 5 },
+  evoFigure: { width: 60, height: 131, objectFit: "contain", marginBottom: 5 },
+  evoFigureSvg: { width: 60, height: 131, marginBottom: 5 },
   evoInfoTextWrap: { width: "100%", paddingRight: 0 },
   evoInfoText: { fontSize: 6.8, color: "#333", lineHeight: 1.25, textAlign: "center" },
   evoNoteBox: {
