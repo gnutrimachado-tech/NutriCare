@@ -34,16 +34,29 @@ const IMME_TABLE = {
   ],
 } as const;
 
-const IMG_TABLE = {
+const MASSA_MUSCULAR_TABLE = {
   F: [
-    { idadeMin: 18, idadeMax: 39, limite: 4.4, bom: 9.3 },
-    { idadeMin: 40, idadeMax: 59, limite: 5.4, bom: 11.3 },
-    { idadeMin: 60, idadeMax: 999, limite: 6.1, bom: 12.0 },
+    { idadeMin: 18, idadeMax: 39, limite: 37.0, bom: 42.0 },
+    { idadeMin: 40, idadeMax: 59, limite: 35.5, bom: 40.5 },
+    { idadeMin: 60, idadeMax: 999, limite: 33.0, bom: 38.0 },
   ],
   M: [
-    { idadeMin: 18, idadeMax: 39, limite: 2.3, bom: 6.0 },
-    { idadeMin: 40, idadeMax: 59, limite: 3.2, bom: 7.4 },
-    { idadeMin: 60, idadeMax: 999, limite: 3.6, bom: 8.2 },
+    { idadeMin: 18, idadeMax: 39, limite: 51.0, bom: 58.0 },
+    { idadeMin: 40, idadeMax: 59, limite: 49.5, bom: 56.0 },
+    { idadeMin: 60, idadeMax: 999, limite: 46.0, bom: 53.0 },
+  ],
+} as const;
+
+const IMG_TABLE = {
+  F: [
+    { idadeMin: 18, idadeMax: 39, limite: 4.4, otimoMax: 5.3, bom: 9.3 },
+    { idadeMin: 40, idadeMax: 59, limite: 5.4, otimoMax: 6.4, bom: 11.3 },
+    { idadeMin: 60, idadeMax: 999, limite: 6.1, otimoMax: 7.2, bom: 12.0 },
+  ],
+  M: [
+    { idadeMin: 18, idadeMax: 39, limite: 2.3, otimoMax: 2.9, bom: 6.0 },
+    { idadeMin: 40, idadeMax: 59, limite: 3.2, otimoMax: 3.9, bom: 7.4 },
+    { idadeMin: 60, idadeMax: 999, limite: 3.6, otimoMax: 4.5, bom: 8.2 },
   ],
 } as const;
 
@@ -95,9 +108,24 @@ export function classificarIMME(imme: number, sexo: Sexo, idade: number): Classi
   return classificarTrinca("baixo-bom-alto", imme, f.limite, f.bom);
 }
 
+export function classificarMassaMuscular(
+  massaLivreGorduraKg: number,
+  sexo: Sexo,
+  idade: number,
+): Classificacao {
+  const f = pegarFaixa(sexo, idade, MASSA_MUSCULAR_TABLE);
+  return classificarTrinca("baixo-bom-alto", massaLivreGorduraKg, f.limite, f.bom);
+}
+
 export function classificarIMG(img: number, sexo: Sexo, idade: number): Classificacao {
   const f = pegarFaixa(sexo, idade, IMG_TABLE);
-  return classificarTrinca("baixo-bom-excesso", img, f.limite, f.bom);
+  if (img < f.limite || img > f.bom) {
+    return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
+  }
+  if (img <= f.otimoMax) {
+    return { status: "OTIMO", cor: "verde", label: "Ótimo" };
+  }
+  return { status: "BOM", cor: "verde", label: "Bom" };
 }
 
 export function classificarAgua(pct: number, sexo: Sexo): Classificacao {
@@ -182,6 +210,7 @@ export function resumoCompleto(input: AvaliacaoInput) {
     massaMuscularEsqueleticaKg: round(massaMuscularEsqueletica, 1),
     classificacoes: {
       agua: classificarAgua(input.pctAgua, input.sexo),
+      massaMuscular: classificarMassaMuscular(input.massaMagraKg, input.sexo, input.idade),
       imme: classificarIMME(imme, input.sexo, input.idade),
       img: classificarIMG(img, input.sexo, input.idade),
       ffmi: classificarFFMI(ffmi, input.sexo),
