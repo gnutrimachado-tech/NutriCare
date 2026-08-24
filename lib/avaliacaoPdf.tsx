@@ -354,9 +354,12 @@ const styles = StyleSheet.create({
   },
 
   // Bloco topo (tabela + espaço reservado p/ imagens)
-  topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  // alignItems: "flex-start" faz os DOIS cards subirem: cada card fecha a
+  // altura no fim do proprio conteudo (base do card 1 logo abaixo da linha
+  // "% de gordura"), em vez de esticar ate a base do card vizinho.
+  topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8, alignItems: "flex-start" },
   topLeft: { width: "56%" },
-  topRight: { width: "42%", alignItems: "center", justifyContent: "center" },
+  topRight: { width: "42%", alignItems: "center" },
 
   // Tabela composição corporal
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
@@ -381,33 +384,47 @@ const styles = StyleSheet.create({
   pillNeutral: { color: MUTED, fontSize: 8 },
 
   // Espaço reservado para imagens do paciente
-  // Reduzido para subir os cards "Composição Corporal" e o card em branco ao
-  // lado direito, deixando-os na mesma altura do PDF de referência.
-  bodyPlaceholder: { width: 132, height: 150, marginTop: 0 },
+  // Altura 130: faz a BASE do card 2 subir e alinhar com a base do card 1
+  // (logo abaixo da linha "% de gordura", posicao do traco vermelho do mock).
+  bodyPlaceholder: { width: 132, height: 130, marginTop: 4 },
 
-  // Evolução info
-  evoInfoWrapper: { flexGrow: 1, flexShrink: 1, flexBasis: 0, flexDirection: "column" },
-  evoInfoSpacer: { flexGrow: 1 },
-  evoInfoRow: { flexDirection: "column", alignItems: "center", marginTop: 2 },
-  evoFigure: { width: 60, height: 131, objectFit: "contain", marginBottom: 5 },
-  evoFigureSvg: { width: 60, height: 131, marginBottom: 5 },
-  evoInfoTextWrap: { width: "100%", paddingRight: 0 },
-  evoInfoText: { fontSize: 6.8, color: "#333", lineHeight: 1.25, textAlign: "center" },
+  // Evolução info — silhueta CENTRALIZADA acima e texto CENTRALIZADO abaixo
+  // (layout da imagem da direita indicada pelas setas vermelhas).
+  // Distâncias topo/base espelham o card COMPOSIÇÃO CORPORAL ("Peso" no topo
+  // e "% de gordura" na base).
+  evoInfoCol: { flexDirection: "column", alignItems: "center", marginTop: 0 },
+  evoFigure: { width: 72, height: 56, objectFit: "contain", marginBottom: 5 },
+  evoFigureSvg: { width: 72, height: 56, marginBottom: 5 },
+  evoInfoTextWrap: { width: "100%" },
+  evoInfoText: {
+    fontSize: 8.6,
+    color: "#333",
+    lineHeight: 1.3,
+    textAlign: "center",
+    hyphens: "none",
+  },
   evoNoteBox: {
     backgroundColor: GREEN_BG,
     borderRadius: 5,
-    paddingVertical: 7,
+    paddingVertical: 6,
     paddingHorizontal: 8,
-    marginTop: 7,
+    marginTop: 6,
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
   },
-  evoNoteIcon: { width: 12, height: 12, marginRight: 5, marginTop: 1 },
-  evoNoteTextWrap: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 3 },
-  evoNoteText: { fontSize: 5.6, color: "#2e4630", lineHeight: 1.3 },
+  evoNoteIcon: { width: 14, height: 14, marginRight: 6 },
+  evoNoteTextWrap: { flexGrow: 1, flexShrink: 1 },
+  evoNoteText: {
+    // Fonte levemente reduzida para o texto caber certinho dentro do
+    // retangulo verde, sem estourar a borda inferior do card.
+    fontSize: 6.9,
+    color: "#2e4630",
+    lineHeight: 1.25,
+    hyphens: "none",
+  },
 
   // Bloco meio (3 cards)
-  midRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "stretch", marginBottom: 8 },
+  midRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
   cardMid: {
     width: "32.4%",
     borderWidth: 1,
@@ -418,7 +435,6 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     backgroundColor: "rgba(255,255,255,0.92)",
   },
-  cardMidEvo: { flexDirection: "column" },
   mHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   mHeadTxt: { fontSize: 7.2, color: MUTED, fontWeight: 700 },
   mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.4 },
@@ -603,8 +619,6 @@ function SilhuetaImgOrSvg() {
     "/images/avaliacao/silueta.jpg",
     "/images/avaliacao/silueta.jpeg",
     "/images/avaliacao/silueta.webp",
-    "/images/avaliacao/silueta.png.jpg",
-    "/images/avaliacao/silueta.jpg.png",
   ];
   let silhuetaUri: string | null = null;
   for (const rel of silhuetaCandidates) {
@@ -617,7 +631,7 @@ function SilhuetaImgOrSvg() {
   const VERDE = "#8fae7f";
   const VERDE_CLARO = "#c2d6b5";
   return (
-    <Svg width={44} height={96} viewBox="0 0 100 220" style={styles.evoFigureSvg}>
+    <Svg width={46} height={100} viewBox="0 0 100 220" style={styles.evoFigureSvg}>
       <Circle cx={50} cy={20} r={13} fill={VERDE} />
       <Rect x={35} y={38} width={30} height={72} rx={12} fill={VERDE} />
       <Rect x={19} y={42} width={11} height={62} rx={5.5} fill={VERDE_CLARO} />
@@ -640,35 +654,25 @@ function GraficoIconeSvg() {
 
 function EvolucaoInfoCard() {
   return (
-    <View style={styles.evoInfoWrapper}>
-      <View style={styles.evoInfoRow}>
+    <View>
+      {/* Silhueta CENTRALIZADA acima, texto CENTRALIZADO abaixo. */}
+      <View style={styles.evoInfoCol}>
         <SilhuetaImgOrSvg />
         <View style={styles.evoInfoTextWrap}>
-          <Text
-            style={styles.evoInfoText}
-            hyphenationCallback={(word) => [word]}
-          >
-            Acompanhe aqui seus resultados ao longo do tempo, com base nos parâmetros avaliados.
+          <Text style={styles.evoInfoText}>
+            Acompanhe aqui seus resultados ao longo do tempo, com base nos parâmetros avaliados
           </Text>
         </View>
       </View>
-
-      <View style={styles.evoInfoSpacer} />
-
       <View style={styles.evoNoteBox}>
         <GraficoIconeSvg />
         <View style={styles.evoNoteTextWrap}>
-          <Text
-            style={styles.evoNoteText}
-            hyphenationCallback={(word) => [word]}
-          >
-            Na sua próxima avaliação, este espaço exibirá um gráfico com a sua evolução de peso, massa muscular e % de gordura.
+          <Text style={styles.evoNoteText}>
+            Na sua próxima avaliação, este espaço exibirá um gráfico com a sua evolução de peso, massa muscular e % de gordura
           </Text>
         </View>
       </View>
     </View>
-  );
-}
   );
 }
 
@@ -887,7 +891,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             ))}
           </View>
 
-          <View style={[styles.cardMid, styles.cardMidEvo]}>
+          <View style={styles.cardMid}>
             <Text style={styles.cardTitle}>EVOLUÇÃO</Text>
             {showEvoCard ? (
               <>
