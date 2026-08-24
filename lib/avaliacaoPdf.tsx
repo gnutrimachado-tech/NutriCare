@@ -388,11 +388,11 @@ const styles = StyleSheet.create({
   // Evolução info
   evoInfoWrapper: { flexGrow: 1, flexShrink: 1, flexBasis: 0, flexDirection: "column" },
   evoInfoSpacer: { flexGrow: 1 },
-  evoInfoRow: { flexDirection: "row", alignItems: "flex-start", marginTop: 2 },
-  evoFigure: { width: 44, height: 96, objectFit: "contain", marginRight: 5 },
-  evoFigureSvg: { width: 44, height: 96, marginRight: 5 },
-  evoInfoTextWrap: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 0 },
-  evoInfoText: { fontSize: 6.8, color: "#333", lineHeight: 1.25 },
+  evoInfoRow: { flexDirection: "column", alignItems: "center", marginTop: 2 },
+  evoFigure: { width: 44, height: 96, objectFit: "contain", marginBottom: 5 },
+  evoFigureSvg: { width: 44, height: 96, marginBottom: 5 },
+  evoInfoTextWrap: { width: "100%", paddingRight: 0 },
+  evoInfoText: { fontSize: 6.8, color: "#333", lineHeight: 1.25, textAlign: "center" },
   evoNoteBox: {
     backgroundColor: GREEN_BG,
     borderRadius: 5,
