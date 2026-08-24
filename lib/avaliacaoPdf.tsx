@@ -644,21 +644,31 @@ function EvolucaoInfoCard() {
       <View style={styles.evoInfoRow}>
         <SilhuetaImgOrSvg />
         <View style={styles.evoInfoTextWrap}>
-          <Text style={styles.evoInfoText}>
+          <Text
+            style={styles.evoInfoText}
+            hyphenationCallback={(word) => [word]}
+          >
             Acompanhe aqui seus resultados ao longo do tempo, com base nos parâmetros avaliados.
           </Text>
         </View>
       </View>
+
       <View style={styles.evoInfoSpacer} />
+
       <View style={styles.evoNoteBox}>
         <GraficoIconeSvg />
         <View style={styles.evoNoteTextWrap}>
-          <Text style={styles.evoNoteText}>
+          <Text
+            style={styles.evoNoteText}
+            hyphenationCallback={(word) => [word]}
+          >
             Na sua próxima avaliação, este espaço exibirá um gráfico com a sua evolução de peso, massa muscular e % de gordura.
           </Text>
         </View>
       </View>
     </View>
+  );
+}
   );
 }
 
