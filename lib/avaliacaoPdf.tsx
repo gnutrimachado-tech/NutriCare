@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
   evoInfoRow: { flexDirection: "column", alignItems: "center", marginTop: -12 },
   evoFigure: { width: 66, height: 145, objectFit: "contain", marginBottom: 3 },
   evoFigureSvg: { width: 66, height: 145, marginBottom: 3 },
-  evoInfoTextWrap: { width: "100%", paddingRight: 0, marginTop: -22.5 },
+  evoInfoTextWrap: { width: "100%", paddingRight: 0, marginTop: -28.2 },
   evoInfoText: { fontSize: 6.8, color: "#333", lineHeight: 1.25, textAlign: "center" },
   evoNoteBox: {
     backgroundColor: GREEN_BG,
@@ -598,6 +598,124 @@ function MiniChart({
   );
 }
 
+function EvolucaoComparativaChart({
+  peso,
+  massaMuscular,
+  gordura,
+}: {
+  peso: Array<{ data: string; value: number | null | undefined }>;
+  massaMuscular: Array<{ data: string; value: number | null | undefined }>;
+  gordura: Array<{ data: string; value: number | null | undefined }>;
+}) {
+  const W = 148;
+  const sectionH = 44;
+  const left = 22;
+  const right = 3;
+  const plotTop = 15;
+  const plotBottom = 31;
+  const plotW = W - left - right;
+  const sections = [
+    { title: "Peso (kg)", points: peso, color: CHART_GREEN },
+    { title: "Massa Muscular (kg)", points: massaMuscular, color: CHART_BLUE },
+    { title: "% de Gordura (%)", points: gordura, color: CHART_RED },
+  ];
+
+  return (
+    <Svg width={W} height={sectionH * sections.length} viewBox={`0 0 ${W} ${sectionH * sections.length}`}>
+      {sections.map((section, sectionIndex) => {
+        const valid = section.points.filter((p) => hasPositive(p.value));
+        const values = valid.map((p) => Number(p.value));
+        const minRaw = values.length ? Math.min(...values) : 0;
+        const maxRaw = values.length ? Math.max(...values) : 1;
+        const span = maxRaw - minRaw;
+        const padding = span > 0 ? span * 0.35 : Math.max(1, Math.abs(maxRaw) * 0.05);
+        const min = minRaw - padding;
+        const max = maxRaw + padding;
+        const count = Math.max(1, section.points.length - 1);
+        const top = sectionIndex * sectionH;
+        const projected = section.points.map((point, index) => {
+          const x = left + (index * plotW) / count;
+          const y = hasPositive(point.value)
+            ? top + plotTop + (plotBottom - plotTop) -
+              ((Number(point.value) - min) / Math.max(0.5, max - min)) * (plotBottom - plotTop)
+            : top + (plotTop + plotBottom) / 2;
+          return { ...point, x, y };
+        });
+        const linePoints = projected.filter((point) => hasPositive(point.value));
+        const first = projected[0];
+        const last = projected[projected.length - 1];
+
+        return (
+          <React.Fragment key={section.title}>
+            <Text
+              x={1}
+              y={top + 8}
+              style={{ fontSize: 7.2, fill: INK, fontWeight: 700 }}
+            >
+              {section.title}
+            </Text>
+            <Text x={left - 2} y={top + plotTop + 3} textAnchor="end" style={{ fontSize: 4.5, fill: "#777" }}>
+              {toFixedPt(maxRaw)}
+            </Text>
+            <Text x={left - 2} y={top + plotBottom + 1} textAnchor="end" style={{ fontSize: 4.5, fill: "#777" }}>
+              {toFixedPt(minRaw)}
+            </Text>
+            <Polyline
+              points={`${left},${top + plotTop} ${left},${top + plotBottom} ${W - right},${top + plotBottom}`}
+              stroke="#cfcfcf"
+              strokeWidth={0.5}
+              fill="none"
+            />
+            {first && last && linePoints.length >= 2 ? (
+              <Rect
+                x={first.x}
+                y={Math.min(...linePoints.map((point) => point.y))}
+                width={Math.max(0, last.x - first.x)}
+                height={top + plotBottom - Math.min(...linePoints.map((point) => point.y))}
+                fill={section.color}
+                opacity={0.12}
+              />
+            ) : null}
+            {linePoints.length >= 2 ? (
+              <Polyline
+                points={linePoints.map((point) => `${point.x},${point.y}`).join(" ")}
+                stroke={section.color}
+                strokeWidth={1.1}
+                fill="none"
+              />
+            ) : null}
+            {projected.map((point, index) => (
+              <React.Fragment key={`${section.title}-${index}`}>
+                {hasPositive(point.value) ? (
+                  <>
+                    <Circle cx={point.x} cy={point.y} r={1.8} fill="#fff" stroke={section.color} strokeWidth={1} />
+                    <Text
+                      x={point.x}
+                      y={point.y - 3}
+                      textAnchor="middle"
+                      style={{ fontSize: 4.8, fill: "#444", fontWeight: 700 }}
+                    >
+                      {toFixedPt(Number(point.value))}
+                    </Text>
+                  </>
+                ) : null}
+                <Text
+                  x={point.x}
+                  y={top + sectionH - 2}
+                  textAnchor="middle"
+                  style={{ fontSize: 4.4, fill: "#888" }}
+                >
+                  {point.data}
+                </Text>
+              </React.Fragment>
+            ))}
+          </React.Fragment>
+        );
+      })}
+    </Svg>
+  );
+}
+
 // Silhueta (usa /public/images/avaliacao/silueta.* se existir; senão SVG).
 function SilhuetaImgOrSvg() {
   const silhuetaCandidates = [
@@ -684,7 +802,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   let evolucao: EvolucaoPonto[];
   if (dados.compareResults && historicoSel.length > 0) {
     const atual = (dados.evolucao || []).slice(-1);
-    evolucao = [...historicoSel.slice(-2), ...atual];
+    evolucao = [...historicoSel.slice(-3), ...atual];
   } else {
     evolucao = (dados.evolucao || []).slice(-1);
   }
@@ -891,9 +1009,11 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             <Text style={styles.cardTitle}>EVOLUÇÃO</Text>
             {showEvoCard ? (
               <>
-                <MiniChart title="Peso (kg)" points={pesoPontos} color={CHART_GREEN} />
-                <MiniChart title="Massa Muscular (kg)" points={musculoPontos} color={CHART_BLUE} />
-                <MiniChart title="% de Gordura (%)" points={bfPontos} color={CHART_RED} />
+                <EvolucaoComparativaChart
+                  peso={pesoPontos}
+                  massaMuscular={musculoPontos}
+                  gordura={bfPontos}
+                />
               </>
             ) : (
               <EvolucaoInfoCard />
