@@ -385,14 +385,16 @@ const styles = StyleSheet.create({
 
   // Evolução info — silhueta CENTRALIZADA acima e texto CENTRALIZADO abaixo
   // (layout da imagem da direita indicada pelas setas vermelhas).
-  evoInfoCol: { flexDirection: "column", alignItems: "center", marginTop: 6 },
-  evoFigure: { width: 78, height: 62, objectFit: "contain", marginBottom: 8 },
-  evoFigureSvg: { width: 78, height: 62, marginBottom: 8 },
+  // Distâncias topo/base espelham o card COMPOSIÇÃO CORPORAL ("Peso" no topo
+  // e "% de gordura" na base).
+  evoInfoCol: { flexDirection: "column", alignItems: "center", marginTop: 0 },
+  evoFigure: { width: 72, height: 56, objectFit: "contain", marginBottom: 5 },
+  evoFigureSvg: { width: 72, height: 56, marginBottom: 5 },
   evoInfoTextWrap: { width: "100%" },
   evoInfoText: {
-    fontSize: 9,
+    fontSize: 8.6,
     color: "#333",
-    lineHeight: 1.35,
+    lineHeight: 1.3,
     textAlign: "center",
     hyphens: "none",
   },
@@ -401,7 +403,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     paddingVertical: 6,
     paddingHorizontal: 8,
-    marginTop: 10,
+    marginTop: 6,
     flexDirection: "row",
     alignItems: "center",
   },
