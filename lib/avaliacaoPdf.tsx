@@ -29,7 +29,6 @@ import {
   Svg,
   Circle,
   Rect,
-  Polyline,
   Font,
 } from "@react-pdf/renderer";
 
@@ -354,9 +353,12 @@ const styles = StyleSheet.create({
   },
 
   // Bloco topo (tabela + espaço reservado p/ imagens)
-  topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  // alignItems: "flex-start" faz os DOIS cards subirem: cada card fecha a
+  // altura no fim do proprio conteudo (base do card 1 logo abaixo da linha
+  // "% de gordura"), em vez de esticar ate a base do card vizinho.
+  topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8, alignItems: "flex-start" },
   topLeft: { width: "56%" },
-  topRight: { width: "42%", alignItems: "center", justifyContent: "center" },
+  topRight: { width: "42%", alignItems: "center" },
 
   // Tabela composição corporal
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
@@ -381,35 +383,48 @@ const styles = StyleSheet.create({
   pillNeutral: { color: MUTED, fontSize: 8 },
 
   // Espaço reservado para imagens do paciente
-  // Reduzido para subir os cards "Composição Corporal" e o card em branco ao
-  // lado direito, deixando-os na mesma altura do PDF de referência.
-  bodyPlaceholder: { width: 132, height: 150, marginTop: 0 },
+  // Altura 130: faz a BASE do card 2 subir e alinhar com a base do card 1
+  // (logo abaixo da linha "% de gordura", posicao do traco vermelho do mock).
+  bodyPlaceholder: { width: 132, height: 130, marginTop: 4 },
 
-  // Evolução info
-  evoInfoWrapper: { flexGrow: 1, flexShrink: 1, flexBasis: 0, flexDirection: "column" },
-  evoInfoSpacer: { flexGrow: 1 },
-  evoInfoRow: { flexDirection: "column", alignItems: "center", marginTop: -40.35 },
-  evoFigure: { width: 66, height: 145, objectFit: "contain", marginBottom: 3 },
-  evoFigureSvg: { width: 66, height: 145, marginBottom: 3 },
-  evoInfoTextWrap: { width: "100%", paddingRight: 0, marginTop: -28.2 },
-  evoInfoText: { fontSize: 7.2, color: "#333", lineHeight: 1.25, textAlign: "center" },
+  // Evolução info — silhueta CENTRALIZADA acima e texto CENTRALIZADO abaixo
+  // (layout da imagem da direita indicada pelas setas vermelhas).
+  // Distâncias topo/base espelham o card COMPOSIÇÃO CORPORAL ("Peso" no topo
+  // e "% de gordura" na base).
+  evoInfoCol: { flexDirection: "column", alignItems: "center", marginTop: 0 },
+  evoFigure: { width: 72, height: 56, objectFit: "contain", marginBottom: 5 },
+  evoFigureSvg: { width: 72, height: 56, marginBottom: 5 },
+  evoInfoTextWrap: { width: "100%" },
+  evoInfoText: {
+    // Fonte aumentada conforme solicitado.
+    fontSize: 9.6,
+    color: "#333",
+    lineHeight: 1.3,
+    textAlign: "center",
+    hyphens: "none",
+  },
   evoNoteBox: {
+    // Retângulo verde aumentado (mais padding) conforme solicitado.
     backgroundColor: GREEN_BG,
     borderRadius: 5,
-    paddingTop: 14,
-    paddingBottom: 9,
-    paddingHorizontal: 8,
-    marginTop: 7,
-    marginHorizontal: -3,
+    paddingVertical: 9,
+    paddingHorizontal: 9,
+    marginTop: 6,
     flexDirection: "row",
     alignItems: "center",
   },
-  evoNoteIcon: { width: 12, height: 12, marginRight: 5, marginTop: 1 },
-  evoNoteTextWrap: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 3, marginTop: -4 },
-  evoNoteText: { fontSize: 5.8, color: "#2e4630", lineHeight: 1.3 },
+  evoNoteIcon: { width: 14, height: 14, marginRight: 6 },
+  evoNoteTextWrap: { flexGrow: 1, flexShrink: 1 },
+  evoNoteText: {
+    // Fonte aumentada conforme solicitado (cabe no retângulo verde maior).
+    fontSize: 7.6,
+    color: "#2e4630",
+    lineHeight: 1.3,
+    hyphens: "none",
+  },
 
   // Bloco meio (3 cards)
-  midRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "stretch", marginBottom: 8 },
+  midRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
   cardMid: {
     width: "32.4%",
     borderWidth: 1,
@@ -420,7 +435,8 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     backgroundColor: "rgba(255,255,255,0.92)",
   },
-  cardMidEvo: { flexDirection: "column" },
+  // Card EVOLUÇÃO sobe 6mm (~17pt) em relação aos cards vizinhos.
+  cardMidEvo: { marginTop: -17 },
   mHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   mHeadTxt: { fontSize: 7.2, color: MUTED, fontWeight: 700 },
   mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.4 },
@@ -540,15 +556,21 @@ function MiniChart({
   const min = minRaw - pad;
   const max = maxRaw + pad;
 
-  const n = Math.max(1, points.length - 1);
+  // ---- Gráfico de BARRAS (estilo do exemplo enviado) ----
+  // Cada ponto vira uma barra vertical, com o valor em cima da barra e a
+  // data embaixo. A largura/posição é calculada para até N barras.
+  const baseY = top + chartH;
+  const n = Math.max(1, points.length);
+  const slot = chartW / n;
+  const barW = Math.min(14, slot * 0.55);
   const proj = points.map((p, i) => {
-    const x = left + (i * chartW) / n;
-    const y = hasPositive(p.value)
-      ? top + chartH - ((Number(p.value) - min) / Math.max(0.5, max - min)) * chartH
-      : top + chartH / 2;
-    return { ...p, x, y };
+    const x = left + slot * i + slot / 2; // centro da barra
+    const ratio = hasPositive(p.value)
+      ? (Number(p.value) - min) / Math.max(0.5, max - min)
+      : 0;
+    const barH = Math.max(2, ratio * chartH);
+    return { ...p, x, barH };
   });
-  const linePts = proj.filter((p) => hasPositive(p.value));
 
   return (
     <View style={styles.evoBlock}>
@@ -556,17 +578,17 @@ function MiniChart({
         {title}
       </Text>
       <Svg width={W} height={H}>
-        {linePts.length >= 2 ? (
-          <Polyline
-            points={linePts.map((p) => `${p.x},${p.y}`).join(" ")}
-            stroke={color}
-            strokeWidth={1.1}
-            fill="none"
-          />
-        ) : null}
         {proj.map((p, i) =>
           hasPositive(p.value) ? (
-            <Circle key={`c${i}`} cx={p.x} cy={p.y} r={2.1} fill="#fff" stroke={color} strokeWidth={1.1} />
+            <Rect
+              key={`b${i}`}
+              x={p.x - barW / 2}
+              y={baseY - p.barH}
+              width={barW}
+              height={p.barH}
+              rx={1.5}
+              fill={color}
+            />
           ) : null
         )}
         {proj.map((p, i) =>
@@ -574,7 +596,7 @@ function MiniChart({
             <Text
               key={`v${i}`}
               x={p.x}
-              y={p.y - 5}
+              y={baseY - p.barH - 3}
               textAnchor="middle"
               style={{ fontSize: 6.4, fill: "#555", fontWeight: 700 }}
             >
@@ -598,130 +620,6 @@ function MiniChart({
   );
 }
 
-function EvolucaoComparativaChart({
-  peso,
-  massaMuscular,
-  gordura,
-}: {
-  peso: Array<{ data: string; value: number | null | undefined }>;
-  massaMuscular: Array<{ data: string; value: number | null | undefined }>;
-  gordura: Array<{ data: string; value: number | null | undefined }>;
-}) {
-  const W = 148;
-  const sectionH = 46;
-  const left = 25;
-  const right = 3;
-  const plotTop = 17;
-  const plotBottom = 32;
-  const plotW = W - left - right;
-  const sections = [
-    { title: "Peso (kg)", suffix: " kg", points: peso, color: CHART_GREEN },
-    { title: "Massa Muscular (kg)", suffix: " kg", points: massaMuscular, color: CHART_BLUE },
-    { title: "% de Gordura (%)", suffix: " %", points: gordura, color: CHART_RED },
-  ];
-
-  return (
-    <Svg width={W} height={sectionH * sections.length} viewBox={`0 0 ${W} ${sectionH * sections.length}`}>
-      {sections.map((section, sectionIndex) => {
-        const valid = section.points.filter((p) => hasPositive(p.value));
-        const values = valid.map((p) => Number(p.value));
-        const minRaw = values.length ? Math.min(...values) : 0;
-        const maxRaw = values.length ? Math.max(...values) : 1;
-        const span = maxRaw - minRaw;
-        const padding = span > 0 ? span * 0.35 : Math.max(1, Math.abs(maxRaw) * 0.05);
-        const min = minRaw - padding;
-        const max = maxRaw + padding;
-        const count = Math.max(1, section.points.length - 1);
-        const top = sectionIndex * sectionH;
-        const projected = section.points.map((point, index) => {
-          const x = left + (index * plotW) / count;
-          const y = hasPositive(point.value)
-            ? top + plotTop + (plotBottom - plotTop) -
-              ((Number(point.value) - min) / Math.max(0.5, max - min)) * (plotBottom - plotTop)
-            : top + (plotTop + plotBottom) / 2;
-          return { ...point, x, y };
-        });
-        const linePoints = projected.filter((point) => hasPositive(point.value));
-        return (
-          <React.Fragment key={section.title}>
-            <Text
-              x={left}
-              y={top + 8}
-              style={{ fontSize: 7.2, fill: INK, fontWeight: 700 }}
-            >
-              {section.title}
-            </Text>
-            <Text x={left - 2} y={top + plotTop + 3} textAnchor="end" style={{ fontSize: 4.5, fill: "#777" }}>
-              {toFixedPt(maxRaw)}
-            </Text>
-            <Text x={left - 2} y={top + plotBottom + 1} textAnchor="end" style={{ fontSize: 4.5, fill: "#777" }}>
-              {toFixedPt(minRaw)}
-            </Text>
-            {linePoints.length ? (
-              <Text
-                x={left + plotW / 2}
-                y={top + 15}
-                textAnchor="middle"
-                style={{ fontSize: 8.5, fill: INK, fontWeight: 700 }}
-              >
-                {toFixedPt(Number(linePoints[linePoints.length - 1].value))}{section.suffix}
-              </Text>
-            ) : null}
-            <Polyline
-              points={`${left},${top + plotTop} ${left},${top + plotBottom} ${W - right},${top + plotBottom}`}
-              stroke="#cfcfcf"
-              strokeWidth={0.5}
-              fill="none"
-            />
-            {projected.map((point, index) => (
-              <React.Fragment key={`${section.title}-${index}`}>
-                {hasPositive(point.value) ? (
-                  <>
-                    <Rect
-                      x={point.x - Math.min(9, Math.max(5, plotW / Math.max(1, projected.length) * 0.28))}
-                      y={point.y}
-                      width={Math.min(18, Math.max(10, plotW / Math.max(1, projected.length) * 0.56))}
-                      height={Math.max(0.5, top + plotBottom - point.y)}
-                      rx={1}
-                      fill={section.color}
-                      opacity={0.9}
-                    />
-                    <Text
-                      x={point.x}
-                      y={point.y - 3}
-                      textAnchor="middle"
-                      style={{ fontSize: 4.8, fill: "#444", fontWeight: 700 }}
-                    >
-                      {toFixedPt(Number(point.value))}
-                    </Text>
-                  </>
-                ) : null}
-                <Text
-                  x={point.x}
-                  y={top + sectionH - 2}
-                  textAnchor="middle"
-                  style={{ fontSize: 4.4, fill: "#888" }}
-                >
-                  {point.data}
-                </Text>
-              </React.Fragment>
-            ))}
-            {sectionIndex < sections.length - 1 ? (
-              <Polyline
-                points={`2,${top + sectionH - 2} ${W - 2},${top + sectionH - 2}`}
-                stroke="#bcbcbc"
-                strokeWidth={0.6}
-                strokeDasharray="3,3"
-                fill="none"
-              />
-            ) : null}
-          </React.Fragment>
-        );
-      })}
-    </Svg>
-  );
-}
-
 // Silhueta (usa /public/images/avaliacao/silueta.* se existir; senão SVG).
 function SilhuetaImgOrSvg() {
   const silhuetaCandidates = [
@@ -729,8 +627,6 @@ function SilhuetaImgOrSvg() {
     "/images/avaliacao/silueta.jpg",
     "/images/avaliacao/silueta.jpeg",
     "/images/avaliacao/silueta.webp",
-    "/images/avaliacao/silueta.png.jpg",
-    "/images/avaliacao/silueta.jpg.png",
   ];
   let silhuetaUri: string | null = null;
   for (const rel of silhuetaCandidates) {
@@ -743,7 +639,7 @@ function SilhuetaImgOrSvg() {
   const VERDE = "#8fae7f";
   const VERDE_CLARO = "#c2d6b5";
   return (
-    <Svg width={44} height={96} viewBox="0 0 100 220" style={styles.evoFigureSvg}>
+    <Svg width={46} height={100} viewBox="0 0 100 220" style={styles.evoFigureSvg}>
       <Circle cx={50} cy={20} r={13} fill={VERDE} />
       <Rect x={35} y={38} width={30} height={72} rx={12} fill={VERDE} />
       <Rect x={19} y={42} width={11} height={62} rx={5.5} fill={VERDE_CLARO} />
@@ -766,29 +662,21 @@ function GraficoIconeSvg() {
 
 function EvolucaoInfoCard() {
   return (
-    <View style={styles.evoInfoWrapper}>
-      <View style={styles.evoInfoRow}>
+    <View>
+      {/* Silhueta CENTRALIZADA acima, texto CENTRALIZADO abaixo. */}
+      <View style={styles.evoInfoCol}>
         <SilhuetaImgOrSvg />
         <View style={styles.evoInfoTextWrap}>
-          <Text
-            style={styles.evoInfoText}
-            hyphenationCallback={(word) => [word]}
-          >
-            Acompanhe aqui seus resultados ao longo do tempo, com base nos{"\n"}parâmetros{"\n"}avaliados.
+          <Text style={styles.evoInfoText}>
+            Acompanhe aqui seus resultados ao longo do tempo, com base nos parâmetros avaliados
           </Text>
         </View>
       </View>
-
-      <View style={styles.evoInfoSpacer} />
-
       <View style={styles.evoNoteBox}>
         <GraficoIconeSvg />
         <View style={styles.evoNoteTextWrap}>
-          <Text
-            style={styles.evoNoteText}
-            hyphenationCallback={(word) => [word]}
-          >
-            Na sua próxima avaliação, este espaço exibirá um gráfico com a sua evolução de peso, massa muscular e % de gordura.
+          <Text style={styles.evoNoteText}>
+            Na sua próxima avaliação, este espaço exibirá um gráfico com a sua evolução de peso, massa muscular e % de gordura
           </Text>
         </View>
       </View>
@@ -808,7 +696,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   let evolucao: EvolucaoPonto[];
   if (dados.compareResults && historicoSel.length > 0) {
     const atual = (dados.evolucao || []).slice(-1);
-    evolucao = [...historicoSel.slice(-3), ...atual];
+    evolucao = [...historicoSel.slice(-2), ...atual];
   } else {
     evolucao = (dados.evolucao || []).slice(-1);
   }
@@ -1015,11 +903,9 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             <Text style={styles.cardTitle}>EVOLUÇÃO</Text>
             {showEvoCard ? (
               <>
-                <EvolucaoComparativaChart
-                  peso={pesoPontos}
-                  massaMuscular={musculoPontos}
-                  gordura={bfPontos}
-                />
+                <MiniChart title="Peso (kg)" points={pesoPontos} color={CHART_GREEN} />
+                <MiniChart title="Massa Muscular (kg)" points={musculoPontos} color={CHART_BLUE} />
+                <MiniChart title="% de Gordura (%)" points={bfPontos} color={CHART_RED} />
               </>
             ) : (
               <EvolucaoInfoCard />
