@@ -86,9 +86,6 @@ type PdfProps = {
     ffmi: number;
     classificacaoAgua?: { cor: "verde" | "amarelo"; label: string };
     classificacaoImg?: { cor: "verde" | "amarelo"; label: string };
-    classificacaoMassaMuscular?: { cor: "verde" | "amarelo"; label: string };
-    classificacaoImme?: { cor: "verde" | "amarelo"; label: string };
-    classificacaoMassaAdiposa?: { cor: "verde" | "amarelo"; label: string };
     classificacaoFfmi?: { cor: "verde" | "amarelo"; label: string };
     classificacaoGordura?: { cor: "verde" | "amarelo"; label: string };
     imagemFrenteUrl?: string;
@@ -391,26 +388,25 @@ const styles = StyleSheet.create({
   // Evolução info
   evoInfoWrapper: { flexGrow: 1, flexShrink: 1, flexBasis: 0, flexDirection: "column" },
   evoInfoSpacer: { flexGrow: 1 },
-  evoInfoRow: { flexDirection: "column", alignItems: "center", marginTop: -12 },
+  evoInfoRow: { flexDirection: "column", alignItems: "center", marginTop: -40.35 },
   evoFigure: { width: 66, height: 145, objectFit: "contain", marginBottom: 3 },
   evoFigureSvg: { width: 66, height: 145, marginBottom: 3 },
-  // 2 mm acima, conforme o modelo enviado (2 mm = aproximadamente 5,67 pt).
-  evoInfoTextWrap: { width: "100%", paddingRight: 0, marginTop: -33.87 },
-  evoInfoText: { fontSize: 6.8, color: "#333", lineHeight: 1.25, textAlign: "center" },
+  evoInfoTextWrap: { width: "100%", paddingRight: 0, marginTop: -28.2 },
+  evoInfoText: { fontSize: 7.2, color: "#333", lineHeight: 1.25, textAlign: "center" },
   evoNoteBox: {
     backgroundColor: GREEN_BG,
     borderRadius: 5,
-    paddingTop: 11,
-    paddingBottom: 7,
+    paddingTop: 14,
+    paddingBottom: 9,
     paddingHorizontal: 8,
     marginTop: 7,
-    marginHorizontal: -2,
+    marginHorizontal: -3,
     flexDirection: "row",
     alignItems: "center",
   },
   evoNoteIcon: { width: 12, height: 12, marginRight: 5, marginTop: 1 },
   evoNoteTextWrap: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 3, marginTop: -4 },
-  evoNoteText: { fontSize: 5.2, color: "#2e4630", lineHeight: 1.3 },
+  evoNoteText: { fontSize: 5.8, color: "#2e4630", lineHeight: 1.3 },
 
   // Bloco meio (3 cards)
   midRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "stretch", marginBottom: 8 },
@@ -602,38 +598,6 @@ function MiniChart({
   );
 }
 
-function MetricChartIcon({ kind, cx, cy }: { kind: "peso" | "musculo" | "gordura"; cx: number; cy: number }) {
-  const stroke = kind === "peso" ? CHART_GREEN : kind === "musculo" ? CHART_BLUE : CHART_RED;
-  const fill = kind === "peso" ? "#eaf5e5" : kind === "musculo" ? "#eaf2fc" : "#fdecec";
-  return (
-    <>
-      <Circle cx={cx} cy={cy} r={12} fill={fill} stroke={stroke} strokeWidth={0.6} />
-      {kind === "peso" ? (
-        <>
-          <Rect x={cx - 6} y={cy - 5} width={12} height={10} rx={1.5} fill={stroke} />
-          <Circle cx={cx} cy={cy} r={2.5} fill="#fff" />
-          <Polyline points={`${cx - 2},${cy - 7} ${cx + 2},${cy - 7}`} stroke={stroke} strokeWidth={1.2} fill="none" />
-        </>
-      ) : kind === "musculo" ? (
-        <>
-          <Rect x={cx - 7} y={cy - 1} width={14} height={2} rx={1} fill={stroke} />
-          <Rect x={cx - 8} y={cy - 5} width={2.5} height={10} rx={1} fill={stroke} />
-          <Rect x={cx + 5.5} y={cy - 5} width={2.5} height={10} rx={1} fill={stroke} />
-          <Rect x={cx - 10} y={cy - 3.5} width={2} height={7} rx={1} fill={stroke} />
-          <Rect x={cx + 8} y={cy - 3.5} width={2} height={7} rx={1} fill={stroke} />
-        </>
-      ) : (
-        <>
-          <Circle cx={cx} cy={cy + 2} r={5.2} fill={stroke} />
-          <Polyline points={`${cx},${cy - 8} ${cx - 4.5},${cy - 1} ${cx},${cy - 3} ${cx + 4.5},${cy - 1} ${cx},${cy - 8}`} fill={stroke} stroke={stroke} strokeWidth={0.5} />
-          <Circle cx={cx} cy={cy + 1} r={1.4} fill="#fff" />
-        </>
-      )}
-    </>
-  );
-}
-
-
 function EvolucaoComparativaChart({
   peso,
   massaMuscular,
@@ -643,66 +607,113 @@ function EvolucaoComparativaChart({
   massaMuscular: Array<{ data: string; value: number | null | undefined }>;
   gordura: Array<{ data: string; value: number | null | undefined }>;
 }) {
-  // Gráfico compacto inspirado no modelo enviado: ícone, valor atual destacado,
-  // linha de evolução e valores inicial/final em cada métrica.
-  const W = 155;
-  const sectionH = 57;
-  const plotLeft = 40;
-  const plotRight = 151;
+  const W = 148;
+  const sectionH = 46;
+  const left = 25;
+  const right = 3;
+  const plotTop = 17;
+  const plotBottom = 32;
+  const plotW = W - left - right;
   const sections = [
-    { title: "Peso (kg)", points: peso, color: CHART_GREEN, kind: "peso" as const },
-    { title: "Massa Muscular (kg)", points: massaMuscular, color: CHART_BLUE, kind: "musculo" as const },
-    { title: "% de Gordura (%)", points: gordura, color: CHART_RED, kind: "gordura" as const },
+    { title: "Peso (kg)", suffix: " kg", points: peso, color: CHART_GREEN },
+    { title: "Massa Muscular (kg)", suffix: " kg", points: massaMuscular, color: CHART_BLUE },
+    { title: "% de Gordura (%)", suffix: " %", points: gordura, color: CHART_RED },
   ];
 
   return (
     <Svg width={W} height={sectionH * sections.length} viewBox={`0 0 ${W} ${sectionH * sections.length}`}>
       {sections.map((section, sectionIndex) => {
-        const top = sectionIndex * sectionH;
         const valid = section.points.filter((p) => hasPositive(p.value));
-        const first = valid[0];
-        const last = valid[valid.length - 1];
-        const current = last?.value;
         const values = valid.map((p) => Number(p.value));
         const minRaw = values.length ? Math.min(...values) : 0;
         const maxRaw = values.length ? Math.max(...values) : 1;
         const span = maxRaw - minRaw;
-        const pad = span > 0 ? span * 0.35 : Math.max(1, Math.abs(maxRaw) * 0.05);
-        const min = minRaw - pad;
-        const max = maxRaw + pad;
+        const padding = span > 0 ? span * 0.35 : Math.max(1, Math.abs(maxRaw) * 0.05);
+        const min = minRaw - padding;
+        const max = maxRaw + padding;
         const count = Math.max(1, section.points.length - 1);
+        const top = sectionIndex * sectionH;
         const projected = section.points.map((point, index) => {
-          const x = plotLeft + (index * (plotRight - plotLeft)) / count;
-          const y = top + 32 - (hasPositive(point.value)
-            ? ((Number(point.value) - min) / Math.max(0.5, max - min)) * 13
-            : 6.5);
+          const x = left + (index * plotW) / count;
+          const y = hasPositive(point.value)
+            ? top + plotTop + (plotBottom - plotTop) -
+              ((Number(point.value) - min) / Math.max(0.5, max - min)) * (plotBottom - plotTop)
+            : top + (plotTop + plotBottom) / 2;
           return { ...point, x, y };
         });
-        const linePoints = projected.filter((p) => hasPositive(p.value));
-        const displayCurrent = hasPositive(current) ? toFixedPt(Number(current)) : "—";
+        const linePoints = projected.filter((point) => hasPositive(point.value));
         return (
           <React.Fragment key={section.title}>
-            {sectionIndex > 0 ? (
-              <Polyline points={`3,${top - 4} ${W - 3},${top - 4}`} stroke="#d7d7d7" strokeWidth={0.5} strokeDasharray="2,2" fill="none" />
+            <Text
+              x={left}
+              y={top + 8}
+              style={{ fontSize: 7.2, fill: INK, fontWeight: 700 }}
+            >
+              {section.title}
+            </Text>
+            <Text x={left - 2} y={top + plotTop + 3} textAnchor="end" style={{ fontSize: 4.5, fill: "#777" }}>
+              {toFixedPt(maxRaw)}
+            </Text>
+            <Text x={left - 2} y={top + plotBottom + 1} textAnchor="end" style={{ fontSize: 4.5, fill: "#777" }}>
+              {toFixedPt(minRaw)}
+            </Text>
+            {linePoints.length ? (
+              <Text
+                x={left + plotW / 2}
+                y={top + 15}
+                textAnchor="middle"
+                style={{ fontSize: 8.5, fill: INK, fontWeight: 700 }}
+              >
+                {toFixedPt(Number(linePoints[linePoints.length - 1].value))}{section.suffix}
+              </Text>
             ) : null}
-            <MetricChartIcon kind={section.kind} cx={14} cy={top + 27} />
-            <Text x={34} y={top + 10} style={{ fontSize: 7.2, fill: INK, fontWeight: 700 }}>{section.title}</Text>
-            <Text x={96} y={top + 24} textAnchor="middle" style={{ fontSize: 12, fill: INK, fontWeight: 800 }}>{displayCurrent}</Text>
-            {linePoints.length >= 2 ? (
-              <Polyline points={linePoints.map((p) => `${p.x},${p.y}`).join(" ")} stroke={section.color} strokeWidth={1.7} fill="none" />
-            ) : null}
-            {linePoints.map((point, index) => (
+            <Polyline
+              points={`${left},${top + plotTop} ${left},${top + plotBottom} ${W - right},${top + plotBottom}`}
+              stroke="#cfcfcf"
+              strokeWidth={0.5}
+              fill="none"
+            />
+            {projected.map((point, index) => (
               <React.Fragment key={`${section.title}-${index}`}>
-                <Circle cx={point.x} cy={point.y} r={2.6} fill="#fff" stroke={section.color} strokeWidth={1.3} />
-                <Text x={point.x} y={top + 40} textAnchor="middle" style={{ fontSize: 5.5, fill: INK, fontWeight: 700 }}>{toFixedPt(Number(point.value))}</Text>
-                <Text x={point.x} y={top + 51} textAnchor="middle" style={{ fontSize: 5.2, fill: MUTED }}>{point.data}</Text>
+                {hasPositive(point.value) ? (
+                  <>
+                    <Rect
+                      x={point.x - Math.min(9, Math.max(5, plotW / Math.max(1, projected.length) * 0.28))}
+                      y={point.y}
+                      width={Math.min(18, Math.max(10, plotW / Math.max(1, projected.length) * 0.56))}
+                      height={Math.max(0.5, top + plotBottom - point.y)}
+                      rx={1}
+                      fill={section.color}
+                      opacity={0.9}
+                    />
+                    <Text
+                      x={point.x}
+                      y={point.y - 3}
+                      textAnchor="middle"
+                      style={{ fontSize: 4.8, fill: "#444", fontWeight: 700 }}
+                    >
+                      {toFixedPt(Number(point.value))}
+                    </Text>
+                  </>
+                ) : null}
+                <Text
+                  x={point.x}
+                  y={top + sectionH - 2}
+                  textAnchor="middle"
+                  style={{ fontSize: 4.4, fill: "#888" }}
+                >
+                  {point.data}
+                </Text>
               </React.Fragment>
             ))}
-            {first && last && first === last ? (
-              <>
-                <Text x={plotLeft} y={top + 40} textAnchor="middle" style={{ fontSize: 5.5, fill: INK, fontWeight: 700 }}>{toFixedPt(Number(first.value))}</Text>
-                <Text x={plotLeft} y={top + 51} textAnchor="middle" style={{ fontSize: 5.2, fill: MUTED }}>{first.data}</Text>
-              </>
+            {sectionIndex < sections.length - 1 ? (
+              <Polyline
+                points={`2,${top + sectionH - 2} ${W - 2},${top + sectionH - 2}`}
+                stroke="#bcbcbc"
+                strokeWidth={0.6}
+                strokeDasharray="3,3"
+                fill="none"
+              />
             ) : null}
           </React.Fragment>
         );
@@ -898,15 +909,15 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.ccColParamText}>Massa muscular</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
-              <View style={styles.ccColEval}><EvalPill cor={dados.classificacaoMassaMuscular?.cor} label={dados.classificacaoMassaMuscular?.label} /></View>
+              <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
                 <Text style={styles.ccColParamText}>Músculo esquelético</Text>
               </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.imme, 2)} kg/m²</Text>
-              <View style={styles.ccColEval}><EvalPill cor={dados.classificacaoImme?.cor} label={dados.classificacaoImme?.label} /></View>
+              <Text style={styles.ccColRes}>{toFixedPt(dados.imme)} kg</Text>
+              <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
             <View style={styles.ccRow}>
@@ -923,8 +934,8 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               <View style={styles.ccColParam}>
                 <Text style={styles.ccColParamText}>Massa adiposa</Text>
               </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
-              <View style={styles.ccColEval}><EvalPill cor={dados.classificacaoMassaAdiposa?.cor} label={dados.classificacaoMassaAdiposa?.label} /></View>
+              <Text style={styles.ccColRes}>{toFixedPt(dados.imme, 2)} kg/m²</Text>
+              <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
             <View style={styles.ccRow}>
