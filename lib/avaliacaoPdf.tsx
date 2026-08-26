@@ -396,10 +396,10 @@ const styles = StyleSheet.create({
   evoFigureSvg: { width: 72, height: 56, marginBottom: 5 },
   evoInfoTextWrap: { width: "100%" },
   evoInfoText: {
-    // Fonte aumentada conforme solicitado.
-    fontSize: 9.6,
+    // Texto um pouco menor para criar respiro entre os cards.
+    fontSize: 8.7,
     color: "#333",
-    lineHeight: 1.3,
+    lineHeight: 1.22,
     textAlign: "center",
     hyphens: "none",
   },
@@ -416,10 +416,11 @@ const styles = StyleSheet.create({
   evoNoteIcon: { width: 14, height: 14, marginRight: 6 },
   evoNoteTextWrap: { flexGrow: 1, flexShrink: 1 },
   evoNoteText: {
-    // Fonte aumentada conforme solicitado (cabe no retângulo verde maior).
-    fontSize: 7.6,
+    // Texto centralizado e menor para evitar quebra de palavras.
+    fontSize: 7,
     color: "#2e4630",
-    lineHeight: 1.3,
+    lineHeight: 1.25,
+    textAlign: "center",
     hyphens: "none",
   },
 
@@ -435,8 +436,8 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     backgroundColor: "rgba(255,255,255,0.92)",
   },
-  // Card EVOLUÇÃO sobe 6mm (~17pt) em relação aos cards vizinhos.
-  cardMidEvo: { marginTop: -17 },
+  // Mantém um pequeno espaço abaixo do card superior, sem sobreposição.
+  cardMidEvo: { marginTop: 6 },
   mHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   mHeadTxt: { fontSize: 7.2, color: MUTED, fontWeight: 700 },
   mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.4 },
@@ -549,12 +550,9 @@ function MiniChart({
 
   const valid = points.filter((p) => hasPositive(p.value));
   const vals = valid.map((p) => Number(p.value));
-  const minRaw = vals.length ? Math.min(...vals) : 0;
-  const maxRaw = vals.length ? Math.max(...vals) : 1;
-  const span = maxRaw - minRaw;
-  const pad = span > 0 ? span * 0.35 : Math.max(1, Math.abs(maxRaw) * 0.05);
-  const min = minRaw - pad;
-  const max = maxRaw + pad;
+  // Barras normais: todas partem da mesma base zero e a altura representa
+  // diretamente o valor de cada avaliação.
+  const max = vals.length ? Math.max(...vals, 1) : 1;
 
   // ---- Gráfico de BARRAS (estilo do exemplo enviado) ----
   // Cada ponto vira uma barra vertical, com o valor em cima da barra e a
@@ -565,9 +563,7 @@ function MiniChart({
   const barW = Math.min(14, slot * 0.55);
   const proj = points.map((p, i) => {
     const x = left + slot * i + slot / 2; // centro da barra
-    const ratio = hasPositive(p.value)
-      ? (Number(p.value) - min) / Math.max(0.5, max - min)
-      : 0;
+    const ratio = hasPositive(p.value) ? Number(p.value) / max : 0;
     const barH = Math.max(2, ratio * chartH);
     return { ...p, x, barH };
   });
@@ -676,7 +672,9 @@ function EvolucaoInfoCard() {
         <GraficoIconeSvg />
         <View style={styles.evoNoteTextWrap}>
           <Text style={styles.evoNoteText}>
-            Na sua próxima avaliação, este espaço exibirá um gráfico com a sua evolução de peso, massa muscular e % de gordura
+            Na sua próxima avaliação, este espaço{"\n"}
+            exibirá um gráfico com sua evolução{"\n"}
+            de peso, massa muscular e % de gordura
           </Text>
         </View>
       </View>
