@@ -28,12 +28,8 @@ import {
   StyleSheet,
   Svg,
   Circle,
-  Defs,
-  Line,
-  LinearGradient,
-  Path,
   Rect,
-  Stop,
+  Polyline,
   Font,
 } from "@react-pdf/renderer";
 
@@ -358,12 +354,9 @@ const styles = StyleSheet.create({
   },
 
   // Bloco topo (tabela + espaço reservado p/ imagens)
-  // alignItems: "flex-start" faz os DOIS cards subirem: cada card fecha a
-  // altura no fim do proprio conteudo (base do card 1 logo abaixo da linha
-  // "% de gordura"), em vez de esticar ate a base do card vizinho.
-  topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8, alignItems: "stretch" },
+  topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
   topLeft: { width: "56%" },
-  topRight: { width: "42%", alignItems: "center", alignSelf: "stretch" },
+  topRight: { width: "42%", alignItems: "center", justifyContent: "center" },
 
   // Tabela composição corporal
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
@@ -388,9 +381,7 @@ const styles = StyleSheet.create({
   pillNeutral: { color: MUTED, fontSize: 8 },
 
   // Espaço reservado para imagens do paciente
-  // Altura 130: faz a BASE do card 2 subir e alinhar com a base do card 1
-  // (logo abaixo da linha "% de gordura", posicao do traco vermelho do mock).
-  bodyPlaceholder: { width: 132, height: 130, marginTop: 4 },
+  bodyPlaceholder: { width: 132, height: 216, marginTop: 4 },
 
   // Evolução info — silhueta CENTRALIZADA acima e texto CENTRALIZADO abaixo
   // (layout da imagem da direita indicada pelas setas vermelhas).
@@ -401,38 +392,32 @@ const styles = StyleSheet.create({
   evoFigureSvg: { width: 72, height: 56, marginBottom: 5 },
   evoInfoTextWrap: { width: "100%" },
   evoInfoText: {
-    // Texto um pouco menor para criar respiro entre os cards.
-    fontSize: 8.7,
+    fontSize: 8.6,
     color: "#333",
-    lineHeight: 1.22,
+    lineHeight: 1.3,
     textAlign: "center",
     hyphens: "none",
   },
   evoNoteBox: {
-    // Retângulo verde aumentado (mais padding) conforme solicitado.
     backgroundColor: GREEN_BG,
     borderRadius: 5,
-    paddingVertical: 9,
-    paddingHorizontal: 9,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
     marginTop: 6,
-    // Aproximadamente 2 mm extras para cada lado do retângulo.
-    marginHorizontal: -5.67,
     flexDirection: "row",
     alignItems: "center",
   },
   evoNoteIcon: { width: 14, height: 14, marginRight: 6 },
   evoNoteTextWrap: { flexGrow: 1, flexShrink: 1 },
   evoNoteText: {
-    // Texto centralizado e menor para evitar quebra de palavras.
-    fontSize: 7,
+    fontSize: 7.6,
     color: "#2e4630",
-    lineHeight: 1.25,
-    textAlign: "center",
+    lineHeight: 1.35,
     hyphens: "none",
   },
 
   // Bloco meio (3 cards)
-  midRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 6, marginBottom: 8, alignItems: "stretch" },
+  midRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
   cardMid: {
     width: "32.4%",
     borderWidth: 1,
@@ -443,9 +428,6 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     backgroundColor: "rgba(255,255,255,0.92)",
   },
-  // O espaçamento é aplicado na linha inteira para os três cards manterem
-  // exatamente a mesma altura.
-  cardMidEvo: { marginTop: 0, alignSelf: "stretch" },
   mHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   mHeadTxt: { fontSize: 7.2, color: MUTED, fontWeight: 700 },
   mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.4 },
@@ -482,7 +464,6 @@ const styles = StyleSheet.create({
   footBig: { fontSize: 13, fontWeight: 800, color: INK },
   footDelta: { fontSize: 7.8, marginTop: 3 },
   footSince: { fontSize: 7, color: MUTED, marginTop: 2 },
-  footChart: { width: "100%", height: 38, marginTop: 4 },
 
   // ============ RODAPÉ FIXO (igual ao PDF de Orientações) ============
   // footerY (Orientações) = 56.  Nome fica em y=footerY+12 (baseline).
@@ -549,147 +530,143 @@ function MiniChart({
   points: Array<{ data: string; value: number | null | undefined }>;
   color: string;
 }) {
+  // Gauge/slider horizontal com escala DINÂMICA baseada no valor atual.
+  // Regra: valor atual sempre próximo do centro; passos redondos de 5 em 5
+  // (para % de Gordura o passo também é 5 começando em 10). A parte clara
+  // (fundo) cobre toda a escala; a parte escura preenche do início até o valor.
   const W = 148;
-  const H = 48;
-  const left = 16;
-  const right = 8;
-  const top = 14;
-  const chartW = W - left - right;
+  const H = 46;
+  const left = 6;
+  const right = 6;
+  const barW = W - left - right;
+  const barY = 26;
+  const barH = 4.2;
 
   const valid = points.filter((p) => hasPositive(p.value));
   const vals = valid.map((p) => Number(p.value));
-  const minValue = vals.length ? Math.min(...vals) : 0;
-  const maxValue = vals.length ? Math.max(...vals) : 1;
-  const spread = Math.max(maxValue - minValue, Math.abs(maxValue) * 0.08, 1);
-  const scaleMin = Math.max(0, minValue - spread * 0.35);
-  const scaleMax = maxValue + spread * 0.35;
-  const current = valid[valid.length - 1];
-  const currentValue = current ? Number(current.value) : 0;
-  const ratio = currentValue
-    ? (currentValue - scaleMin) / Math.max(1, scaleMax - scaleMin)
-    : 0;
-  const markerX = left + Math.max(0.06, Math.min(0.94, ratio)) * chartW;
-  const axisMin = toFixedPt(scaleMin, 0);
-  const axisMax = toFixedPt(scaleMax, 0);
+  const current = vals.length ? vals[vals.length - 1] : 0;
+  const firstDate = points.length ? points[0].data : "";
+  const lastDate = points.length ? points[points.length - 1].data : "";
+
+  // Escala: 5 marcações (4 passos de 5) centradas no valor atual.
+  // Ex.: current=73 → 60,65,70,75,80  |  current=63,4 → 50,55,60,65,70
+  //      current=13,2 → 5,10,15,20,25  (piso em 0)
+  const step = 5;
+  const stepsBefore = 2; // duas marcações à esquerda do centro
+  const centerTick = Math.round(current / step) * step;
+  let scaleMin = centerTick - stepsBefore * step;
+  if (scaleMin < 0) scaleMin = 0;
+  const scaleMax = scaleMin + 4 * step;
+  const ticks = [
+    scaleMin,
+    scaleMin + step,
+    scaleMin + 2 * step,
+    scaleMin + 3 * step,
+    scaleMax,
+  ];
+
+  // Posição X do valor atual na barra.
+  const clamped = Math.min(scaleMax, Math.max(scaleMin, current));
+  const valueX =
+    left + ((clamped - scaleMin) / (scaleMax - scaleMin)) * barW;
+
+  // Cor clara (fundo) — aprox 22% do canal (equivale ao "light" das barras).
+  const lightColor = color + "33"; // 20% opacidade
+
+  // Pill do valor atual (acima da barra).
+  const pillText = toFixedPt(current);
+  const pillW = 22;
+  const pillH = 11;
+  const pillX = valueX - pillW / 2;
+  const pillY = 6;
 
   return (
     <View style={styles.evoBlock}>
-      <Text style={{ fontSize: 7.8, fontWeight: 700, color: INK, marginBottom: 1 }}>
+      <Text style={{ fontSize: 7.6, fontWeight: 700, color: INK, marginBottom: 1 }}>
         {title}
       </Text>
       <Svg width={W} height={H}>
-        <Line x1={left} y1={top + 7} x2={left + chartW} y2={top + 7} stroke="#d9e3da" strokeWidth={5} strokeLinecap="round" />
-        <Line x1={left} y1={top + 7} x2={markerX} y2={top + 7} stroke={color} strokeWidth={5} strokeLinecap="round" />
-        <Circle cx={markerX} cy={top + 7} r={3.2} fill="#fff" stroke={color} strokeWidth={1.4} />
-        {current ? (
-          <Text
-            x={markerX}
-            y={top - 1}
-            textAnchor="middle"
-            style={{ fontSize: 6.4, fill: color, fontWeight: 700 }}
-          >
-            {toFixedPt(currentValue)}
-          </Text>
+        {/* Marcações (números da escala) */}
+        {ticks.map((t, i) => {
+          const x = left + (i / 4) * barW;
+          return (
+            <Text
+              key={`t${i}`}
+              x={x}
+              y={22}
+              textAnchor="middle"
+              style={{ fontSize: 6.4, fill: "#7a7a7a" }}
+            >
+              {t}
+            </Text>
+          );
+        })}
+
+        {/* Barra clara (fundo cobre toda a escala) */}
+        <Rect
+          x={left}
+          y={barY}
+          width={barW}
+          height={barH}
+          rx={barH / 2}
+          fill={lightColor}
+        />
+        {/* Barra escura (do início até o valor atual) */}
+        {valueX > left ? (
+          <Rect
+            x={left}
+            y={barY}
+            width={Math.max(0, valueX - left)}
+            height={barH}
+            rx={barH / 2}
+            fill={color}
+          />
         ) : null}
-        <Text x={left} y={H - 3} textAnchor="start" style={{ fontSize: 5.6, fill: "#888" }}>
-          {axisMin}
+
+        {/* Pill do valor atual */}
+        <Rect
+          x={pillX}
+          y={pillY}
+          width={pillW}
+          height={pillH}
+          rx={2}
+          fill={color}
+        />
+        <Text
+          x={valueX}
+          y={pillY + 7.6}
+          textAnchor="middle"
+          style={{ fontSize: 7, fill: "#fff", fontWeight: 700 }}
+        >
+          {pillText}
         </Text>
-        <Text x={left + chartW} y={H - 3} textAnchor="end" style={{ fontSize: 5.6, fill: "#888" }}>
-          {axisMax}
+        {/* Ponteiro do pill até a barra */}
+        <Polyline
+          points={`${valueX},${pillY + pillH} ${valueX},${barY - 0.5}`}
+          stroke={color}
+          strokeWidth={1.1}
+          fill="none"
+        />
+
+        {/* Datas — início (esquerda) e atual (direita) */}
+        <Text
+          x={left}
+          y={H - 2}
+          textAnchor="start"
+          style={{ fontSize: 6, fill: "#999" }}
+        >
+          {firstDate}
+        </Text>
+        <Text
+          x={W - right}
+          y={H - 2}
+          textAnchor="end"
+          style={{ fontSize: 6, fill: "#999" }}
+        >
+          {lastDate}
         </Text>
       </Svg>
     </View>
-  );
-}
-
-function EvolutionSparkline({
-  points,
-  color,
-}: {
-  points: Array<{ data: string; value: number | null | undefined }>;
-  color: string;
-}) {
-  const W = 116;
-  const H = 38;
-  const left = 8;
-  const right = 8;
-  const top = 6;
-  const bottom = 11;
-  const valid = points.filter((p) => hasPositive(p.value));
-  if (!valid.length) return null;
-
-  const values = valid.map((p) => Number(p.value));
-  const minValue = Math.min(...values);
-  const maxValue = Math.max(...values);
-  const spread = Math.max(maxValue - minValue, Math.abs(maxValue) * 0.08, 1);
-  const scaleMin = minValue - spread * 0.25;
-  const scaleMax = maxValue + spread * 0.25;
-  const plotW = W - left - right;
-  const plotH = H - top - bottom;
-  const plotted = valid.map((p, i) => {
-    const x = valid.length === 1 ? left + plotW / 2 : left + (plotW * i) / (valid.length - 1);
-    const y =
-      top +
-      ((scaleMax - Number(p.value)) / Math.max(1, scaleMax - scaleMin)) * plotH;
-    return { ...p, x, y };
-  });
-  const lineD = plotted
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
-    .join(" ");
-  const first = plotted[0];
-  const last = plotted[plotted.length - 1];
-  const baselineY = top + plotH;
-  const areaD = `${lineD} L ${last.x} ${baselineY} L ${first.x} ${baselineY} Z`;
-  const gradientId = `evolution-gradient-${color.replace("#", "")}`;
-
-  return (
-    <Svg width={W} height={H} style={styles.footChart}>
-      <Defs>
-        <LinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0%" stopColor={color} stopOpacity={0.28} />
-          <Stop offset="100%" stopColor={color} stopOpacity={0.02} />
-        </LinearGradient>
-      </Defs>
-      <Line
-        x1={left}
-        y1={baselineY}
-        x2={W - right}
-        y2={baselineY}
-        stroke="#e1e1e1"
-        strokeWidth={0.7}
-      />
-      <Path d={areaD} fill={`url(#${gradientId})`} stroke="none" />
-      <Path d={lineD} fill="none" stroke={color} strokeWidth={1.2} />
-      {plotted.map((p, i) => (
-        <Circle
-          key={`point-${i}`}
-          cx={p.x}
-          cy={p.y}
-          r={2.1}
-          fill="#fff"
-          stroke={color}
-          strokeWidth={1.1}
-        />
-      ))}
-      <Text
-        x={first.x}
-        y={H - 1}
-        textAnchor="middle"
-        style={{ fontSize: 5.5, fill: "#888" }}
-      >
-        {first.data}
-      </Text>
-      {last !== first ? (
-        <Text
-          x={last.x}
-          y={H - 1}
-          textAnchor="middle"
-          style={{ fontSize: 5.5, fill: "#888" }}
-        >
-          {last.data}
-        </Text>
-      ) : null}
-    </Svg>
   );
 }
 
@@ -749,9 +726,7 @@ function EvolucaoInfoCard() {
         <GraficoIconeSvg />
         <View style={styles.evoNoteTextWrap}>
           <Text style={styles.evoNoteText}>
-            Na sua próxima avaliação, este espaço{"\n"}
-            exibirá um gráfico com sua evolução{"\n"}
-            de peso, massa muscular e % de gordura
+            Na sua próxima avaliação, este espaço exibirá um gráfico com a sua evolução de peso, massa muscular e % de gordura
           </Text>
         </View>
       </View>
@@ -974,7 +949,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             ))}
           </View>
 
-          <View style={[styles.cardMid, styles.cardMidEvo]}>
+          <View style={styles.cardMid}>
             <Text style={styles.cardTitle}>EVOLUÇÃO</Text>
             {showEvoCard ? (
               <>
@@ -1004,7 +979,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.footDelta}>—</Text>
               )}
               {desde ? <Text style={styles.footSince}>{desde}</Text> : null}
-              {showEvoCard ? <EvolutionSparkline points={pesoPontos} color={CHART_GREEN} /> : null}
             </View>
 
             <View style={styles.footBox}>
@@ -1019,7 +993,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.footDelta}>—</Text>
               )}
               {desde ? <Text style={styles.footSince}>{desde}</Text> : null}
-              {showEvoCard ? <EvolutionSparkline points={musculoPontos} color={CHART_BLUE} /> : null}
             </View>
 
             <View style={styles.footBox}>
@@ -1034,7 +1007,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.footDelta}>—</Text>
               )}
               {desde ? <Text style={styles.footSince}>{desde}</Text> : null}
-              {showEvoCard ? <EvolutionSparkline points={bfPontos} color={CHART_RED} /> : null}
             </View>
           </View>
         </View>
