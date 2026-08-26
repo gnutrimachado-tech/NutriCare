@@ -370,6 +370,7 @@ const styles = StyleSheet.create({
   ccHeadTxt: { fontSize: 7.4, color: MUTED, fontWeight: 700 },
   ccRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.2 },
   ccColParam: { width: "52%", flexDirection: "row", alignItems: "center", paddingLeft: 10 },
+  ccIcon: { width: 18, marginRight: 4, fontSize: 10, textAlign: "center" },
   ccColParamText: { fontSize: 8.2, color: INK },
   ccColRes: { width: "24%", fontSize: 8.2, color: INK },
   ccColEval: { width: "24%" },
@@ -550,10 +551,10 @@ function MiniChart({
   color: string;
 }) {
   const W = 148;
-  const H = 48;
-  const left = 16;
+  const H = 66;
+  const left = 8;
   const right = 8;
-  const top = 14;
+  const top = 23;
   const chartW = W - left - right;
 
   const valid = points.filter((p) => hasPositive(p.value));
@@ -561,16 +562,33 @@ function MiniChart({
   const minValue = vals.length ? Math.min(...vals) : 0;
   const maxValue = vals.length ? Math.max(...vals) : 1;
   const spread = Math.max(maxValue - minValue, Math.abs(maxValue) * 0.08, 1);
-  const scaleMin = Math.max(0, minValue - spread * 0.35);
-  const scaleMax = maxValue + spread * 0.35;
+  const scaleMin = Math.max(0, minValue - spread * 0.7);
+  const scaleMax = maxValue + spread * 0.7;
   const current = valid[valid.length - 1];
   const currentValue = current ? Number(current.value) : 0;
   const ratio = currentValue
     ? (currentValue - scaleMin) / Math.max(1, scaleMax - scaleMin)
     : 0;
   const markerX = left + Math.max(0.06, Math.min(0.94, ratio)) * chartW;
-  const axisMin = toFixedPt(scaleMin, 0);
-  const axisMax = toFixedPt(scaleMax, 0);
+  const first = valid[0];
+  const firstValue = first ? Number(first.value) : currentValue;
+  const firstRatio = firstValue
+    ? (firstValue - scaleMin) / Math.max(1, scaleMax - scaleMin)
+    : 0;
+  const firstX = left + Math.max(0.06, Math.min(0.94, firstRatio)) * chartW;
+  const fillStartX = Math.min(firstX, markerX);
+  const fillWidth = Math.max(4, Math.abs(markerX - firstX));
+  const tickCount = 5;
+  const tickValues = Array.from({ length: tickCount }, (_, i) => {
+    return scaleMin + ((scaleMax - scaleMin) * i) / (tickCount - 1);
+  });
+  const bubbleText = toFixedPt(currentValue);
+  const bubbleWidth = Math.max(30, bubbleText.length * 5.4 + 13);
+  const bubbleX = Math.max(
+    left + bubbleWidth / 2,
+    Math.min(left + chartW - bubbleWidth / 2, markerX)
+  );
+  const axisY = top + 8;
 
   return (
     <View style={styles.evoBlock}>
@@ -578,25 +596,80 @@ function MiniChart({
         {title}
       </Text>
       <Svg width={W} height={H}>
-        <Line x1={left} y1={top + 7} x2={left + chartW} y2={top + 7} stroke="#d9e3da" strokeWidth={5} strokeLinecap="round" />
-        <Line x1={left} y1={top + 7} x2={markerX} y2={top + 7} stroke={color} strokeWidth={5} strokeLinecap="round" />
-        <Circle cx={markerX} cy={top + 7} r={3.2} fill="#fff" stroke={color} strokeWidth={1.4} />
+        <Rect
+          x={bubbleX - bubbleWidth / 2}
+          y={0}
+          width={bubbleWidth}
+          height={14}
+          rx={4}
+          fill={color}
+        />
         {current ? (
           <Text
-            x={markerX}
-            y={top - 1}
+            x={bubbleX}
+            y={10}
             textAnchor="middle"
-            style={{ fontSize: 6.4, fill: color, fontWeight: 700 }}
+            style={{ fontSize: 7.2, fill: "#fff", fontWeight: 700 }}
           >
-            {toFixedPt(currentValue)}
+            {bubbleText}
           </Text>
         ) : null}
-        <Text x={left} y={H - 3} textAnchor="start" style={{ fontSize: 5.6, fill: "#888" }}>
-          {axisMin}
-        </Text>
-        <Text x={left + chartW} y={H - 3} textAnchor="end" style={{ fontSize: 5.6, fill: "#888" }}>
-          {axisMax}
-        </Text>
+        {tickValues.map((tick, index) => {
+          const x = left + (chartW * index) / (tickCount - 1);
+          return (
+            <Text
+              key={`${title}-tick-${index}`}
+              x={x}
+              y={top - 3}
+              textAnchor="middle"
+              style={{ fontSize: 6, fill: "#888" }}
+            >
+              {toFixedPt(tick, 0)}
+            </Text>
+          );
+        })}
+        <Line
+          x1={left}
+          y1={axisY}
+          x2={left + chartW}
+          y2={axisY}
+          stroke="#d9e3da"
+          strokeWidth={7}
+          strokeLinecap="round"
+        />
+        <Line
+          x1={fillStartX}
+          y1={axisY}
+          x2={fillStartX + fillWidth}
+          y2={axisY}
+          stroke={color}
+          strokeWidth={7}
+          strokeLinecap="round"
+        />
+        <Line
+          x1={markerX}
+          y1={axisY - 9}
+          x2={markerX}
+          y2={axisY + 9}
+          stroke={color}
+          strokeWidth={2.2}
+        />
+        <Circle cx={markerX} cy={axisY} r={3.5} fill={color} />
+        {first ? (
+          <Text x={left} y={H - 1} textAnchor="start" style={{ fontSize: 6, fill: "#888" }}>
+            {first.data}
+          </Text>
+        ) : null}
+        {current ? (
+          <Text
+            x={left + chartW}
+            y={H - 1}
+            textAnchor="end"
+            style={{ fontSize: 6, fill: "#888" }}
+          >
+            {current.data}
+          </Text>
+        ) : null}
       </Svg>
     </View>
   );
@@ -848,6 +921,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
+                <Text style={styles.ccIcon}>⚖️</Text>
                 <Text style={styles.ccColParamText}>Peso</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.pesoKg)} kg</Text>
@@ -856,6 +930,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
+                <Text style={styles.ccIcon}>💧</Text>
                 <Text style={styles.ccColParamText}>% de água corporal</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.pctAgua)} %</Text>
@@ -869,6 +944,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
+                <Text style={styles.ccIcon}>💪</Text>
                 <Text style={styles.ccColParamText}>Massa muscular</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
@@ -877,6 +953,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
+                <Text style={styles.ccIcon}>🏋️</Text>
                 <Text style={styles.ccColParamText}>Músculo esquelético</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.imme)} kg</Text>
@@ -885,6 +962,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
+                <Text style={styles.ccIcon}>🍃</Text>
                 <Text style={styles.ccColParamText}>Massa livre de gordura</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
@@ -895,6 +973,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
+                <Text style={styles.ccIcon}>🟠</Text>
                 <Text style={styles.ccColParamText}>Massa adiposa</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.imme, 2)} kg/m²</Text>
@@ -903,6 +982,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
+                <Text style={styles.ccIcon}>📏</Text>
                 <Text style={styles.ccColParamText}>Índice de massa gorda</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
@@ -917,6 +997,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
+                <Text style={styles.ccIcon}>🔥</Text>
                 <Text style={styles.ccColParamText}>% de gordura</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.bfPct)} %</Text>
