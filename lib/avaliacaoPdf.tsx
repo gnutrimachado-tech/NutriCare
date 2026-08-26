@@ -244,6 +244,9 @@ const RED_TXT = "#c62828";
 const CHART_GREEN = "#7a9b6d";
 const CHART_BLUE = "#4a7dbd";
 const CHART_RED = "#c62828";
+const CHART_GREEN_LIGHT = "#dfe9dc";
+const CHART_BLUE_LIGHT = "#d8e1ef";
+const CHART_RED_LIGHT = "#efbebe";
 
 // ---------- Estilos ----------
 const styles = StyleSheet.create({
@@ -370,7 +373,6 @@ const styles = StyleSheet.create({
   ccHeadTxt: { fontSize: 7.4, color: MUTED, fontWeight: 700 },
   ccRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.2 },
   ccColParam: { width: "52%", flexDirection: "row", alignItems: "center", paddingLeft: 10 },
-  ccIcon: { width: 18, marginRight: 4, fontSize: 10, textAlign: "center" },
   ccColParamText: { fontSize: 8.2, color: INK },
   ccColRes: { width: "24%", fontSize: 8.2, color: INK },
   ccColEval: { width: "24%" },
@@ -589,6 +591,13 @@ function MiniChart({
     Math.min(left + chartW - bubbleWidth / 2, markerX)
   );
   const axisY = top + 8;
+  const dateY = axisY + 14;
+  const trackColor =
+    color === CHART_GREEN
+      ? CHART_GREEN_LIGHT
+      : color === CHART_BLUE
+        ? CHART_BLUE_LIGHT
+        : CHART_RED_LIGHT;
 
   return (
     <View style={styles.evoBlock}>
@@ -633,7 +642,7 @@ function MiniChart({
           y1={axisY}
           x2={left + chartW}
           y2={axisY}
-          stroke="#d9e3da"
+          stroke={trackColor}
           strokeWidth={7}
           strokeLinecap="round"
         />
@@ -656,14 +665,14 @@ function MiniChart({
         />
         <Circle cx={markerX} cy={axisY} r={3.5} fill={color} />
         {first ? (
-          <Text x={left} y={H - 1} textAnchor="start" style={{ fontSize: 6, fill: "#888" }}>
+          <Text x={left} y={dateY} textAnchor="start" style={{ fontSize: 6, fill: "#888" }}>
             {first.data}
           </Text>
         ) : null}
         {current ? (
           <Text
             x={left + chartW}
-            y={H - 1}
+            y={dateY}
             textAnchor="end"
             style={{ fontSize: 6, fill: "#888" }}
           >
@@ -921,7 +930,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.ccIcon}>⚖️</Text>
                 <Text style={styles.ccColParamText}>Peso</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.pesoKg)} kg</Text>
@@ -930,7 +938,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.ccIcon}>💧</Text>
                 <Text style={styles.ccColParamText}>% de água corporal</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.pctAgua)} %</Text>
@@ -944,7 +951,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.ccIcon}>💪</Text>
                 <Text style={styles.ccColParamText}>Massa muscular</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
@@ -953,7 +959,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.ccIcon}>🏋️</Text>
                 <Text style={styles.ccColParamText}>Músculo esquelético</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.imme)} kg</Text>
@@ -962,7 +967,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.ccIcon}>🍃</Text>
                 <Text style={styles.ccColParamText}>Massa livre de gordura</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
@@ -973,7 +977,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.ccIcon}>🟠</Text>
                 <Text style={styles.ccColParamText}>Massa adiposa</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.imme, 2)} kg/m²</Text>
@@ -982,7 +985,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.ccIcon}>📏</Text>
                 <Text style={styles.ccColParamText}>Índice de massa gorda</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
@@ -997,7 +999,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.ccIcon}>🔥</Text>
                 <Text style={styles.ccColParamText}>% de gordura</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.bfPct)} %</Text>
