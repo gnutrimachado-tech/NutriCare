@@ -184,12 +184,6 @@ if (greatVibesPath && fs.existsSync(greatVibesPath)) {
     Font.register({ family: "GreatVibes", src: greatVibesPath });
   } catch {}
 }
-try {
-  Font.registerEmojiSource({
-    format: "png",
-    url: "https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/",
-  });
-} catch {}
 function toFixedPt(v: number | null | undefined, digits = 1) {
   if (v === null || v === undefined || !Number.isFinite(Number(v))) return "—";
   return Number(v).toFixed(digits).replace(".", ",");
@@ -250,8 +244,6 @@ const RED_TXT = "#c62828";
 const CHART_GREEN = "#7a9b6d";
 const CHART_BLUE = "#4a7dbd";
 const CHART_RED = "#c62828";
-const REF_AGUA = "50 – 65 %";
-const REF_GORDURA = "16 – 28 %";
 
 // ---------- Estilos ----------
 const styles = StyleSheet.create({
@@ -335,17 +327,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 20,
     fontFamily: "Helvetica-Bold",
-    color: TITLE_GREEN,
+    color: "#0d0d0d",
     letterSpacing: 0,
-  },
-  headerSubtitle: {
-    position: "absolute",
-    top: PAGE_HEIGHT - TITLE_Y + 5,
-    left: 0,
-    right: 0,
-    textAlign: "center",
-    fontSize: 11,
-    color: "#333333",
   },
 
   // Cards genéricos
@@ -374,22 +357,22 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // Bloco topo: um único card envolvendo a tabela e a imagem corporal.
+  // Bloco topo (tabela + espaço reservado p/ imagens)
+  // alignItems: "flex-start" faz os DOIS cards subirem: cada card fecha a
+  // altura no fim do proprio conteudo (base do card 1 logo abaixo da linha
+  // "% de gordura"), em vez de esticar ate a base do card vizinho.
   topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8, alignItems: "stretch" },
   topLeft: { width: "56%" },
-  topRight: { width: "42%", alignItems: "center", justifyContent: "center", alignSelf: "stretch" },
-  compWrap: { paddingTop: 9, paddingHorizontal: 11, paddingBottom: 8 },
+  topRight: { width: "42%", alignItems: "center", alignSelf: "stretch" },
 
   // Tabela composição corporal
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   ccHeadTxt: { fontSize: 7.4, color: MUTED, fontWeight: 700 },
   ccRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.2 },
-  ccColParam: { width: "38%", flexDirection: "row", alignItems: "center", paddingLeft: 2 },
+  ccColParam: { width: "52%", flexDirection: "row", alignItems: "center", paddingLeft: 10 },
   ccColParamText: { fontSize: 8.2, color: INK },
-  ccColRes: { width: "22%", fontSize: 8.2, color: INK },
-  ccColRef: { width: "20%", fontSize: 8.2, color: MUTED },
-  ccColEval: { width: "20%" },
-  emoji: { width: 13, fontSize: 8.5 },
+  ccColRes: { width: "24%", fontSize: 8.2, color: INK },
+  ccColEval: { width: "24%" },
 
   pill: {
     borderRadius: 4,
@@ -404,7 +387,10 @@ const styles = StyleSheet.create({
   pillRed: { backgroundColor: RED_BG, color: RED_TXT },
   pillNeutral: { color: MUTED, fontSize: 8 },
 
-  bodyFigure: { width: 118, height: 132, objectFit: "contain", marginTop: 2 },
+  // Espaço reservado para imagens do paciente
+  // Altura 130: faz a BASE do card 2 subir e alinhar com a base do card 1
+  // (logo abaixo da linha "% de gordura", posicao do traco vermelho do mock).
+  bodyPlaceholder: { width: 132, height: 130, marginTop: 4 },
 
   // Evolução info — silhueta CENTRALIZADA acima e texto CENTRALIZADO abaixo
   // (layout da imagem da direita indicada pelas setas vermelhas).
@@ -558,43 +544,33 @@ function MiniChart({
   title,
   points,
   color,
-  scale = "body",
 }: {
   title: string;
   points: Array<{ data: string; value: number | null | undefined }>;
   color: string;
-  scale?: "body" | "percentage";
 }) {
   const W = 148;
-  const H = 58;
-  const left = 13;
-  const right = 7;
+  const H = 48;
+  const left = 16;
+  const right = 8;
+  const top = 14;
   const chartW = W - left - right;
 
   const valid = points.filter((p) => hasPositive(p.value));
+  const vals = valid.map((p) => Number(p.value));
+  const minValue = vals.length ? Math.min(...vals) : 0;
+  const maxValue = vals.length ? Math.max(...vals) : 1;
+  const spread = Math.max(maxValue - minValue, Math.abs(maxValue) * 0.08, 1);
+  const scaleMin = Math.max(0, minValue - spread * 0.35);
+  const scaleMax = maxValue + spread * 0.35;
   const current = valid[valid.length - 1];
   const currentValue = current ? Number(current.value) : 0;
-  const step = 5;
-  const range = scale === "percentage" ? 15 : 20;
-  const scaleMin = current
-    ? scale === "percentage"
-      ? Math.max(0, Math.ceil((currentValue - 5) / step) * step)
-      : Math.floor((currentValue - 10) / step) * step
+  const ratio = currentValue
+    ? (currentValue - scaleMin) / Math.max(1, scaleMax - scaleMin)
     : 0;
-  const scaleMax = scaleMin + range;
-  const markerRatio = current
-    ? Math.max(0, Math.min(1, (currentValue - scaleMin) / range))
-    : 0.5;
-  const markerX = left + markerRatio * chartW;
-  const centerX = left + 0.5 * chartW;
-  const tickValues = Array.from({ length: range / step + 1 }, (_, i) => scaleMin + i * step);
-  const fillColor =
-    color === CHART_BLUE ? "#cbd9eb" : color === CHART_RED ? "#efbaba" : "#dbe8d6";
-  const firstDate = points[0]?.data || "—";
-  const lastDate = points[points.length - 1]?.data || firstDate;
-  const badgeText = current ? toFixedPt(currentValue) : "—";
-  const badgeWidth = Math.max(20, badgeText.length * 4.1 + 7);
-  const badgeX = Math.max(left, Math.min(W - right - badgeWidth, markerX - badgeWidth / 2));
+  const markerX = left + Math.max(0.06, Math.min(0.94, ratio)) * chartW;
+  const axisMin = toFixedPt(scaleMin, 0);
+  const axisMax = toFixedPt(scaleMax, 0);
 
   return (
     <View style={styles.evoBlock}>
@@ -602,41 +578,24 @@ function MiniChart({
         {title}
       </Text>
       <Svg width={W} height={H}>
-        {tickValues.map((tick, index) => {
-          const x = left + (index / (tickValues.length - 1)) * chartW;
-          return (
-            <Text key={`tick-${tick}`} x={x} y={17} textAnchor="middle" style={{ fontSize: 5.5, fill: "#777" }}>
-              {toFixedPt(tick, 0)}
-            </Text>
-          );
-        })}
-        <Line x1={left} y1={28} x2={left + chartW} y2={28} stroke={fillColor} strokeWidth={7} strokeLinecap="round" />
+        <Line x1={left} y1={top + 7} x2={left + chartW} y2={top + 7} stroke="#d9e3da" strokeWidth={5} strokeLinecap="round" />
+        <Line x1={left} y1={top + 7} x2={markerX} y2={top + 7} stroke={color} strokeWidth={5} strokeLinecap="round" />
+        <Circle cx={markerX} cy={top + 7} r={3.2} fill="#fff" stroke={color} strokeWidth={1.4} />
         {current ? (
-          <Line
-            x1={centerX}
-            y1={28}
-            x2={markerX}
-            y2={28}
-            stroke={color}
-            strokeWidth={7}
-            strokeLinecap="round"
-          />
+          <Text
+            x={markerX}
+            y={top - 1}
+            textAnchor="middle"
+            style={{ fontSize: 6.4, fill: color, fontWeight: 700 }}
+          >
+            {toFixedPt(currentValue)}
+          </Text>
         ) : null}
-        {current ? <Line x1={markerX} y1={20} x2={markerX} y2={36} stroke={color} strokeWidth={1.5} /> : null}
-        {current ? <Circle cx={markerX} cy={28} r={3.5} fill={color} /> : null}
-        {current ? (
-          <>
-            <Rect x={badgeX} y={0} width={badgeWidth} height={12} rx={3} fill={color} />
-            <Text x={badgeX + badgeWidth / 2} y={8.6} textAnchor="middle" style={{ fontSize: 6.4, fill: "#fff", fontWeight: 700 }}>
-              {badgeText}
-            </Text>
-          </>
-        ) : null}
-        <Text x={left} y={49} textAnchor="start" style={{ fontSize: 5.6, fill: "#888" }}>
-          {firstDate}
+        <Text x={left} y={H - 3} textAnchor="start" style={{ fontSize: 5.6, fill: "#888" }}>
+          {axisMin}
         </Text>
-        <Text x={left + chartW} y={49} textAnchor="end" style={{ fontSize: 5.6, fill: "#888" }}>
-          {lastDate}
+        <Text x={left + chartW} y={H - 3} textAnchor="end" style={{ fontSize: 5.6, fill: "#888" }}>
+          {axisMax}
         </Text>
       </Svg>
     </View>
@@ -804,7 +763,6 @@ function EvolucaoInfoCard() {
 export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProps) {
   const logo = fileToDataUri("/logo-nutricare.png");
   const fundo = fileToDataUri("/layouts/fundo-layout.jpg") || fileToDataUri("/fundo-layout.jpg");
-  const silhueta = fileToDataUri("/images/avaliacao/silueta.png");
   const previous = dados.previousSummary || null;
 
   const historicoSel = (dados.evolucaoHistorico || []).filter((h) =>
@@ -874,40 +832,33 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
           </Text>
           <View style={styles.headerRule} />
           <Text style={styles.headerTitle}>AVALIAÇÃO FÍSICA</Text>
-          <Text style={styles.headerSubtitle}>Composição Corporal</Text>
         </View>
 
-        {/* ============ BLOCO TOPO: CARD ÚNICO ============ */}
-        <View style={[styles.card, styles.compWrap]}>
-          <View style={styles.topRow}>
-          {/* Tabela COMPOSIÇÃO CORPORAL */}
-          <View style={styles.topLeft}>
+        {/* ============ BLOCO TOPO: 2 CARDS ============ */}
+        <View style={styles.topRow}>
+          {/* Card esquerdo — tabela COMPOSIÇÃO CORPORAL */}
+          <View style={[styles.card, styles.topLeft]}>
             <Text style={styles.cardTitle}>COMPOSIÇÃO CORPORAL</Text>
 
             <View style={styles.ccHead}>
-              <Text style={[styles.ccHeadTxt, { width: "38%", paddingLeft: 15 }]}>Parâmetro</Text>
-              <Text style={[styles.ccHeadTxt, { width: "22%" }]}>Resultado</Text>
-              <Text style={[styles.ccHeadTxt, { width: "20%" }]}>Referência</Text>
-              <Text style={[styles.ccHeadTxt, { width: "20%" }]}>Avaliação</Text>
+              <Text style={[styles.ccHeadTxt, { width: "52%", paddingLeft: 10 }]}>Parâmetro</Text>
+              <Text style={[styles.ccHeadTxt, { width: "24%" }]}>Resultado</Text>
+              <Text style={[styles.ccHeadTxt, { width: "24%" }]}>Avaliação</Text>
             </View>
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.emoji}>⚖️</Text>
                 <Text style={styles.ccColParamText}>Peso</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.pesoKg)} kg</Text>
-              <Text style={styles.ccColRef}>—</Text>
               <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.emoji}>💧</Text>
                 <Text style={styles.ccColParamText}>% de água corporal</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.pctAgua)} %</Text>
-              <Text style={styles.ccColRef}>{REF_AGUA}</Text>
               <View style={styles.ccColEval}>
                 <EvalPill
                   cor={dados.classificacaoAgua?.cor}
@@ -918,31 +869,25 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.emoji}>💪</Text>
                 <Text style={styles.ccColParamText}>Massa muscular</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
-              <Text style={styles.ccColRef}>—</Text>
               <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.emoji}>🏋️</Text>
                 <Text style={styles.ccColParamText}>Músculo esquelético</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.imme)} kg</Text>
-              <Text style={styles.ccColRef}>—</Text>
               <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.emoji}>🍃</Text>
                 <Text style={styles.ccColParamText}>Massa livre de gordura</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
-              <Text style={styles.ccColRef}>—</Text>
               <View style={styles.ccColEval}>
                 <EvalPill cor={dados.classificacaoFfmi?.cor} label={dados.classificacaoFfmi?.label} />
               </View>
@@ -950,21 +895,17 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.emoji}>🟠</Text>
                 <Text style={styles.ccColParamText}>Massa adiposa</Text>
               </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.massaGordaKg)} kg</Text>
-              <Text style={styles.ccColRef}>—</Text>
+              <Text style={styles.ccColRes}>{toFixedPt(dados.imme, 2)} kg/m²</Text>
               <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.emoji}>📏</Text>
                 <Text style={styles.ccColParamText}>Índice de massa gorda</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
-              <Text style={styles.ccColRef}>—</Text>
               <View style={styles.ccColEval}>
                 {dados.classificacaoImg?.label ? (
                   <EvalPill cor={dados.classificacaoImg.cor} label={dados.classificacaoImg.label} />
@@ -976,11 +917,9 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
-                <Text style={styles.emoji}>🔥</Text>
                 <Text style={styles.ccColParamText}>% de gordura</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.bfPct)} %</Text>
-              <Text style={styles.ccColRef}>{REF_GORDURA}</Text>
               <View style={styles.ccColEval}>
                 {dados.classificacaoGordura?.label ? (
                   <EvalPill cor={dados.classificacaoGordura.cor} label={dados.classificacaoGordura.label} />
@@ -991,12 +930,10 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             </View>
           </View>
 
-          {/* Imagem corporal */}
-          <View style={styles.topRight}>
-            <Text style={styles.cardTitleCentered}>COMPOSIÇÃO CORPORAL</Text>
-            {silhueta ? <Image src={silhueta} style={styles.bodyFigure} /> : <View style={styles.bodyFigure} />}
+          {/* Card direito — espaço reservado para imagens do paciente */}
+          <View style={[styles.card, styles.topRight]}>
+            <View style={styles.bodyPlaceholder} />
           </View>
-        </View>
         </View>
 
         {/* ============ BLOCO MEIO: 3 CARDS ============ */}
@@ -1041,19 +978,9 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             <Text style={styles.cardTitle}>EVOLUÇÃO</Text>
             {showEvoCard ? (
               <>
-                <MiniChart title="Peso (kg)" points={pesoPontos} color={CHART_GREEN} scale="body" />
-                <MiniChart
-                  title="Massa Muscular (kg)"
-                  points={musculoPontos}
-                  color={CHART_BLUE}
-                  scale="body"
-                />
-                <MiniChart
-                  title="% de Gordura (%)"
-                  points={bfPontos}
-                  color={CHART_RED}
-                  scale="percentage"
-                />
+                <MiniChart title="Peso (kg)" points={pesoPontos} color={CHART_GREEN} />
+                <MiniChart title="Massa Muscular (kg)" points={musculoPontos} color={CHART_BLUE} />
+                <MiniChart title="% de Gordura (%)" points={bfPontos} color={CHART_RED} />
               </>
             ) : (
               <EvolucaoInfoCard />
