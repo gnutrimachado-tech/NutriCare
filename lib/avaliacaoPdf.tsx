@@ -28,9 +28,12 @@ import {
   StyleSheet,
   Svg,
   Circle,
+  Defs,
   Line,
+  LinearGradient,
   Path,
   Rect,
+  Stop,
   Font,
 } from "@react-pdf/renderer";
 
@@ -635,17 +638,27 @@ function EvolutionSparkline({
     .join(" ");
   const first = plotted[0];
   const last = plotted[plotted.length - 1];
+  const baselineY = top + plotH;
+  const areaD = `${lineD} L ${last.x} ${baselineY} L ${first.x} ${baselineY} Z`;
+  const gradientId = `evolution-gradient-${color.replace("#", "")}`;
 
   return (
     <Svg width={W} height={H} style={styles.footChart}>
+      <Defs>
+        <LinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0%" stopColor={color} stopOpacity={0.28} />
+          <Stop offset="100%" stopColor={color} stopOpacity={0.02} />
+        </LinearGradient>
+      </Defs>
       <Line
         x1={left}
-        y1={top + plotH}
+        y1={baselineY}
         x2={W - right}
-        y2={top + plotH}
+        y2={baselineY}
         stroke="#e1e1e1"
         strokeWidth={0.7}
       />
+      <Path d={areaD} fill={`url(#${gradientId})`} stroke="none" />
       <Path d={lineD} fill="none" stroke={color} strokeWidth={1.2} />
       {plotted.map((p, i) => (
         <Circle
