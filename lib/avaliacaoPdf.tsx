@@ -28,6 +28,8 @@ import {
   StyleSheet,
   Svg,
   Circle,
+  Line,
+  Path,
   Rect,
   Font,
 } from "@react-pdf/renderer";
@@ -356,9 +358,9 @@ const styles = StyleSheet.create({
   // alignItems: "flex-start" faz os DOIS cards subirem: cada card fecha a
   // altura no fim do proprio conteudo (base do card 1 logo abaixo da linha
   // "% de gordura"), em vez de esticar ate a base do card vizinho.
-  topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8, alignItems: "flex-start" },
+  topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8, alignItems: "stretch" },
   topLeft: { width: "56%" },
-  topRight: { width: "42%", alignItems: "center" },
+  topRight: { width: "42%", alignItems: "center", alignSelf: "stretch" },
 
   // Tabela composição corporal
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
@@ -410,6 +412,8 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     paddingHorizontal: 9,
     marginTop: 6,
+    // Aproximadamente 2 mm extras para cada lado do retângulo.
+    marginHorizontal: -5.67,
     flexDirection: "row",
     alignItems: "center",
   },
@@ -425,7 +429,7 @@ const styles = StyleSheet.create({
   },
 
   // Bloco meio (3 cards)
-  midRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  midRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 6, marginBottom: 8, alignItems: "stretch" },
   cardMid: {
     width: "32.4%",
     borderWidth: 1,
@@ -436,8 +440,9 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     backgroundColor: "rgba(255,255,255,0.92)",
   },
-  // Mantém um pequeno espaço abaixo do card superior, sem sobreposição.
-  cardMidEvo: { marginTop: 6 },
+  // O espaçamento é aplicado na linha inteira para os três cards manterem
+  // exatamente a mesma altura.
+  cardMidEvo: { marginTop: 0, alignSelf: "stretch" },
   mHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   mHeadTxt: { fontSize: 7.2, color: MUTED, fontWeight: 700 },
   mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.4 },
@@ -474,6 +479,7 @@ const styles = StyleSheet.create({
   footBig: { fontSize: 13, fontWeight: 800, color: INK },
   footDelta: { fontSize: 7.8, marginTop: 3 },
   footSince: { fontSize: 7, color: MUTED, marginTop: 2 },
+  footChart: { width: "100%", height: 38, marginTop: 4 },
 
   // ============ RODAPÉ FIXO (igual ao PDF de Orientações) ============
   // footerY (Orientações) = 56.  Nome fica em y=footerY+12 (baseline).
@@ -541,32 +547,27 @@ function MiniChart({
   color: string;
 }) {
   const W = 148;
-  const H = 44;
-  const left = 20;
-  const right = 20;
-  const top = 10;
-  const chartH = 20;
+  const H = 48;
+  const left = 16;
+  const right = 8;
+  const top = 14;
   const chartW = W - left - right;
 
   const valid = points.filter((p) => hasPositive(p.value));
   const vals = valid.map((p) => Number(p.value));
-  // Barras normais: todas partem da mesma base zero e a altura representa
-  // diretamente o valor de cada avaliação.
-  const max = vals.length ? Math.max(...vals, 1) : 1;
-
-  // ---- Gráfico de BARRAS (estilo do exemplo enviado) ----
-  // Cada ponto vira uma barra vertical, com o valor em cima da barra e a
-  // data embaixo. A largura/posição é calculada para até N barras.
-  const baseY = top + chartH;
-  const n = Math.max(1, points.length);
-  const slot = chartW / n;
-  const barW = Math.min(14, slot * 0.55);
-  const proj = points.map((p, i) => {
-    const x = left + slot * i + slot / 2; // centro da barra
-    const ratio = hasPositive(p.value) ? Number(p.value) / max : 0;
-    const barH = Math.max(2, ratio * chartH);
-    return { ...p, x, barH };
-  });
+  const minValue = vals.length ? Math.min(...vals) : 0;
+  const maxValue = vals.length ? Math.max(...vals) : 1;
+  const spread = Math.max(maxValue - minValue, Math.abs(maxValue) * 0.08, 1);
+  const scaleMin = Math.max(0, minValue - spread * 0.35);
+  const scaleMax = maxValue + spread * 0.35;
+  const current = valid[valid.length - 1];
+  const currentValue = current ? Number(current.value) : 0;
+  const ratio = currentValue
+    ? (currentValue - scaleMin) / Math.max(1, scaleMax - scaleMin)
+    : 0;
+  const markerX = left + Math.max(0.06, Math.min(0.94, ratio)) * chartW;
+  const axisMin = toFixedPt(scaleMin, 0);
+  const axisMax = toFixedPt(scaleMax, 0);
 
   return (
     <View style={styles.evoBlock}>
@@ -574,45 +575,108 @@ function MiniChart({
         {title}
       </Text>
       <Svg width={W} height={H}>
-        {proj.map((p, i) =>
-          hasPositive(p.value) ? (
-            <Rect
-              key={`b${i}`}
-              x={p.x - barW / 2}
-              y={baseY - p.barH}
-              width={barW}
-              height={p.barH}
-              rx={1.5}
-              fill={color}
-            />
-          ) : null
-        )}
-        {proj.map((p, i) =>
-          hasPositive(p.value) ? (
-            <Text
-              key={`v${i}`}
-              x={p.x}
-              y={baseY - p.barH - 3}
-              textAnchor="middle"
-              style={{ fontSize: 6.4, fill: "#555", fontWeight: 700 }}
-            >
-              {toFixedPt(Number(p.value))}
-            </Text>
-          ) : null
-        )}
-        {proj.map((p, i) => (
+        <Line x1={left} y1={top + 7} x2={left + chartW} y2={top + 7} stroke="#d9e3da" strokeWidth={5} strokeLinecap="round" />
+        <Line x1={left} y1={top + 7} x2={markerX} y2={top + 7} stroke={color} strokeWidth={5} strokeLinecap="round" />
+        <Circle cx={markerX} cy={top + 7} r={3.2} fill="#fff" stroke={color} strokeWidth={1.4} />
+        {current ? (
           <Text
-            key={`d${i}`}
-            x={p.x}
-            y={H - 3}
+            x={markerX}
+            y={top - 1}
             textAnchor="middle"
-            style={{ fontSize: 6, fill: "#999" }}
+            style={{ fontSize: 6.4, fill: color, fontWeight: 700 }}
           >
-            {p.data}
+            {toFixedPt(currentValue)}
           </Text>
-        ))}
+        ) : null}
+        <Text x={left} y={H - 3} textAnchor="start" style={{ fontSize: 5.6, fill: "#888" }}>
+          {axisMin}
+        </Text>
+        <Text x={left + chartW} y={H - 3} textAnchor="end" style={{ fontSize: 5.6, fill: "#888" }}>
+          {axisMax}
+        </Text>
       </Svg>
     </View>
+  );
+}
+
+function EvolutionSparkline({
+  points,
+  color,
+}: {
+  points: Array<{ data: string; value: number | null | undefined }>;
+  color: string;
+}) {
+  const W = 116;
+  const H = 38;
+  const left = 8;
+  const right = 8;
+  const top = 6;
+  const bottom = 11;
+  const valid = points.filter((p) => hasPositive(p.value));
+  if (!valid.length) return null;
+
+  const values = valid.map((p) => Number(p.value));
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const spread = Math.max(maxValue - minValue, Math.abs(maxValue) * 0.08, 1);
+  const scaleMin = minValue - spread * 0.25;
+  const scaleMax = maxValue + spread * 0.25;
+  const plotW = W - left - right;
+  const plotH = H - top - bottom;
+  const plotted = valid.map((p, i) => {
+    const x = valid.length === 1 ? left + plotW / 2 : left + (plotW * i) / (valid.length - 1);
+    const y =
+      top +
+      ((scaleMax - Number(p.value)) / Math.max(1, scaleMax - scaleMin)) * plotH;
+    return { ...p, x, y };
+  });
+  const lineD = plotted
+    .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
+    .join(" ");
+  const first = plotted[0];
+  const last = plotted[plotted.length - 1];
+
+  return (
+    <Svg width={W} height={H} style={styles.footChart}>
+      <Line
+        x1={left}
+        y1={top + plotH}
+        x2={W - right}
+        y2={top + plotH}
+        stroke="#e1e1e1"
+        strokeWidth={0.7}
+      />
+      <Path d={lineD} fill="none" stroke={color} strokeWidth={1.2} />
+      {plotted.map((p, i) => (
+        <Circle
+          key={`point-${i}`}
+          cx={p.x}
+          cy={p.y}
+          r={2.1}
+          fill="#fff"
+          stroke={color}
+          strokeWidth={1.1}
+        />
+      ))}
+      <Text
+        x={first.x}
+        y={H - 1}
+        textAnchor="middle"
+        style={{ fontSize: 5.5, fill: "#888" }}
+      >
+        {first.data}
+      </Text>
+      {last !== first ? (
+        <Text
+          x={last.x}
+          y={H - 1}
+          textAnchor="middle"
+          style={{ fontSize: 5.5, fill: "#888" }}
+        >
+          {last.data}
+        </Text>
+      ) : null}
+    </Svg>
   );
 }
 
@@ -927,6 +991,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.footDelta}>—</Text>
               )}
               {desde ? <Text style={styles.footSince}>{desde}</Text> : null}
+              {showEvoCard ? <EvolutionSparkline points={pesoPontos} color={CHART_GREEN} /> : null}
             </View>
 
             <View style={styles.footBox}>
@@ -941,6 +1006,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.footDelta}>—</Text>
               )}
               {desde ? <Text style={styles.footSince}>{desde}</Text> : null}
+              {showEvoCard ? <EvolutionSparkline points={musculoPontos} color={CHART_BLUE} /> : null}
             </View>
 
             <View style={styles.footBox}>
@@ -955,6 +1021,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.footDelta}>—</Text>
               )}
               {desde ? <Text style={styles.footSince}>{desde}</Text> : null}
+              {showEvoCard ? <EvolutionSparkline points={bfPontos} color={CHART_RED} /> : null}
             </View>
           </View>
         </View>
