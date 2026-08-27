@@ -89,6 +89,9 @@ type PdfProps = {
     img: number;
     ffmi: number;
     classificacaoAgua?: { cor: "verde" | "amarelo"; label: string };
+    classificacaoMassaMuscular?: { cor: "verde" | "amarelo"; label: string };
+    classificacaoImme?: { cor: "verde" | "amarelo"; label: string };
+    classificacaoMassaAdiposa?: { cor: "verde" | "amarelo"; label: string };
     classificacaoImg?: { cor: "verde" | "amarelo"; label: string };
     classificacaoFfmi?: { cor: "verde" | "amarelo"; label: string };
     classificacaoGordura?: { cor: "verde" | "amarelo"; label: string };
@@ -553,11 +556,12 @@ function MiniChart({
   color: string;
 }) {
   const W = 148;
-  const H = 66;
-  const left = 8;
-  const right = 8;
-  const top = 23;
-  const chartW = W - left - right;
+  const H = 64;
+  const centerX = W / 2;
+  const arcY = 43;
+  const radius = 31;
+  const arcStartX = centerX - radius;
+  const arcEndX = centerX + radius;
 
   const valid = points.filter((p) => hasPositive(p.value));
   const vals = valid.map((p) => Number(p.value));
@@ -571,33 +575,22 @@ function MiniChart({
   const ratio = currentValue
     ? (currentValue - scaleMin) / Math.max(1, scaleMax - scaleMin)
     : 0;
-  const markerX = left + Math.max(0.06, Math.min(0.94, ratio)) * chartW;
+  const progress = Math.max(0.08, Math.min(0.92, ratio));
+  const endAngle = Math.PI - Math.PI * progress;
+  const fillEndX = centerX + radius * Math.cos(endAngle);
+  const fillEndY = arcY - radius * Math.sin(endAngle);
+  const largeArc = progress > 0.5 ? 1 : 0;
   const first = valid[0];
   const firstValue = first ? Number(first.value) : currentValue;
-  const firstRatio = firstValue
-    ? (firstValue - scaleMin) / Math.max(1, scaleMax - scaleMin)
-    : 0;
-  const firstX = left + Math.max(0.06, Math.min(0.94, firstRatio)) * chartW;
-  const fillStartX = Math.min(firstX, markerX);
-  const fillWidth = Math.max(4, Math.abs(markerX - firstX));
-  const tickCount = 5;
-  const tickValues = Array.from({ length: tickCount }, (_, i) => {
-    return scaleMin + ((scaleMax - scaleMin) * i) / (tickCount - 1);
-  });
-  const bubbleText = toFixedPt(currentValue);
-  const bubbleWidth = Math.max(30, bubbleText.length * 5.4 + 13);
-  const bubbleX = Math.max(
-    left + bubbleWidth / 2,
-    Math.min(left + chartW - bubbleWidth / 2, markerX)
-  );
-  const axisY = top + 8;
-  const dateY = axisY + 14;
-  const trackColor =
-    color === CHART_GREEN
-      ? CHART_GREEN_LIGHT
-      : color === CHART_BLUE
-        ? CHART_BLUE_LIGHT
-        : CHART_RED_LIGHT;
+  const currentText = toFixedPt(currentValue);
+  const firstText = toFixedPt(firstValue);
+  const trackColor = color === CHART_GREEN
+    ? CHART_GREEN_LIGHT
+    : color === CHART_BLUE
+      ? CHART_BLUE_LIGHT
+      : CHART_RED_LIGHT;
+  const trackPath = `M ${arcStartX} ${arcY} A ${radius} ${radius} 0 0 1 ${arcEndX} ${arcY}`;
+  const fillPath = `M ${arcStartX} ${arcY} A ${radius} ${radius} 0 ${largeArc} 1 ${fillEndX} ${fillEndY}`;
 
   return (
     <View style={styles.evoBlock}>
@@ -605,79 +598,32 @@ function MiniChart({
         {title}
       </Text>
       <Svg width={W} height={H}>
-        <Rect
-          x={bubbleX - bubbleWidth / 2}
-          y={0}
-          width={bubbleWidth}
-          height={14}
-          rx={4}
-          fill={color}
-        />
+        <Path d={trackPath} fill="none" stroke={trackColor} strokeWidth={7} strokeLinecap="round" />
         {current ? (
-          <Text
-            x={bubbleX}
-            y={10}
-            textAnchor="middle"
-            style={{ fontSize: 7.2, fill: "#fff", fontWeight: 700 }}
-          >
-            {bubbleText}
-          </Text>
+          <Path d={fillPath} fill="none" stroke={color} strokeWidth={7} strokeLinecap="round" />
         ) : null}
-        {tickValues.map((tick, index) => {
-          const x = left + (chartW * index) / (tickCount - 1);
-          return (
-            <Text
-              key={`${title}-tick-${index}`}
-              x={x}
-              y={top - 3}
-              textAnchor="middle"
-              style={{ fontSize: 6, fill: "#888" }}
-            >
-              {toFixedPt(tick, 0)}
-            </Text>
-          );
-        })}
-        <Line
-          x1={left}
-          y1={axisY}
-          x2={left + chartW}
-          y2={axisY}
-          stroke={trackColor}
-          strokeWidth={7}
-          strokeLinecap="round"
-        />
-        <Line
-          x1={fillStartX}
-          y1={axisY}
-          x2={fillStartX + fillWidth}
-          y2={axisY}
-          stroke={color}
-          strokeWidth={7}
-          strokeLinecap="round"
-        />
-        <Line
-          x1={markerX}
-          y1={axisY - 9}
-          x2={markerX}
-          y2={axisY + 9}
-          stroke={color}
-          strokeWidth={2.2}
-        />
-        <Circle cx={markerX} cy={axisY} r={3.5} fill={color} />
         {first ? (
-          <Text x={left} y={dateY} textAnchor="start" style={{ fontSize: 6, fill: "#888" }}>
-            {first.data}
-          </Text>
+          <>
+            <Text x={10} y={37} textAnchor="start" style={{ fontSize: 7, fill: INK }}>
+              {firstText}
+            </Text>
+            <Text x={10} y={49} textAnchor="start" style={{ fontSize: 6, fill: "#888" }}>
+              {first.data}
+            </Text>
+          </>
         ) : null}
         {current ? (
-          <Text
-            x={left + chartW}
-            y={dateY}
-            textAnchor="end"
-            style={{ fontSize: 6, fill: "#888" }}
-          >
-            {current.data}
-          </Text>
+          <>
+            <Text x={centerX} y={39} textAnchor="middle" style={{ fontSize: 11, fill: INK, fontWeight: 700 }}>
+              {currentText}
+            </Text>
+            <Text x={W - 10} y={37} textAnchor="end" style={{ fontSize: 7, fill: INK }}>
+              {currentText}
+            </Text>
+            <Text x={W - 10} y={49} textAnchor="end" style={{ fontSize: 6, fill: "#888" }}>
+              {current.data}
+            </Text>
+          </>
         ) : null}
       </Svg>
     </View>
@@ -954,15 +900,22 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.ccColParamText}>Massa muscular</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
-              <View style={styles.ccColEval}><EvalPill /></View>
+              <View style={styles.ccColEval}>
+                <EvalPill
+                  cor={dados.classificacaoMassaMuscular?.cor}
+                  label={dados.classificacaoMassaMuscular?.label}
+                />
+              </View>
             </View>
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
                 <Text style={styles.ccColParamText}>Músculo esquelético</Text>
               </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.imme)} kg</Text>
-              <View style={styles.ccColEval}><EvalPill /></View>
+              <Text style={styles.ccColRes}>{toFixedPt(dados.imme, 2)} kg/m²</Text>
+              <View style={styles.ccColEval}>
+                <EvalPill cor={dados.classificacaoImme?.cor} label={dados.classificacaoImme?.label} />
+              </View>
             </View>
 
             <View style={styles.ccRow}>
@@ -979,8 +932,13 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               <View style={styles.ccColParam}>
                 <Text style={styles.ccColParamText}>Massa adiposa</Text>
               </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.imme, 2)} kg/m²</Text>
-              <View style={styles.ccColEval}><EvalPill /></View>
+              <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
+              <View style={styles.ccColEval}>
+                <EvalPill
+                  cor={(dados.classificacaoMassaAdiposa || dados.classificacaoImg)?.cor}
+                  label={(dados.classificacaoMassaAdiposa || dados.classificacaoImg)?.label}
+                />
+              </View>
             </View>
 
             <View style={styles.ccRow}>
