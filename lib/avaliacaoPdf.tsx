@@ -438,7 +438,7 @@ const styles = StyleSheet.create({
   },
 
   // Bloco meio (3 cards)
-  midRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 6, marginBottom: 8, alignItems: "flex-start" },
+  midRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 6, marginBottom: 8, alignItems: "stretch" },
   cardMid: {
     width: "32.4%",
     borderWidth: 1,
@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     backgroundColor: "rgba(255,255,255,0.92)",
   },
-  cardMidEvo: { marginTop: 0, alignSelf: "flex-start" },
+  cardMidEvo: { marginTop: 0, alignSelf: "stretch" },
   mHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   mHeadTxt: { fontSize: 7.2, color: MUTED, fontWeight: 700 },
   mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.4 },
@@ -574,10 +574,6 @@ function MiniChart({
     ? (currentValue - scaleMin) / Math.max(1, scaleMax - scaleMin)
     : 0;
   const progress = Math.max(0.08, Math.min(0.92, ratio));
-  const endAngle = Math.PI - Math.PI * progress;
-  const fillEndX = centerX + radius * Math.cos(endAngle);
-  const fillEndY = arcY - radius * Math.sin(endAngle);
-  const largeArc = progress > 0.5 ? 1 : 0;
   const first = valid[0];
   const firstValue = first ? Number(first.value) : currentValue;
   const currentText = toFixedPt(currentValue);
@@ -587,8 +583,17 @@ function MiniChart({
     : color === CHART_BLUE
       ? CHART_BLUE_LIGHT
       : CHART_RED_LIGHT;
-  const trackPath = `M ${arcStartX} ${arcY} A ${radius} ${radius} 0 0 1 ${arcEndX} ${arcY}`;
-  const fillPath = `M ${arcStartX} ${arcY} A ${radius} ${radius} 0 ${largeArc} 1 ${fillEndX} ${fillEndY}`;
+  const makeArcPath = (arcProgress: number) => {
+    const steps = Math.max(8, Math.ceil(arcProgress * 24));
+    return Array.from({ length: steps + 1 }, (_, index) => {
+      const angle = Math.PI - (Math.PI * arcProgress * index) / steps;
+      const x = centerX + radius * Math.cos(angle);
+      const y = arcY - radius * Math.sin(angle);
+      return `${index === 0 ? "M" : "L"} ${x} ${y}`;
+    }).join(" ");
+  };
+  const trackPath = makeArcPath(1);
+  const fillPath = makeArcPath(progress);
 
   return (
     <View style={styles.evoBlock}>
