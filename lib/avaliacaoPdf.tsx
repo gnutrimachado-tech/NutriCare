@@ -438,7 +438,7 @@ const styles = StyleSheet.create({
   },
 
   // Bloco meio (3 cards)
-  midRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 6, marginBottom: 8, alignItems: "stretch" },
+  midRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 6, marginBottom: 8, alignItems: "flex-start" },
   cardMid: {
     width: "32.4%",
     borderWidth: 1,
@@ -449,9 +449,7 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     backgroundColor: "rgba(255,255,255,0.92)",
   },
-  // O espaçamento é aplicado na linha inteira para os três cards manterem
-  // exatamente a mesma altura.
-  cardMidEvo: { marginTop: 0, alignSelf: "stretch" },
+  cardMidEvo: { marginTop: 0, alignSelf: "flex-start" },
   mHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   mHeadTxt: { fontSize: 7.2, color: MUTED, fontWeight: 700 },
   mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.4 },
@@ -459,7 +457,7 @@ const styles = StyleSheet.create({
   mColLabelText: { fontSize: 7.9, color: INK },
   mColRes: { width: "24%", fontSize: 7.9, color: INK, textAlign: "center" },
 
-  evoBlock: { marginBottom: 3 },
+  evoBlock: { marginBottom: 1 },
   evoHead: { flexDirection: "row", alignItems: "center", marginBottom: 2 },
 
   // Evolução comparativa
@@ -556,10 +554,10 @@ function MiniChart({
   color: string;
 }) {
   const W = 148;
-  const H = 64;
+  const H = 43;
   const centerX = W / 2;
-  const arcY = 43;
-  const radius = 31;
+  const arcY = 29;
+  const radius = 25;
   const arcStartX = centerX - radius;
   const arcEndX = centerX + radius;
 
@@ -604,23 +602,23 @@ function MiniChart({
         ) : null}
         {first ? (
           <>
-            <Text x={10} y={37} textAnchor="start" style={{ fontSize: 7, fill: INK }}>
+            <Text x={10} y={28} textAnchor="start" style={{ fontSize: 7, fill: INK }}>
               {firstText}
             </Text>
-            <Text x={10} y={49} textAnchor="start" style={{ fontSize: 6, fill: "#888" }}>
+            <Text x={10} y={40} textAnchor="start" style={{ fontSize: 6, fill: "#888" }}>
               {first.data}
             </Text>
           </>
         ) : null}
         {current ? (
           <>
-            <Text x={centerX} y={39} textAnchor="middle" style={{ fontSize: 11, fill: INK, fontWeight: 700 }}>
+            <Text x={centerX} y={33} textAnchor="middle" style={{ fontSize: 10, fill: INK, fontWeight: 700 }}>
               {currentText}
             </Text>
-            <Text x={W - 10} y={37} textAnchor="end" style={{ fontSize: 7, fill: INK }}>
+            <Text x={W - 10} y={28} textAnchor="end" style={{ fontSize: 7, fill: INK }}>
               {currentText}
             </Text>
-            <Text x={W - 10} y={49} textAnchor="end" style={{ fontSize: 6, fill: "#888" }}>
+            <Text x={W - 10} y={40} textAnchor="end" style={{ fontSize: 6, fill: "#888" }}>
               {current.data}
             </Text>
           </>
