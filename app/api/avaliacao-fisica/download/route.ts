@@ -126,6 +126,12 @@ export async function POST(req: NextRequest) {
         bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
       };
     });
+    const evolucaoAtual = {
+      data: fmtData(new Date()),
+      peso: resumo.pesoKg,
+      massaMuscular: resumo.massaMagraKg,
+      bfPct: resumo.bfPct,
+    };
     // Mesma lista com o id de cada avaliação — alimenta as caixas de seleção
     const evolucaoHistorico = rotativas.map((r) => {
       const snap = extrairSnapshotDeEvolucao(r);
@@ -211,6 +217,7 @@ export async function POST(req: NextRequest) {
         evolucaoSelecionadaIds: Array.isArray(body.evolucaoSelecionadaIds)
           ? body.evolucaoSelecionadaIds
           : [],
+        evolucaoAtual,
         dataAvaliacaoInicial,
       },
       nutricionista,
