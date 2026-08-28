@@ -206,6 +206,7 @@ export async function POST(req: NextRequest) {
         evolucaoSelecionadaIds: Array.isArray(body.evolucaoSelecionadaIds)
           ? body.evolucaoSelecionadaIds
           : [],
+        evolucaoAtual: atualPonto,
         dataAvaliacaoInicial,
       },
       nutricionista,
