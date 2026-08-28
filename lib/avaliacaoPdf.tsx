@@ -28,12 +28,7 @@ import {
   StyleSheet,
   Svg,
   Circle,
-  Defs,
-  Line,
-  LinearGradient,
-  Path,
   Rect,
-  Stop,
   Font,
 } from "@react-pdf/renderer";
 
@@ -89,9 +84,6 @@ type PdfProps = {
     img: number;
     ffmi: number;
     classificacaoAgua?: { cor: "verde" | "amarelo"; label: string };
-    classificacaoMassaMuscular?: { cor: "verde" | "amarelo"; label: string };
-    classificacaoImme?: { cor: "verde" | "amarelo"; label: string };
-    classificacaoMassaAdiposa?: { cor: "verde" | "amarelo"; label: string };
     classificacaoImg?: { cor: "verde" | "amarelo"; label: string };
     classificacaoFfmi?: { cor: "verde" | "amarelo"; label: string };
     classificacaoGordura?: { cor: "verde" | "amarelo"; label: string };
@@ -247,9 +239,6 @@ const RED_TXT = "#c62828";
 const CHART_GREEN = "#7a9b6d";
 const CHART_BLUE = "#4a7dbd";
 const CHART_RED = "#c62828";
-const CHART_GREEN_LIGHT = "#dfe9dc";
-const CHART_BLUE_LIGHT = "#d8e1ef";
-const CHART_RED_LIGHT = "#efbebe";
 
 // ---------- Estilos ----------
 const styles = StyleSheet.create({
@@ -367,9 +356,9 @@ const styles = StyleSheet.create({
   // alignItems: "flex-start" faz os DOIS cards subirem: cada card fecha a
   // altura no fim do proprio conteudo (base do card 1 logo abaixo da linha
   // "% de gordura"), em vez de esticar ate a base do card vizinho.
-  topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8, alignItems: "stretch" },
+  topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8, alignItems: "flex-start" },
   topLeft: { width: "56%" },
-  topRight: { width: "42%", alignItems: "center", alignSelf: "stretch" },
+  topRight: { width: "42%", alignItems: "center" },
 
   // Tabela composição corporal
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
@@ -407,10 +396,10 @@ const styles = StyleSheet.create({
   evoFigureSvg: { width: 72, height: 56, marginBottom: 5 },
   evoInfoTextWrap: { width: "100%" },
   evoInfoText: {
-    // Texto um pouco menor para criar respiro entre os cards.
-    fontSize: 8.7,
+    // Fonte aumentada conforme solicitado.
+    fontSize: 9.6,
     color: "#333",
-    lineHeight: 1.22,
+    lineHeight: 1.3,
     textAlign: "center",
     hyphens: "none",
   },
@@ -421,24 +410,21 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     paddingHorizontal: 9,
     marginTop: 6,
-    // Aproximadamente 2 mm extras para cada lado do retângulo.
-    marginHorizontal: -5.67,
     flexDirection: "row",
     alignItems: "center",
   },
   evoNoteIcon: { width: 14, height: 14, marginRight: 6 },
   evoNoteTextWrap: { flexGrow: 1, flexShrink: 1 },
   evoNoteText: {
-    // Texto centralizado e menor para evitar quebra de palavras.
-    fontSize: 7,
+    // Fonte aumentada conforme solicitado (cabe no retângulo verde maior).
+    fontSize: 7.6,
     color: "#2e4630",
-    lineHeight: 1.25,
-    textAlign: "center",
+    lineHeight: 1.3,
     hyphens: "none",
   },
 
   // Bloco meio (3 cards)
-  midRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 6, marginBottom: 8, alignItems: "stretch" },
+  midRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
   cardMid: {
     width: "32.4%",
     borderWidth: 1,
@@ -449,15 +435,16 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     backgroundColor: "rgba(255,255,255,0.92)",
   },
-  cardMidEvo: { marginTop: 0, alignSelf: "stretch" },
-  mHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 3 },
+  // Card EVOLUÇÃO sobe 6mm (~17pt) em relação aos cards vizinhos.
+  cardMidEvo: { marginTop: -17 },
+  mHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   mHeadTxt: { fontSize: 7.2, color: MUTED, fontWeight: 700 },
-  mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 2 },
+  mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.4 },
   mColLabel: { width: "52%", flexDirection: "row", alignItems: "center" },
   mColLabelText: { fontSize: 7.9, color: INK },
   mColRes: { width: "24%", fontSize: 7.9, color: INK, textAlign: "center" },
 
-  evoBlock: { marginBottom: 1 },
+  evoBlock: { marginBottom: 3 },
   evoHead: { flexDirection: "row", alignItems: "center", marginBottom: 2 },
 
   // Evolução comparativa
@@ -486,7 +473,6 @@ const styles = StyleSheet.create({
   footBig: { fontSize: 13, fontWeight: 800, color: INK },
   footDelta: { fontSize: 7.8, marginTop: 3 },
   footSince: { fontSize: 7, color: MUTED, marginTop: 2 },
-  footChart: { width: "100%", height: 38, marginTop: 4 },
 
   // ============ RODAPÉ FIXO (igual ao PDF de Orientações) ============
   // footerY (Orientações) = 56.  Nome fica em y=footerY+12 (baseline).
@@ -554,46 +540,37 @@ function MiniChart({
   color: string;
 }) {
   const W = 148;
-  const H = 43;
-  const centerX = W / 2;
-  const arcY = 29;
-  const radius = 25;
-  const arcStartX = centerX - radius;
-  const arcEndX = centerX + radius;
+  const H = 44;
+  const left = 20;
+  const right = 20;
+  const top = 10;
+  const chartH = 20;
+  const chartW = W - left - right;
 
   const valid = points.filter((p) => hasPositive(p.value));
   const vals = valid.map((p) => Number(p.value));
-  const minValue = vals.length ? Math.min(...vals) : 0;
-  const maxValue = vals.length ? Math.max(...vals) : 1;
-  const spread = Math.max(maxValue - minValue, Math.abs(maxValue) * 0.08, 1);
-  const scaleMin = Math.max(0, minValue - spread * 0.7);
-  const scaleMax = maxValue + spread * 0.7;
-  const current = valid[valid.length - 1];
-  const currentValue = current ? Number(current.value) : 0;
-  const ratio = currentValue
-    ? (currentValue - scaleMin) / Math.max(1, scaleMax - scaleMin)
-    : 0;
-  const progress = Math.max(0.08, Math.min(0.92, ratio));
-  const first = valid[0];
-  const firstValue = first ? Number(first.value) : currentValue;
-  const currentText = toFixedPt(currentValue);
-  const firstText = toFixedPt(firstValue);
-  const trackColor = color === CHART_GREEN
-    ? CHART_GREEN_LIGHT
-    : color === CHART_BLUE
-      ? CHART_BLUE_LIGHT
-      : CHART_RED_LIGHT;
-  const makeArcPath = (arcProgress: number) => {
-    const steps = Math.max(8, Math.ceil(arcProgress * 24));
-    return Array.from({ length: steps + 1 }, (_, index) => {
-      const angle = Math.PI - (Math.PI * arcProgress * index) / steps;
-      const x = centerX + radius * Math.cos(angle);
-      const y = arcY - radius * Math.sin(angle);
-      return `${index === 0 ? "M" : "L"} ${x} ${y}`;
-    }).join(" ");
-  };
-  const trackPath = makeArcPath(1);
-  const fillPath = makeArcPath(progress);
+  const minRaw = vals.length ? Math.min(...vals) : 0;
+  const maxRaw = vals.length ? Math.max(...vals) : 1;
+  const span = maxRaw - minRaw;
+  const pad = span > 0 ? span * 0.35 : Math.max(1, Math.abs(maxRaw) * 0.05);
+  const min = minRaw - pad;
+  const max = maxRaw + pad;
+
+  // ---- Gráfico de BARRAS (estilo do exemplo enviado) ----
+  // Cada ponto vira uma barra vertical, com o valor em cima da barra e a
+  // data embaixo. A largura/posição é calculada para até N barras.
+  const baseY = top + chartH;
+  const n = Math.max(1, points.length);
+  const slot = chartW / n;
+  const barW = Math.min(14, slot * 0.55);
+  const proj = points.map((p, i) => {
+    const x = left + slot * i + slot / 2; // centro da barra
+    const ratio = hasPositive(p.value)
+      ? (Number(p.value) - min) / Math.max(0.5, max - min)
+      : 0;
+    const barH = Math.max(2, ratio * chartH);
+    return { ...p, x, barH };
+  });
 
   return (
     <View style={styles.evoBlock}>
@@ -601,126 +578,45 @@ function MiniChart({
         {title}
       </Text>
       <Svg width={W} height={H}>
-        <Path d={trackPath} fill="none" stroke={trackColor} strokeWidth={7} strokeLinecap="round" />
-        {current ? (
-          <Path d={fillPath} fill="none" stroke={color} strokeWidth={7} strokeLinecap="round" />
-        ) : null}
-        {first ? (
-          <>
-            <Text x={10} y={28} textAnchor="start" style={{ fontSize: 7, fill: INK }}>
-              {firstText}
+        {proj.map((p, i) =>
+          hasPositive(p.value) ? (
+            <Rect
+              key={`b${i}`}
+              x={p.x - barW / 2}
+              y={baseY - p.barH}
+              width={barW}
+              height={p.barH}
+              rx={1.5}
+              fill={color}
+            />
+          ) : null
+        )}
+        {proj.map((p, i) =>
+          hasPositive(p.value) ? (
+            <Text
+              key={`v${i}`}
+              x={p.x}
+              y={baseY - p.barH - 3}
+              textAnchor="middle"
+              style={{ fontSize: 6.4, fill: "#555", fontWeight: 700 }}
+            >
+              {toFixedPt(Number(p.value))}
             </Text>
-            <Text x={10} y={40} textAnchor="start" style={{ fontSize: 6, fill: "#888" }}>
-              {first.data}
-            </Text>
-          </>
-        ) : null}
-        {current ? (
-          <>
-            <Text x={centerX} y={33} textAnchor="middle" style={{ fontSize: 10, fill: INK, fontWeight: 700 }}>
-              {currentText}
-            </Text>
-            <Text x={W - 10} y={28} textAnchor="end" style={{ fontSize: 7, fill: INK }}>
-              {currentText}
-            </Text>
-            <Text x={W - 10} y={40} textAnchor="end" style={{ fontSize: 6, fill: "#888" }}>
-              {current.data}
-            </Text>
-          </>
-        ) : null}
+          ) : null
+        )}
+        {proj.map((p, i) => (
+          <Text
+            key={`d${i}`}
+            x={p.x}
+            y={H - 3}
+            textAnchor="middle"
+            style={{ fontSize: 6, fill: "#999" }}
+          >
+            {p.data}
+          </Text>
+        ))}
       </Svg>
     </View>
-  );
-}
-
-function EvolutionSparkline({
-  points,
-  color,
-}: {
-  points: Array<{ data: string; value: number | null | undefined }>;
-  color: string;
-}) {
-  const W = 116;
-  const H = 38;
-  const left = 8;
-  const right = 8;
-  const top = 6;
-  const bottom = 11;
-  const valid = points.filter((p) => hasPositive(p.value));
-  if (!valid.length) return null;
-
-  const values = valid.map((p) => Number(p.value));
-  const minValue = Math.min(...values);
-  const maxValue = Math.max(...values);
-  const spread = Math.max(maxValue - minValue, Math.abs(maxValue) * 0.08, 1);
-  const scaleMin = minValue - spread * 0.25;
-  const scaleMax = maxValue + spread * 0.25;
-  const plotW = W - left - right;
-  const plotH = H - top - bottom;
-  const plotted = valid.map((p, i) => {
-    const x = valid.length === 1 ? left + plotW / 2 : left + (plotW * i) / (valid.length - 1);
-    const y =
-      top +
-      ((scaleMax - Number(p.value)) / Math.max(1, scaleMax - scaleMin)) * plotH;
-    return { ...p, x, y };
-  });
-  const lineD = plotted
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
-    .join(" ");
-  const first = plotted[0];
-  const last = plotted[plotted.length - 1];
-  const baselineY = top + plotH;
-  const areaD = `${lineD} L ${last.x} ${baselineY} L ${first.x} ${baselineY} Z`;
-  const gradientId = `evolution-gradient-${color.replace("#", "")}`;
-
-  return (
-    <Svg width={W} height={H} style={styles.footChart}>
-      <Defs>
-        <LinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0%" stopColor={color} stopOpacity={0.28} />
-          <Stop offset="100%" stopColor={color} stopOpacity={0.02} />
-        </LinearGradient>
-      </Defs>
-      <Line
-        x1={left}
-        y1={baselineY}
-        x2={W - right}
-        y2={baselineY}
-        stroke="#e1e1e1"
-        strokeWidth={0.7}
-      />
-      <Path d={areaD} fill={`url(#${gradientId})`} stroke="none" />
-      <Path d={lineD} fill="none" stroke={color} strokeWidth={1.2} />
-      {plotted.map((p, i) => (
-        <Circle
-          key={`point-${i}`}
-          cx={p.x}
-          cy={p.y}
-          r={2.1}
-          fill="#fff"
-          stroke={color}
-          strokeWidth={1.1}
-        />
-      ))}
-      <Text
-        x={first.x}
-        y={H - 1}
-        textAnchor="middle"
-        style={{ fontSize: 5.5, fill: "#888" }}
-      >
-        {first.data}
-      </Text>
-      {last !== first ? (
-        <Text
-          x={last.x}
-          y={H - 1}
-          textAnchor="middle"
-          style={{ fontSize: 5.5, fill: "#888" }}
-        >
-          {last.data}
-        </Text>
-      ) : null}
-    </Svg>
   );
 }
 
@@ -780,9 +676,7 @@ function EvolucaoInfoCard() {
         <GraficoIconeSvg />
         <View style={styles.evoNoteTextWrap}>
           <Text style={styles.evoNoteText}>
-            Na sua próxima avaliação, este espaço{"\n"}
-            exibirá um gráfico com sua evolução{"\n"}
-            de peso, massa muscular e % de gordura
+            Na sua próxima avaliação, este espaço exibirá um gráfico com a sua evolução de peso, massa muscular e % de gordura
           </Text>
         </View>
       </View>
@@ -796,17 +690,28 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   const fundo = fileToDataUri("/layouts/fundo-layout.jpg") || fileToDataUri("/fundo-layout.jpg");
   const previous = dados.previousSummary || null;
 
+  // ============ COMPARAÇÃO (caixas 1ª/2ª/3ª da aba Antropometria) ============
+  // A comparação usa SOMENTE as avaliações selecionadas, que já chegam em
+  // ordem cronológica. O progresso é calculado da PRIMEIRA até a ÚLTIMA
+  // selecionada (1ª→2ª, 1ª→3ª ou 1ª→3ª passando pela 2ª, conforme a seleção)
+  // e o gráfico mostra apenas as barras da primeira e da última data
+  // selecionadas — sem anexar a avaliação atual novamente (ela já é a 3ª).
   const historicoSel = (dados.evolucaoHistorico || []).filter((h) =>
     (dados.evolucaoSelecionadaIds || []).includes(h.id)
   );
+  const compAtiva = Boolean(dados.compareResults) && historicoSel.length > 0;
+  const compPrimeira = compAtiva ? historicoSel[0] : null;
+  const compUltima = compAtiva ? historicoSel[historicoSel.length - 1] : null;
+
   let evolucao: EvolucaoPonto[];
-  if (dados.compareResults && historicoSel.length > 0) {
-    const atual = (dados.evolucao || []).slice(-1);
-    evolucao = [...historicoSel.slice(-2), ...atual];
+  if (compAtiva && compPrimeira && compUltima) {
+    // Apenas a PRIMEIRA e a ÚLTIMA data selecionadas (datas exatas da seleção).
+    evolucao =
+      compPrimeira.id !== compUltima.id ? [compPrimeira, compUltima] : [compPrimeira];
   } else {
     evolucao = (dados.evolucao || []).slice(-1);
   }
-  const showEvoCard = dados.compareResults && evolucao.length > 1;
+  const showEvoCard = compAtiva && evolucao.length > 1;
   const pesoPontos = evolucao.map((p) => ({ data: p.data, value: p.peso }));
   const musculoPontos = evolucao.map((p) => ({ data: p.data, value: p.massaMuscular }));
   const bfPontos = evolucao.map((p) => ({ data: p.data, value: p.bfPct }));
@@ -825,13 +730,43 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   }));
   const valorOu = (v: any) => (hasPositive(v) ? toFixedPt(v) : "—");
 
-  const base = previous;
-  const dPeso = base?.pesoKg != null ? dados.pesoKg - Number(base.pesoKg) : null;
-  const dMM = base?.massaMuscularKg != null ? dados.massaMagraKg - Number(base.massaMuscularKg) : null;
-  const dBF = base?.bodyFatPct != null ? dados.bfPct - Number(base.bodyFatPct) : null;
-  const desde = dados.dataAvaliacaoInicial
-    ? `desde ${new Date(dados.dataAvaliacaoInicial).toLocaleDateString("pt-BR")}`
-    : "";
+  // ============ EVOLUÇÃO COMPARATIVA ============
+  // Com comparação: valor exibido = ÚLTIMA avaliação selecionada, delta =
+  // última − primeira selecionada e "desde <data da primeira selecionada>".
+  // Sem comparação: comportamento original (atual vs. 1ª avaliação).
+  const cmpPeso = compUltima?.peso != null ? Number(compUltima.peso) : dados.pesoKg;
+  const cmpMM = compUltima?.massaMuscular != null ? Number(compUltima.massaMuscular) : dados.massaMagraKg;
+  const cmpBF = compUltima?.bfPct != null ? Number(compUltima.bfPct) : dados.bfPct;
+  const mesmoPonto =
+    compPrimeira != null && compUltima != null && compPrimeira.id === compUltima.id;
+  const dPeso = compAtiva
+    ? !mesmoPonto && compPrimeira?.peso != null
+      ? cmpPeso - Number(compPrimeira.peso)
+      : null
+    : previous?.pesoKg != null
+      ? dados.pesoKg - Number(previous.pesoKg)
+      : null;
+  const dMM = compAtiva
+    ? !mesmoPonto && compPrimeira?.massaMuscular != null
+      ? cmpMM - Number(compPrimeira.massaMuscular)
+      : null
+    : previous?.massaMuscularKg != null
+      ? dados.massaMagraKg - Number(previous.massaMuscularKg)
+      : null;
+  const dBF = compAtiva
+    ? !mesmoPonto && compPrimeira?.bfPct != null
+      ? cmpBF - Number(compPrimeira.bfPct)
+      : null
+    : previous?.bodyFatPct != null
+      ? dados.bfPct - Number(previous.bodyFatPct)
+      : null;
+  const desde = compAtiva
+    ? compPrimeira?.data
+      ? `desde ${compPrimeira.data}`
+      : ""
+    : dados.dataAvaliacaoInicial
+      ? `desde ${new Date(dados.dataAvaliacaoInicial).toLocaleDateString("pt-BR")}`
+      : "";
 
   // Cálculo da largura do traço da assinatura (mesma lógica do PDF de Orientações:
   // linha acompanha exatamente o comprimento do texto "Nutricionista: {nome}").
@@ -903,22 +838,15 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.ccColParamText}>Massa muscular</Text>
               </View>
               <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
-              <View style={styles.ccColEval}>
-                <EvalPill
-                  cor={dados.classificacaoMassaMuscular?.cor}
-                  label={dados.classificacaoMassaMuscular?.label}
-                />
-              </View>
+              <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
             <View style={styles.ccRow}>
               <View style={styles.ccColParam}>
                 <Text style={styles.ccColParamText}>Músculo esquelético</Text>
               </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.imme, 2)} kg/m²</Text>
-              <View style={styles.ccColEval}>
-                <EvalPill cor={dados.classificacaoImme?.cor} label={dados.classificacaoImme?.label} />
-              </View>
+              <Text style={styles.ccColRes}>{toFixedPt(dados.imme)} kg</Text>
+              <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
             <View style={styles.ccRow}>
@@ -935,13 +863,8 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               <View style={styles.ccColParam}>
                 <Text style={styles.ccColParamText}>Massa adiposa</Text>
               </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
-              <View style={styles.ccColEval}>
-                <EvalPill
-                  cor={(dados.classificacaoMassaAdiposa || dados.classificacaoImg)?.cor}
-                  label={(dados.classificacaoMassaAdiposa || dados.classificacaoImg)?.label}
-                />
-              </View>
+              <Text style={styles.ccColRes}>{toFixedPt(dados.imme, 2)} kg/m²</Text>
+              <View style={styles.ccColEval}><EvalPill /></View>
             </View>
 
             <View style={styles.ccRow}>
@@ -1037,7 +960,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
           <View style={styles.footRow}>
             <View style={styles.footBox}>
               <Text style={styles.footLabel}>Peso</Text>
-              <Text style={styles.footBig}>{toFixedPt(dados.pesoKg)} kg</Text>
+              <Text style={styles.footBig}>{toFixedPt(cmpPeso)} kg</Text>
               {dPeso !== null ? (
                 <Text style={[styles.footDelta, { color: dPeso <= 0 ? GREEN_TXT : RED_TXT }]}>
                   {dPeso > 0 ? "+" : ""}
@@ -1047,12 +970,11 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.footDelta}>—</Text>
               )}
               {desde ? <Text style={styles.footSince}>{desde}</Text> : null}
-              {showEvoCard ? <EvolutionSparkline points={pesoPontos} color={CHART_GREEN} /> : null}
             </View>
 
             <View style={styles.footBox}>
               <Text style={[styles.footLabel, { color: CHART_BLUE }]}>Massa Muscular</Text>
-              <Text style={styles.footBig}>{toFixedPt(dados.massaMagraKg)} kg</Text>
+              <Text style={styles.footBig}>{toFixedPt(cmpMM)} kg</Text>
               {dMM !== null ? (
                 <Text style={[styles.footDelta, { color: dMM >= 0 ? GREEN_TXT : RED_TXT }]}>
                   {dMM > 0 ? "+" : ""}
@@ -1062,12 +984,11 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.footDelta}>—</Text>
               )}
               {desde ? <Text style={styles.footSince}>{desde}</Text> : null}
-              {showEvoCard ? <EvolutionSparkline points={musculoPontos} color={CHART_BLUE} /> : null}
             </View>
 
             <View style={styles.footBox}>
               <Text style={[styles.footLabel, { color: CHART_RED }]}>% de Gordura</Text>
-              <Text style={styles.footBig}>{toFixedPt(dados.bfPct)} %</Text>
+              <Text style={styles.footBig}>{toFixedPt(cmpBF)} %</Text>
               {dBF !== null ? (
                 <Text style={[styles.footDelta, { color: dBF <= 0 ? GREEN_TXT : RED_TXT }]}>
                   {dBF > 0 ? "+" : ""}
@@ -1077,7 +998,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <Text style={styles.footDelta}>—</Text>
               )}
               {desde ? <Text style={styles.footSince}>{desde}</Text> : null}
-              {showEvoCard ? <EvolutionSparkline points={bfPontos} color={CHART_RED} /> : null}
             </View>
           </View>
         </View>
