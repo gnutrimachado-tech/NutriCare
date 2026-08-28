@@ -107,6 +107,9 @@ type PdfProps = {
     // Histórico (1ª/2ª/3ª) + seleção feita na aba Antropometria:
     evolucaoHistorico?: EvolucaoHistoricoPonto[];
     evolucaoSelecionadaIds?: string[];
+    // Resultado que está sendo gerado agora. Ele sempre aparece como o último
+    // ponto do card Evolução, mesmo quando a comparação usa avaliações antigas.
+    evolucaoAtual?: EvolucaoPonto | null;
     dataAvaliacaoInicial?: string | null;
   };
   nutricionista: {
@@ -798,26 +801,74 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   const fundo = fileToDataUri("/layouts/fundo-layout.jpg") || fileToDataUri("/fundo-layout.jpg");
   const previous = dados.previousSummary || null;
 
-  // Quando há avaliações marcadas, a evolução deve ser formada somente por
-  // elas. Antes, o ponto atual era acrescentado automaticamente e, por isso,
-  // selecionar 1ª + 2ª acabava exibindo também uma terceira data que não foi
-  // selecionada. A ordem recebida do backend é cronológica.
-  const historicoSel = (dados.evolucaoHistorico || []).filter((h) =>
-    (dados.evolucaoSelecionadaIds || []).includes(h.id)
+  // As avaliações antigas continuam controlando quais pontos históricos
+  // entram no gráfico. A 1ª avaliação é a base automática da comparação e o
+  // resultado atual é sempre acrescentado ao final do card Evolução.
+  const historico = dados.evolucaoHistorico || [];
+  const idsSelecionados = new Set(dados.evolucaoSelecionadaIds || []);
+  const historicoSel = historico.filter((h) => idsSelecionados.has(h.id));
+  const primeiraHistorica = historico[0] || null;
+  const atual: EvolucaoPonto | null =
+    dados.evolucaoAtual ||
+    dados.evolucao?.[dados.evolucao.length - 1] ||
+    {
+      data: dados.data,
+      peso: dados.pesoKg,
+      massaMuscular: dados.massaMagraKg,
+      bfPct: dados.bfPct,
+    };
+  const temComparacaoSelecionada = Boolean(dados.compareResults && historicoSel.length > 0);
+
+  // Sem seleção explícita, mostra 1ª avaliação + atual. Com seleção, mantém
+  // somente os pontos marcados, mas recoloca a 1ª como base quando necessário.
+  const historicoParaGrafico = temComparacaoSelecionada
+    ? [
+        ...(primeiraHistorica && !historicoSel.some((h) => h.id === primeiraHistorica.id)
+          ? [primeiraHistorica]
+          : []),
+        ...historicoSel,
+      ]
+    : primeiraHistorica
+      ? [primeiraHistorica]
+      : [];
+  const evolucao: EvolucaoPonto[] = [
+    ...historicoParaGrafico.map(({ data, peso, massaMuscular, bfPct }) => ({
+      data,
+      peso,
+      massaMuscular,
+      bfPct,
+    })),
+    ...(atual ? [atual] : []),
+  ];
+  const showEvoCard = Boolean(
+    atual &&
+      [atual.peso, atual.massaMuscular, atual.bfPct].some((value) => hasPositive(value))
   );
-  const temComparacaoSelecionada = dados.compareResults && historicoSel.length > 0;
-  const evolucao: EvolucaoPonto[] = temComparacaoSelecionada
-    ? historicoSel.map(({ data, peso, massaMuscular, bfPct }) => ({
-        data,
-        peso,
-        massaMuscular,
-        bfPct,
-      }))
-    : (dados.evolucao || []).slice(-1);
-  const showEvoCard = dados.compareResults && evolucao.length > 1;
   const pesoPontos = evolucao.map((p) => ({ data: p.data, value: p.peso }));
   const musculoPontos = evolucao.map((p) => ({ data: p.data, value: p.massaMuscular }));
   const bfPontos = evolucao.map((p) => ({ data: p.data, value: p.bfPct }));
+  const temAvaliaçãoPosteriorSelecionada = historicoSel.some(
+    (h) => h.id !== primeiraHistorica?.id
+  );
+  const pontosComparacao = [
+    ...(temAvaliaçãoPosteriorSelecionada
+      ? historicoParaGrafico
+      : primeiraHistorica
+        ? [primeiraHistorica]
+        : []),
+    ...(temAvaliaçãoPosteriorSelecionada || !atual ? [] : [atual]),
+  ].map(({ data, peso, massaMuscular, bfPct }) => ({
+    data,
+    peso,
+    massaMuscular,
+    bfPct,
+  }));
+  const pesoComparacaoPontos = pontosComparacao.map((p) => ({ data: p.data, value: p.peso }));
+  const musculoComparacaoPontos = pontosComparacao.map((p) => ({
+    data: p.data,
+    value: p.massaMuscular,
+  }));
+  const bfComparacaoPontos = pontosComparacao.map((p) => ({ data: p.data, value: p.bfPct }));
 
   const circRows = CIRC_ORDER.map((k) => ({
     key: k,
@@ -833,35 +884,42 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   }));
   const valorOu = (v: any) => (hasPositive(v) ? toFixedPt(v) : "—");
 
-  // Para uma seleção, o progresso é calculado entre a primeira e a última
-  // avaliação marcadas. Com 1ª + 2ª + 3ª, o gráfico mantém os três pontos,
-  // mas a variação numérica vai da 1ª até a 3ª. Sem seleção, preserva-se a
-  // comparação anterior com a avaliação atual.
-  const primeiraSelecionada = temComparacaoSelecionada ? historicoSel[0] : null;
-  const ultimaSelecionada = temComparacaoSelecionada
+  // Os cards inferiores sempre partem da 1ª avaliação. Se uma avaliação
+  // posterior foi marcada, a variação termina nela (1ª→2ª, 1ª→3ª etc.);
+  // caso contrário, termina no resultado atual.
+  const primeiraComparacao = primeiraHistorica || null;
+  const ultimaComparacao = temAvaliaçãoPosteriorSelecionada
     ? historicoSel[historicoSel.length - 1]
-    : null;
-  const base = primeiraSelecionada
+    : atual;
+  const base = primeiraComparacao
     ? {
-        pesoKg: primeiraSelecionada.peso,
-        massaMuscularKg: primeiraSelecionada.massaMuscular,
-        bodyFatPct: primeiraSelecionada.bfPct,
+        pesoKg: primeiraComparacao.peso,
+        massaMuscularKg: primeiraComparacao.massaMuscular,
+        bodyFatPct: primeiraComparacao.bfPct,
       }
     : previous;
-  const pesoComparado = ultimaSelecionada?.peso ?? dados.pesoKg;
-  const massaMuscularComparada = ultimaSelecionada?.massaMuscular ?? dados.massaMagraKg;
-  const gorduraComparada = ultimaSelecionada?.bfPct ?? dados.bfPct;
+  const pesoComparado = ultimaComparacao?.peso ?? atual?.peso ?? dados.pesoKg;
+  const massaMuscularComparada =
+    ultimaComparacao?.massaMuscular ?? atual?.massaMuscular ?? dados.massaMagraKg;
+  const gorduraComparada = ultimaComparacao?.bfPct ?? atual?.bfPct ?? dados.bfPct;
   const dPeso = base?.pesoKg != null ? pesoComparado - Number(base.pesoKg) : null;
   const dMM =
     base?.massaMuscularKg != null
       ? massaMuscularComparada - Number(base.massaMuscularKg)
       : null;
   const dBF = base?.bodyFatPct != null ? gorduraComparada - Number(base.bodyFatPct) : null;
-  const desde = primeiraSelecionada?.data
-    ? `desde ${primeiraSelecionada.data}`
+  const indiceUltimaComparacao = ultimaComparacao && "id" in ultimaComparacao
+    ? historico.findIndex((h) => h.id === ultimaComparacao.id)
+    : -1;
+  const ordinal = (index: number) =>
+    index === 0 ? "1ª avaliação" : index === 1 ? "2ª avaliação" : `${index + 1}ª avaliação`;
+  const periodoComparacao = primeiraComparacao
+    ? `Período: 1ª avaliação → ${
+        indiceUltimaComparacao >= 0 ? ordinal(indiceUltimaComparacao) : "atual"
+      }`
     : dados.dataAvaliacaoInicial
-    ? `desde ${new Date(dados.dataAvaliacaoInicial).toLocaleDateString("pt-BR")}`
-    : "";
+      ? `Desde ${new Date(dados.dataAvaliacaoInicial).toLocaleDateString("pt-BR")}`
+      : "";
 
   // Cálculo da largura do traço da assinatura (mesma lógica do PDF de Orientações:
   // linha acompanha exatamente o comprimento do texto "Nutricionista: {nome}").
@@ -1076,8 +1134,10 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               ) : (
                 <Text style={styles.footDelta}>—</Text>
               )}
-              {desde ? <Text style={styles.footSince}>{desde}</Text> : null}
-              {showEvoCard ? <EvolutionSparkline points={pesoPontos} color={CHART_GREEN} /> : null}
+              {periodoComparacao ? <Text style={styles.footSince}>{periodoComparacao}</Text> : null}
+              {showEvoCard ? (
+                <EvolutionSparkline points={pesoComparacaoPontos} color={CHART_GREEN} />
+              ) : null}
             </View>
 
             <View style={styles.footBox}>
@@ -1091,8 +1151,10 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               ) : (
                 <Text style={styles.footDelta}>—</Text>
               )}
-              {desde ? <Text style={styles.footSince}>{desde}</Text> : null}
-              {showEvoCard ? <EvolutionSparkline points={musculoPontos} color={CHART_BLUE} /> : null}
+              {periodoComparacao ? <Text style={styles.footSince}>{periodoComparacao}</Text> : null}
+              {showEvoCard ? (
+                <EvolutionSparkline points={musculoComparacaoPontos} color={CHART_BLUE} />
+              ) : null}
             </View>
 
             <View style={styles.footBox}>
@@ -1106,8 +1168,10 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               ) : (
                 <Text style={styles.footDelta}>—</Text>
               )}
-              {desde ? <Text style={styles.footSince}>{desde}</Text> : null}
-              {showEvoCard ? <EvolutionSparkline points={bfPontos} color={CHART_RED} /> : null}
+              {periodoComparacao ? <Text style={styles.footSince}>{periodoComparacao}</Text> : null}
+              {showEvoCard ? (
+                <EvolutionSparkline points={bfComparacaoPontos} color={CHART_RED} />
+              ) : null}
             </View>
           </View>
         </View>
