@@ -562,20 +562,22 @@ function MiniChart({
   const arcEndX = centerX + radius;
 
   const valid = points.filter((p) => hasPositive(p.value));
-  const vals = valid.map((p) => Number(p.value));
-  const minValue = vals.length ? Math.min(...vals) : 0;
-  const maxValue = vals.length ? Math.max(...vals) : 1;
-  const spread = Math.max(maxValue - minValue, Math.abs(maxValue) * 0.08, 1);
-  const scaleMin = Math.max(0, minValue - spread * 0.7);
-  const scaleMax = maxValue + spread * 0.7;
   const current = valid[valid.length - 1];
   const currentValue = current ? Number(current.value) : 0;
-  const ratio = currentValue
-    ? (currentValue - scaleMin) / Math.max(1, scaleMax - scaleMin)
-    : 0;
-  const progress = Math.max(0.08, Math.min(0.92, ratio));
   const first = valid[0];
   const firstValue = first ? Number(first.value) : currentValue;
+  // O preenchimento representa a variação real do parâmetro:
+  // - sem alteração: centro do arco;
+  // - aumento: arco mais preenchido;
+  // - redução: arco menos preenchido.
+  // A janela de 12% evita que diferenças pequenas fiquem invisíveis, sem
+  // alterar o desenho atual do gráfico.
+  const variationWindow = Math.max(Math.abs(firstValue) * 0.12, 1);
+  const variation =
+    first && current
+      ? (currentValue - firstValue) / (variationWindow * 2)
+      : 0;
+  const progress = Math.max(0.08, Math.min(0.92, 0.5 + variation));
   const currentText = toFixedPt(currentValue);
   const firstText = toFixedPt(firstValue);
   const trackColor = color === CHART_GREEN
