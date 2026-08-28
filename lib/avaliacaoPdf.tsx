@@ -13,8 +13,8 @@
 //   4) Título "AVALIAÇÃO FÍSICA" na mesma altura e mesmo tamanho do PDF de
 //      Orientações (Helvetica-Bold 20, TITLE_Y = HEADER_LINE_Y - 28.35).
 //
-// Nada dos cards internos (Composição Corporal, Circunferências, Dobras,
-// Evolução e Evolução Comparativa) foi alterado.
+// A estrutura visual dos cards internos (Composição Corporal,
+// Circunferências, Dobras, Evolução e Evolução Comparativa) é preservada.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -396,10 +396,9 @@ const styles = StyleSheet.create({
   pillRed: { backgroundColor: RED_BG, color: RED_TXT },
   pillNeutral: { color: MUTED, fontSize: 8 },
 
-  // Espaço reservado para imagens do paciente
-  // Altura 130: faz a BASE do card 2 subir e alinhar com a base do card 1
-  // (logo abaixo da linha "% de gordura", posicao do traco vermelho do mock).
-  bodyPlaceholder: { width: 132, height: 130, marginTop: 4 },
+  // Imagem de biotipo no card superior direito. A altura permanece a mesma
+  // área reservada anteriormente, sem alterar o tamanho do card.
+  bodyImage: { width: 132, height: 130, marginTop: 4, objectFit: "contain" },
 
   // Evolução info — silhueta CENTRALIZADA acima e texto CENTRALIZADO abaixo
   // (layout da imagem da direita indicada pelas setas vermelhas).
@@ -799,6 +798,7 @@ function EvolucaoInfoCard() {
 export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProps) {
   const logo = fileToDataUri("/logo-nutricare.png");
   const fundo = fileToDataUri("/layouts/fundo-layout.jpg") || fileToDataUri("/fundo-layout.jpg");
+  const imagemFrente = fileToDataUri(dados.imagemFrenteUrl);
   const previous = dados.previousSummary || null;
 
   // As avaliações antigas continuam controlando quais pontos históricos
@@ -908,18 +908,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
       ? massaMuscularComparada - Number(base.massaMuscularKg)
       : null;
   const dBF = base?.bodyFatPct != null ? gorduraComparada - Number(base.bodyFatPct) : null;
-  const indiceUltimaComparacao = ultimaComparacao && "id" in ultimaComparacao
-    ? historico.findIndex((h) => h.id === ultimaComparacao.id)
-    : -1;
-  const ordinal = (index: number) =>
-    index === 0 ? "1ª avaliação" : index === 1 ? "2ª avaliação" : `${index + 1}ª avaliação`;
-  const periodoComparacao = primeiraComparacao
-    ? `Período: 1ª avaliação → ${
-        indiceUltimaComparacao >= 0 ? ordinal(indiceUltimaComparacao) : "atual"
-      }`
-    : dados.dataAvaliacaoInicial
-      ? `Desde ${new Date(dados.dataAvaliacaoInicial).toLocaleDateString("pt-BR")}`
-      : "";
 
   // Cálculo da largura do traço da assinatura (mesma lógica do PDF de Orientações:
   // linha acompanha exatamente o comprimento do texto "Nutricionista: {nome}").
@@ -1061,9 +1049,9 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             </View>
           </View>
 
-          {/* Card direito — espaço reservado para imagens do paciente */}
+          {/* Card direito — imagem frontal do biotipo calculado */}
           <View style={[styles.card, styles.topRight]}>
-            <View style={styles.bodyPlaceholder} />
+            {imagemFrente ? <Image src={imagemFrente} style={styles.bodyImage} /> : null}
           </View>
         </View>
 
@@ -1134,7 +1122,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               ) : (
                 <Text style={styles.footDelta}>—</Text>
               )}
-              {periodoComparacao ? <Text style={styles.footSince}>{periodoComparacao}</Text> : null}
               {showEvoCard ? (
                 <EvolutionSparkline points={pesoComparacaoPontos} color={CHART_GREEN} />
               ) : null}
@@ -1151,7 +1138,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               ) : (
                 <Text style={styles.footDelta}>—</Text>
               )}
-              {periodoComparacao ? <Text style={styles.footSince}>{periodoComparacao}</Text> : null}
               {showEvoCard ? (
                 <EvolutionSparkline points={musculoComparacaoPontos} color={CHART_BLUE} />
               ) : null}
@@ -1168,7 +1154,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               ) : (
                 <Text style={styles.footDelta}>—</Text>
               )}
-              {periodoComparacao ? <Text style={styles.footSince}>{periodoComparacao}</Text> : null}
               {showEvoCard ? (
                 <EvolutionSparkline points={bfComparacaoPontos} color={CHART_RED} />
               ) : null}
