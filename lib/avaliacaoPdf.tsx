@@ -796,16 +796,22 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   const fundo = fileToDataUri("/layouts/fundo-layout.jpg") || fileToDataUri("/fundo-layout.jpg");
   const previous = dados.previousSummary || null;
 
+  // Quando há avaliações marcadas, a evolução deve ser formada somente por
+  // elas. Antes, o ponto atual era acrescentado automaticamente e, por isso,
+  // selecionar 1ª + 2ª acabava exibindo também uma terceira data que não foi
+  // selecionada. A ordem recebida do backend é cronológica.
   const historicoSel = (dados.evolucaoHistorico || []).filter((h) =>
     (dados.evolucaoSelecionadaIds || []).includes(h.id)
   );
-  let evolucao: EvolucaoPonto[];
-  if (dados.compareResults && historicoSel.length > 0) {
-    const atual = (dados.evolucao || []).slice(-1);
-    evolucao = [...historicoSel.slice(-2), ...atual];
-  } else {
-    evolucao = (dados.evolucao || []).slice(-1);
-  }
+  const temComparacaoSelecionada = dados.compareResults && historicoSel.length > 0;
+  const evolucao: EvolucaoPonto[] = temComparacaoSelecionada
+    ? historicoSel.map(({ data, peso, massaMuscular, bfPct }) => ({
+        data,
+        peso,
+        massaMuscular,
+        bfPct,
+      }))
+    : (dados.evolucao || []).slice(-1);
   const showEvoCard = dados.compareResults && evolucao.length > 1;
   const pesoPontos = evolucao.map((p) => ({ data: p.data, value: p.peso }));
   const musculoPontos = evolucao.map((p) => ({ data: p.data, value: p.massaMuscular }));
@@ -825,11 +831,33 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   }));
   const valorOu = (v: any) => (hasPositive(v) ? toFixedPt(v) : "—");
 
-  const base = previous;
-  const dPeso = base?.pesoKg != null ? dados.pesoKg - Number(base.pesoKg) : null;
-  const dMM = base?.massaMuscularKg != null ? dados.massaMagraKg - Number(base.massaMuscularKg) : null;
-  const dBF = base?.bodyFatPct != null ? dados.bfPct - Number(base.bodyFatPct) : null;
-  const desde = dados.dataAvaliacaoInicial
+  // Para uma seleção, o progresso é calculado entre a primeira e a última
+  // avaliação marcadas. Com 1ª + 2ª + 3ª, o gráfico mantém os três pontos,
+  // mas a variação numérica vai da 1ª até a 3ª. Sem seleção, preserva-se a
+  // comparação anterior com a avaliação atual.
+  const primeiraSelecionada = temComparacaoSelecionada ? historicoSel[0] : null;
+  const ultimaSelecionada = temComparacaoSelecionada
+    ? historicoSel[historicoSel.length - 1]
+    : null;
+  const base = primeiraSelecionada
+    ? {
+        pesoKg: primeiraSelecionada.peso,
+        massaMuscularKg: primeiraSelecionada.massaMuscular,
+        bodyFatPct: primeiraSelecionada.bfPct,
+      }
+    : previous;
+  const pesoComparado = ultimaSelecionada?.peso ?? dados.pesoKg;
+  const massaMuscularComparada = ultimaSelecionada?.massaMuscular ?? dados.massaMagraKg;
+  const gorduraComparada = ultimaSelecionada?.bfPct ?? dados.bfPct;
+  const dPeso = base?.pesoKg != null ? pesoComparado - Number(base.pesoKg) : null;
+  const dMM =
+    base?.massaMuscularKg != null
+      ? massaMuscularComparada - Number(base.massaMuscularKg)
+      : null;
+  const dBF = base?.bodyFatPct != null ? gorduraComparada - Number(base.bodyFatPct) : null;
+  const desde = primeiraSelecionada?.data
+    ? `desde ${primeiraSelecionada.data}`
+    : dados.dataAvaliacaoInicial
     ? `desde ${new Date(dados.dataAvaliacaoInicial).toLocaleDateString("pt-BR")}`
     : "";
 
@@ -1037,7 +1065,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
           <View style={styles.footRow}>
             <View style={styles.footBox}>
               <Text style={styles.footLabel}>Peso</Text>
-              <Text style={styles.footBig}>{toFixedPt(dados.pesoKg)} kg</Text>
+              <Text style={styles.footBig}>{toFixedPt(pesoComparado)} kg</Text>
               {dPeso !== null ? (
                 <Text style={[styles.footDelta, { color: dPeso <= 0 ? GREEN_TXT : RED_TXT }]}>
                   {dPeso > 0 ? "+" : ""}
@@ -1052,7 +1080,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.footBox}>
               <Text style={[styles.footLabel, { color: CHART_BLUE }]}>Massa Muscular</Text>
-              <Text style={styles.footBig}>{toFixedPt(dados.massaMagraKg)} kg</Text>
+              <Text style={styles.footBig}>{toFixedPt(massaMuscularComparada)} kg</Text>
               {dMM !== null ? (
                 <Text style={[styles.footDelta, { color: dMM >= 0 ? GREEN_TXT : RED_TXT }]}>
                   {dMM > 0 ? "+" : ""}
@@ -1067,7 +1095,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.footBox}>
               <Text style={[styles.footLabel, { color: CHART_RED }]}>% de Gordura</Text>
-              <Text style={styles.footBig}>{toFixedPt(dados.bfPct)} %</Text>
+              <Text style={styles.footBig}>{toFixedPt(gorduraComparada)} %</Text>
               {dBF !== null ? (
                 <Text style={[styles.footDelta, { color: dBF <= 0 ? GREEN_TXT : RED_TXT }]}>
                   {dBF > 0 ? "+" : ""}
