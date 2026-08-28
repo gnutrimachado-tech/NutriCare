@@ -1059,23 +1059,15 @@ export default function AntropometriaLayout({
     arr.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
     return arr;
   }, [historicoAvaliacoes]);
-  const [avaliacaoBaseId, setAvaliacaoBaseId] = useState<string>("");
   // Caixas de seleção: quais avaliações (1ª/2ª/3ª) entram na comparação.
-  // Nenhuma marcada = somente a primeira (a atual); 1 ou 2 marcadas = compara
-  // com 2 ou 3 pontos no gráfico de evolução.
+  // A 1ª avaliação é a base automática; as demais marcadas definem o ponto
+  // final dos cards inferiores.
   const [evolucaoSelecionadaIds, setEvolucaoSelecionadaIds] = useState<string[]>([]);
   function toggleEvolucaoSelecionada(id: string) {
     setEvolucaoSelecionadaIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
   }
-  useEffect(() => {
-    // Padrão: comparar contra a 1ª avaliação (mais antiga), se existir.
-    if (!avaliacaoBaseId && historicoOrdenado[0]?.id) {
-      setAvaliacaoBaseId(historicoOrdenado[0].id);
-    }
-  }, [historicoOrdenado, avaliacaoBaseId]);
-
   function classifPill(c: { cor: "verde" | "amarelo" }) {
     return {
       ...avaliacaoPillBaseStyle,
@@ -1682,35 +1674,9 @@ export default function AntropometriaLayout({
 
             {compararResultados ? (
               <div style={avaliacaoCompareSelectWrapStyle}>
-                <span style={compareHintStyle}>Comparar com:</span>
-                <select
-                  value={avaliacaoBaseId}
-                  onChange={(e) => setAvaliacaoBaseId(e.target.value)}
-                  style={avaliacaoCompareSelectStyle}
-                >
-                  {historicoOrdenado.length === 0 ? (
-                    <option value="">Sem avaliações anteriores</option>
-                  ) : (
-                    historicoOrdenado.map((h, idx) => {
-                      const label =
-                        idx === 0
-                          ? "1ª avaliação"
-                          : idx === 1
-                          ? "2ª avaliação"
-                          : "3ª avaliação";
-                      const d = h.createdAt ? new Date(h.createdAt).toLocaleDateString("pt-BR") : "—";
-                      return (
-                        <option key={h.id} value={h.id}>
-                          {label} — {d}
-                        </option>
-                      );
-                    })
-                  )}
-                </select>
-
-                {/* Caixas de seleção: o gráfico de evolução do PDF responde a elas.
-                    Nenhuma marcada = somente a primeira (avaliação atual);
-                    1 marcada = compara com 2 meses; 2 marcadas = com 3 meses. */}
+                <span style={compareHintStyle}>
+                  A comparação começa sempre na 1ª avaliação. Marque as demais para calcular o período até elas:
+                </span>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                   {historicoOrdenado.map((h, idx) => {
                     const label =
