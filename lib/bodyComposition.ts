@@ -2,7 +2,7 @@
 // Tabelas + regras de composição corporal usadas na Avaliação Física.
 
 export type Sexo = "M" | "F";
-export type CodigoImagem = 1 | 2 | 3;
+export type CodigoImagem = 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface AvaliacaoInput {
   pesoKg: number;
@@ -131,12 +131,12 @@ export function classificarIMG(img: number, sexo: Sexo, idade: number): Classifi
 export function classificarAgua(pct: number, sexo: Sexo): Classificacao {
   if (sexo === "M") {
     if (pct >= 58) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
-    if (pct >= 51) return { status: "BOM", cor: "verde", label: "Bom" };
+    if (pct >= 50) return { status: "BOM", cor: "verde", label: "Bom" };
     return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
   }
 
   if (pct >= 50) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
-  if (pct >= 43) return { status: "BOM", cor: "verde", label: "Bom" };
+  if (pct >= 42) return { status: "BOM", cor: "verde", label: "Bom" };
   return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
 }
 
@@ -166,14 +166,14 @@ export function classificarPercentualGordura(bfPct: number, sexo: Sexo): Classif
 
 export function escolherImagemFrontal(sexo: Sexo, ffmi: number, bfPct: number): CodigoImagem {
   if (sexo === "M") {
-    if (ffmi >= 21.5 && bfPct <= 12) return 3;
-    if (ffmi >= 17.5 && ffmi <= 21.4 && bfPct <= 16) return 1;
-    return 2;
+    if (ffmi >= 21.5) return bfPct <= 12 ? 3 : 4;
+    if (ffmi >= 17.5) return bfPct <= 16 ? 1 : 5;
+    return bfPct <= 16 ? 6 : 2;
   }
 
-  if (ffmi >= 19 && bfPct <= 20) return 3;
-  if (ffmi >= 14.5 && ffmi <= 18.9 && bfPct <= 26) return 1;
-  return 2;
+  if (ffmi >= 19) return bfPct <= 20 ? 3 : 4;
+  if (ffmi >= 14.5) return bfPct <= 26 ? 1 : 5;
+  return bfPct <= 26 ? 6 : 2;
 }
 
 function imagemPrefixo(sexo: Sexo) {
@@ -181,7 +181,10 @@ function imagemPrefixo(sexo: Sexo) {
 }
 
 export function imagemFrontalUrl(sexo: Sexo, code: CodigoImagem): string {
-  return `/images/avaliacao/${imagemPrefixo(sexo)}-frente-${code}.png.jpg`;
+  // Os arquivos atuais da pasta public/images/avaliacao foram salvos com
+  // .png.jpg para as imagens 1–3 e .png.png para as imagens 4–6.
+  const extensao = code <= 3 ? "png.jpg" : "png.png";
+  return `/images/avaliacao/${imagemPrefixo(sexo)}-frente-${code}.${extensao}`;
 }
 
 export function imagemLateralUrl(sexo: Sexo, code: CodigoImagem): string {
