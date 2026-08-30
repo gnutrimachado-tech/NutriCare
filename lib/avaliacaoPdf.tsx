@@ -371,22 +371,13 @@ const styles = StyleSheet.create({
   // altura no fim do proprio conteudo (base do card 1 logo abaixo da linha
   // "% de gordura"), em vez de esticar ate a base do card vizinho.
   topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8, alignItems: "stretch" },
-  // O card superior esquerdo acompanha os dois primeiros cards inferiores;
-  // o card de biotipo acompanha a largura do card Evolução.
-  topLeft: { width: "66.2%" },
-  topRight: {
-    width: "32.4%",
-    alignItems: "center",
-    alignSelf: "stretch",
-    paddingTop: 8.5,
-    paddingBottom: 8.5,
-    paddingHorizontal: 0,
-  },
+  topLeft: { width: "56%" },
+  topRight: { width: "42%", alignItems: "center", alignSelf: "stretch" },
 
   // Tabela composição corporal
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   ccHeadTxt: { fontSize: 7.4, color: MUTED, fontWeight: 700 },
-  ccRow: { flexDirection: "row", alignItems: "center", paddingVertical: 2.4 },
+  ccRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.2 },
   ccColParam: { width: "52%", flexDirection: "row", alignItems: "center", paddingLeft: 10 },
   ccColParamText: { fontSize: 8.2, color: INK },
   ccColRes: { width: "24%", fontSize: 8.2, color: INK },
@@ -405,15 +396,13 @@ const styles = StyleSheet.create({
   pillRed: { backgroundColor: RED_BG, color: RED_TXT },
   pillNeutral: { color: MUTED, fontSize: 8 },
 
-  // Imagem de biotipo no card superior direito. A altura permanece a mesma
-  // área reservada anteriormente, sem alterar o tamanho do card.
-  bodyImage: { width: 150, height: 150, objectFit: "contain" },
+  // Imagem de biotipo no card superior direito.
+  bodyImage: { width: 132, height: 130, marginTop: 4, objectFit: "contain" },
 
   // Evolução info — silhueta CENTRALIZADA acima e texto CENTRALIZADO abaixo
   // (layout da imagem da direita indicada pelas setas vermelhas).
   // Distâncias topo/base espelham o card COMPOSIÇÃO CORPORAL ("Peso" no topo
   // e "% de gordura" na base).
-  evoInfoCard: { flexGrow: 1, justifyContent: "space-between" },
   evoInfoCol: { flexDirection: "column", alignItems: "center", marginTop: 0 },
   evoFigure: { width: 72, height: 56, objectFit: "contain", marginBottom: 5 },
   evoFigureSvg: { width: 72, height: 56, marginBottom: 5 },
@@ -450,7 +439,7 @@ const styles = StyleSheet.create({
   },
 
   // Bloco meio (3 cards)
-  midRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 6, marginBottom: 2, alignItems: "stretch" },
+  midRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 6, marginBottom: 8, alignItems: "stretch" },
   cardMid: {
     width: "32.4%",
     borderWidth: 1,
@@ -461,21 +450,16 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     backgroundColor: "rgba(255,255,255,0.92)",
   },
-  cardMidEvo: {
-    marginTop: 0,
-    alignSelf: "stretch",
-    flexDirection: "column",
-  },
+  cardMidEvo: { marginTop: 0, alignSelf: "stretch" },
   mHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 3 },
   mHeadTxt: { fontSize: 7.2, color: MUTED, fontWeight: 700 },
-  mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 2.7 },
+  mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 2 },
   mColLabel: { width: "52%", flexDirection: "row", alignItems: "center" },
   mColLabelText: { fontSize: 7.9, color: INK },
   mColRes: { width: "24%", fontSize: 7.9, color: INK, textAlign: "center" },
 
-  evoBlock: { marginBottom: 3 },
+  evoBlock: { marginBottom: 1 },
   evoHead: { flexDirection: "row", alignItems: "center", marginBottom: 2 },
-  evoChart: { width: "100%", height: 50, marginTop: 4 },
 
   // Evolução comparativa
   footCard: {
@@ -571,95 +555,77 @@ function MiniChart({
   color: string;
 }) {
   const W = 148;
-  const H = 50;
-  const left = 10;
-  const right = 8;
-  const top = 16;
-  const bottom = 13;
+  const H = 43;
+  const centerX = W / 2;
+  const arcY = 29;
+  const radius = 25;
   const valid = points.filter((p) => hasPositive(p.value));
-  if (!valid.length) {
-    return (
-      <View style={styles.evoBlock}>
-        <Text style={{ fontSize: 7.8, fontWeight: 700, color: INK, marginBottom: 1 }}>
-          {title}
-        </Text>
-      </View>
-    );
-  }
-
-  const values = valid.map((p) => Number(p.value));
-  const minValue = Math.min(...values);
-  const maxValue = Math.max(...values);
-  const spread = Math.max(maxValue - minValue, Math.abs(maxValue) * 0.08, 1);
-  const scaleMin = minValue - spread * 0.25;
-  const scaleMax = maxValue + spread * 0.25;
-  const plotW = W - left - right;
-  const plotH = H - top - bottom;
-  const plotted = valid.map((p, i) => {
-    const x = valid.length === 1 ? left + plotW / 2 : left + (plotW * i) / (valid.length - 1);
-    const y = top + ((scaleMax - Number(p.value)) / (scaleMax - scaleMin)) * plotH;
-    return { ...p, x, y };
-  });
-  const lineD = plotted
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
-    .join(" ");
-  const first = plotted[0];
-  const last = plotted[plotted.length - 1];
-  const baselineY = top + plotH;
-  const areaD = `${lineD} L ${last.x} ${baselineY} L ${first.x} ${baselineY} Z`;
-  const gradientId = `mini-evolution-gradient-${color.replace("#", "")}`;
-  const currentText = toFixedPt(Number(last.value));
-  const firstText = toFixedPt(Number(first.value));
-  const fillColor = color === CHART_GREEN
+  const current = valid[valid.length - 1];
+  const currentValue = current ? Number(current.value) : 0;
+  const first = valid[0];
+  const firstValue = first ? Number(first.value) : currentValue;
+  // O preenchimento representa a variação real do parâmetro:
+  // - sem alteração: centro do arco;
+  // - aumento: arco mais preenchido;
+  // - redução: arco menos preenchido.
+  const variationWindow = Math.max(Math.abs(firstValue) * 0.12, 1);
+  const variation =
+    first && current
+      ? (currentValue - firstValue) / (variationWindow * 2)
+      : 0;
+  const progress = Math.max(0.08, Math.min(0.92, 0.5 + variation));
+  const currentText = toFixedPt(currentValue);
+  const firstText = toFixedPt(firstValue);
+  const trackColor = color === CHART_GREEN
     ? CHART_GREEN_LIGHT
     : color === CHART_BLUE
       ? CHART_BLUE_LIGHT
       : CHART_RED_LIGHT;
+  const makeArcPath = (arcProgress: number) => {
+    const steps = Math.max(8, Math.ceil(arcProgress * 24));
+    return Array.from({ length: steps + 1 }, (_, index) => {
+      const angle = Math.PI - (Math.PI * arcProgress * index) / steps;
+      const x = centerX + radius * Math.cos(angle);
+      const y = arcY - radius * Math.sin(angle);
+      return `${index === 0 ? "M" : "L"} ${x} ${y}`;
+    }).join(" ");
+  };
+  const trackPath = makeArcPath(1);
+  const fillPath = makeArcPath(progress);
 
   return (
     <View style={styles.evoBlock}>
       <Text style={{ fontSize: 7.8, fontWeight: 700, color: INK, marginBottom: 1 }}>
         {title}
       </Text>
-      <Svg width={W} height={H} style={styles.evoChart}>
-        <Defs>
-          <LinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0%" stopColor={color} stopOpacity={0.24} />
-            <Stop offset="100%" stopColor={color} stopOpacity={0.02} />
-          </LinearGradient>
-        </Defs>
-        <Path d={areaD} fill={`url(#${gradientId})`} stroke="none" />
-        <Path d={lineD} fill="none" stroke={color} strokeWidth={1.3} />
-        {plotted.map((p, i) => (
-          <Circle
-            key={`mini-point-${i}`}
-            cx={p.x}
-            cy={p.y}
-            r={2.5}
-            fill="#fff"
-            stroke={color}
-            strokeWidth={1.3}
-          />
-        ))}
-        <Text x={first.x} y={Math.max(top - 2, first.y - 5)} textAnchor="middle" style={{ fontSize: 6.5, fill: INK }}>
-          {firstText}
-        </Text>
-        {last !== first ? (
-          <Text x={last.x} y={Math.max(top - 2, last.y - 5)} textAnchor="middle" style={{ fontSize: 6.5, fill: INK }}>
-            {currentText}
-          </Text>
+      <Svg width={W} height={H}>
+        <Path d={trackPath} fill="none" stroke={trackColor} strokeWidth={7} strokeLinecap="round" />
+        {current ? (
+          <Path d={fillPath} fill="none" stroke={color} strokeWidth={7} strokeLinecap="round" />
         ) : null}
-        {plotted.map((p, i) => (
-          <Text
-            key={`mini-date-${i}`}
-            x={p.x}
-            y={H - 1}
-            textAnchor="middle"
-            style={{ fontSize: 5.2, fill: "#888" }}
-          >
-            {p.data}
-          </Text>
-        ))}
+        {first ? (
+          <>
+            <Text x={10} y={28} textAnchor="start" style={{ fontSize: 7, fill: INK }}>
+              {firstText}
+            </Text>
+            <Text x={10} y={40} textAnchor="start" style={{ fontSize: 6, fill: "#888" }}>
+              {first.data}
+            </Text>
+          </>
+        ) : null}
+        {current ? (
+          <>
+            <Text x={centerX} y={33} textAnchor="middle" style={{ fontSize: 10, fill: INK, fontWeight: 700 }}>
+              {currentText}
+            </Text>
+            <Text x={W - 10} y={28} textAnchor="end" style={{ fontSize: 7, fill: INK }}>
+              {currentText}
+            </Text>
+            <Text x={W - 10} y={40} textAnchor="end" style={{ fontSize: 6, fill: "#888" }}>
+              {current.data}
+            </Text>
+          </>
+        ) : null}
       </Svg>
     </View>
   );
@@ -798,7 +764,7 @@ function GraficoIconeSvg() {
 
 function EvolucaoInfoCard() {
   return (
-    <View style={styles.evoInfoCard}>
+    <View>
       {/* Silhueta CENTRALIZADA acima, texto CENTRALIZADO abaixo. */}
       <View style={styles.evoInfoCol}>
         <SilhuetaImgOrSvg />
