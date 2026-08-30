@@ -371,13 +371,22 @@ const styles = StyleSheet.create({
   // altura no fim do proprio conteudo (base do card 1 logo abaixo da linha
   // "% de gordura"), em vez de esticar ate a base do card vizinho.
   topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8, alignItems: "stretch" },
-  topLeft: { width: "56%" },
-  topRight: { width: "42%", alignItems: "center", alignSelf: "stretch" },
+  // O card superior esquerdo acompanha os dois primeiros cards inferiores;
+  // o card de biotipo acompanha a largura do card Evolução.
+  topLeft: { width: "66.2%" },
+  topRight: {
+    width: "32.4%",
+    alignItems: "center",
+    alignSelf: "stretch",
+    paddingTop: 8.5,
+    paddingBottom: 8.5,
+    paddingHorizontal: 0,
+  },
 
   // Tabela composição corporal
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   ccHeadTxt: { fontSize: 7.4, color: MUTED, fontWeight: 700 },
-  ccRow: { flexDirection: "row", alignItems: "center", paddingVertical: 1.2 },
+  ccRow: { flexDirection: "row", alignItems: "center", paddingVertical: 2.4 },
   ccColParam: { width: "52%", flexDirection: "row", alignItems: "center", paddingLeft: 10 },
   ccColParamText: { fontSize: 8.2, color: INK },
   ccColRes: { width: "24%", fontSize: 8.2, color: INK },
@@ -398,7 +407,7 @@ const styles = StyleSheet.create({
 
   // Imagem de biotipo no card superior direito. A altura permanece a mesma
   // área reservada anteriormente, sem alterar o tamanho do card.
-  bodyImage: { width: 132, height: 130, marginTop: 4, objectFit: "contain" },
+  bodyImage: { width: 145, height: 145, objectFit: "contain" },
 
   // Evolução info — silhueta CENTRALIZADA acima e texto CENTRALIZADO abaixo
   // (layout da imagem da direita indicada pelas setas vermelhas).
@@ -440,7 +449,7 @@ const styles = StyleSheet.create({
   },
 
   // Bloco meio (3 cards)
-  midRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 6, marginBottom: 8, alignItems: "stretch" },
+  midRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 6, marginBottom: 2, alignItems: "stretch" },
   cardMid: {
     width: "32.4%",
     borderWidth: 1,
@@ -454,7 +463,7 @@ const styles = StyleSheet.create({
   cardMidEvo: { marginTop: 0, alignSelf: "stretch" },
   mHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 3 },
   mHeadTxt: { fontSize: 7.2, color: MUTED, fontWeight: 700 },
-  mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 2 },
+  mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 2.7 },
   mColLabel: { width: "52%", flexDirection: "row", alignItems: "center" },
   mColLabelText: { fontSize: 7.9, color: INK },
   mColRes: { width: "24%", fontSize: 7.9, color: INK, textAlign: "center" },
@@ -841,7 +850,8 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
     ...(atual ? [atual] : []),
   ];
   const showEvoCard = Boolean(
-    atual &&
+    dados.compareResults &&
+      atual &&
       [atual.peso, atual.massaMuscular, atual.bfPct].some((value) => hasPositive(value))
   );
   const pesoPontos = evolucao.map((p) => ({ data: p.data, value: p.peso }));
