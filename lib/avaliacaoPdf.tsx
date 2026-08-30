@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
   // alignItems: "flex-start" faz os DOIS cards subirem: cada card fecha a
   // altura no fim do proprio conteudo (base do card 1 logo abaixo da linha
   // "% de gordura"), em vez de esticar ate a base do card vizinho.
-  topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8, alignItems: "stretch" },
+  topRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2, alignItems: "stretch" },
   topLeft: { width: "66.2%" },
   topRight: {
     width: "32.4%",
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
   },
 
   // Tabela composição corporal
-  ccTable: { width: "92%", alignSelf: "center" },
+  ccTable: { width: "92%", alignSelf: "center", position: "relative", left: 6 },
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   ccHeadTxt: { fontSize: 7.4, color: MUTED, fontWeight: 700 },
   ccRow: { flexDirection: "row", alignItems: "center", paddingVertical: 2.4 },
@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
   },
 
   // Bloco meio (3 cards)
-  midRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 6, marginBottom: 2, alignItems: "stretch" },
+  midRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 0, marginBottom: 2, alignItems: "stretch" },
   cardMid: {
     width: "32.4%",
     borderWidth: 1,
@@ -465,9 +465,9 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
     flexDirection: "column",
   },
-  mHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 3 },
+  mHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 3, marginTop: 3 },
   mHeadTxt: { fontSize: 7.2, color: MUTED, fontWeight: 700 },
-  mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 2.7 },
+  mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 3 },
   mColLabel: { width: "52%", flexDirection: "row", alignItems: "center" },
   mColLabelText: { fontSize: 7.9, color: INK },
   mColRes: { width: "24%", fontSize: 7.9, color: INK, textAlign: "center" },
@@ -660,7 +660,21 @@ function EvolutionSparkline({
   const valid = points.filter((p) => hasPositive(p.value));
   if (!valid.length) return null;
 
-  const values = valid.map((p) => Number(p.value));
+  // Quando há apenas a avaliação inicial e a final, acrescenta um ponto
+  // intermediário para manter a leitura visual da oscilação no gráfico
+  // comparativo, sem alterar os valores das avaliações reais.
+  const graphPoints =
+    valid.length === 2
+      ? [
+          valid[0],
+          {
+            data: valid[1].data,
+            value: (Number(valid[0].value) + Number(valid[1].value)) / 2,
+          },
+          valid[1],
+        ]
+      : valid;
+  const values = graphPoints.map((p) => Number(p.value));
   const minValue = Math.min(...values);
   const maxValue = Math.max(...values);
   const spread = Math.max(maxValue - minValue, Math.abs(maxValue) * 0.08, 1);
@@ -668,8 +682,11 @@ function EvolutionSparkline({
   const scaleMax = maxValue + spread * 0.25;
   const plotW = W - left - right;
   const plotH = H - top - bottom;
-  const plotted = valid.map((p, i) => {
-    const x = valid.length === 1 ? left + plotW / 2 : left + (plotW * i) / (valid.length - 1);
+  const plotted = graphPoints.map((p, i) => {
+    const x =
+      graphPoints.length === 1
+        ? left + plotW / 2
+        : left + (plotW * i) / (graphPoints.length - 1);
     const y =
       top +
       ((scaleMax - Number(p.value)) / Math.max(1, scaleMax - scaleMin)) * plotH;
