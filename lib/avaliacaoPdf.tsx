@@ -376,12 +376,13 @@ const styles = StyleSheet.create({
     width: "32.4%",
     alignItems: "center",
     alignSelf: "stretch",
-    paddingTop: 8.5,
-    paddingBottom: 8.5,
+    paddingTop: 5.67,
+    paddingBottom: 5.67,
     paddingHorizontal: 11,
   },
 
   // Tabela composição corporal
+  ccTable: { width: "92%", alignSelf: "center" },
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   ccHeadTxt: { fontSize: 7.4, color: MUTED, fontWeight: 700 },
   ccRow: { flexDirection: "row", alignItems: "center", paddingVertical: 2.4 },
@@ -404,13 +405,14 @@ const styles = StyleSheet.create({
   pillNeutral: { color: MUTED, fontSize: 8 },
 
   // Imagem de biotipo no card superior direito.
-  bodyCardTitle: { alignSelf: "flex-start", marginBottom: 4 },
+  bodyCardTitle: { alignSelf: "flex-start", marginBottom: 5.67 },
   bodyImage: { width: 150, height: 150, objectFit: "contain" },
 
   // Evolução info — silhueta CENTRALIZADA acima e texto CENTRALIZADO abaixo
   // (layout da imagem da direita indicada pelas setas vermelhas).
   // Distâncias topo/base espelham o card COMPOSIÇÃO CORPORAL ("Peso" no topo
   // e "% de gordura" na base).
+  evoInfoCard: { flexGrow: 1, justifyContent: "space-between" },
   evoInfoCol: { flexDirection: "column", alignItems: "center", marginTop: 0 },
   evoFigure: { width: 72, height: 56, objectFit: "contain", marginBottom: 5 },
   evoFigureSvg: { width: 72, height: 56, marginBottom: 5 },
@@ -458,7 +460,11 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     backgroundColor: "rgba(255,255,255,0.92)",
   },
-  cardMidEvo: { marginTop: 0, alignSelf: "stretch" },
+  cardMidEvo: {
+    marginTop: 0,
+    alignSelf: "stretch",
+    flexDirection: "column",
+  },
   mHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 3 },
   mHeadTxt: { fontSize: 7.2, color: MUTED, fontWeight: 700 },
   mRow: { flexDirection: "row", alignItems: "center", paddingVertical: 2.7 },
@@ -468,7 +474,7 @@ const styles = StyleSheet.create({
 
   evoBlock: { marginBottom: 3 },
   evoHead: { flexDirection: "row", alignItems: "center", marginBottom: 2 },
-  evoChart: { width: "100%", height: 50, marginTop: 4 },
+  evoChart: { width: "100%", height: 50, marginTop: 0 },
 
   // Evolução comparativa
   footCard: {
@@ -602,7 +608,7 @@ function MiniChart({
 
   return (
     <View style={styles.evoBlock}>
-      <Text style={{ fontSize: 7.8, fontWeight: 700, color: INK, marginBottom: 4 }}>
+      <Text style={{ fontSize: 7.8, fontWeight: 700, color: INK, marginBottom: 3 }}>
         {title}
       </Text>
       <Svg width={W} height={H} style={styles.evoChart}>
@@ -707,24 +713,17 @@ function EvolutionSparkline({
           strokeWidth={1.1}
         />
       ))}
-      <Text
-        x={first.x}
-        y={H - 1}
-        textAnchor="middle"
-        style={{ fontSize: 5.5, fill: "#888" }}
-      >
-        {first.data}
-      </Text>
-      {last !== first ? (
+      {plotted.map((p, i) => (
         <Text
-          x={last.x}
+          key={`comparison-date-${i}`}
+          x={p.x}
           y={H - 1}
           textAnchor="middle"
           style={{ fontSize: 5.5, fill: "#888" }}
         >
-          {last.data}
+          {p.data}
         </Text>
-      ) : null}
+      ))}
     </Svg>
   );
 }
@@ -771,7 +770,7 @@ function GraficoIconeSvg() {
 
 function EvolucaoInfoCard() {
   return (
-    <View>
+    <View style={styles.evoInfoCard}>
       {/* Silhueta CENTRALIZADA acima, texto CENTRALIZADO abaixo. */}
       <View style={styles.evoInfoCol}>
         <SilhuetaImgOrSvg />
@@ -949,104 +948,106 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
           <View style={[styles.card, styles.topLeft]}>
             <Text style={styles.cardTitle}>COMPOSIÇÃO CORPORAL</Text>
 
-            <View style={styles.ccHead}>
-              <Text style={[styles.ccHeadTxt, { width: "52%", paddingLeft: 10 }]}>Parâmetro</Text>
-              <Text style={[styles.ccHeadTxt, { width: "24%" }]}>Resultado</Text>
-              <Text style={[styles.ccHeadTxt, { width: "24%" }]}>Avaliação</Text>
-            </View>
+            <View style={styles.ccTable}>
+              <View style={styles.ccHead}>
+                <Text style={[styles.ccHeadTxt, { width: "52%", paddingLeft: 10 }]}>Parâmetro</Text>
+                <Text style={[styles.ccHeadTxt, { width: "24%" }]}>Resultado</Text>
+                <Text style={[styles.ccHeadTxt, { width: "24%" }]}>Avaliação</Text>
+              </View>
 
-            <View style={styles.ccRow}>
-              <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>Peso</Text>
+              <View style={styles.ccRow}>
+                <View style={styles.ccColParam}>
+                  <Text style={styles.ccColParamText}>Peso</Text>
+                </View>
+                <Text style={styles.ccColRes}>{toFixedPt(dados.pesoKg)} kg</Text>
+                <View style={styles.ccColEval}><EvalPill /></View>
               </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.pesoKg)} kg</Text>
-              <View style={styles.ccColEval}><EvalPill /></View>
-            </View>
 
-            <View style={styles.ccRow}>
-              <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>% de água corporal</Text>
+              <View style={styles.ccRow}>
+                <View style={styles.ccColParam}>
+                  <Text style={styles.ccColParamText}>% de água corporal</Text>
+                </View>
+                <Text style={styles.ccColRes}>{toFixedPt(dados.pctAgua)} %</Text>
+                <View style={styles.ccColEval}>
+                  <EvalPill
+                    cor={dados.classificacaoAgua?.cor}
+                    label={dados.classificacaoAgua?.label || "Adequado"}
+                  />
+                </View>
               </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.pctAgua)} %</Text>
-              <View style={styles.ccColEval}>
-                <EvalPill
-                  cor={dados.classificacaoAgua?.cor}
-                  label={dados.classificacaoAgua?.label || "Adequado"}
-                />
-              </View>
-            </View>
 
-            <View style={styles.ccRow}>
-              <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>Massa muscular</Text>
+              <View style={styles.ccRow}>
+                <View style={styles.ccColParam}>
+                  <Text style={styles.ccColParamText}>Massa muscular</Text>
+                </View>
+                <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
+                <View style={styles.ccColEval}>
+                  <EvalPill
+                    cor={dados.classificacaoMassaMuscular?.cor}
+                    label={dados.classificacaoMassaMuscular?.label}
+                  />
+                </View>
               </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
-              <View style={styles.ccColEval}>
-                <EvalPill
-                  cor={dados.classificacaoMassaMuscular?.cor}
-                  label={dados.classificacaoMassaMuscular?.label}
-                />
-              </View>
-            </View>
 
-            <View style={styles.ccRow}>
-              <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>Músculo esquelético</Text>
+              <View style={styles.ccRow}>
+                <View style={styles.ccColParam}>
+                  <Text style={styles.ccColParamText}>Músculo esquelético</Text>
+                </View>
+                <Text style={styles.ccColRes}>{toFixedPt(dados.imme, 2)} kg/m²</Text>
+                <View style={styles.ccColEval}>
+                  <EvalPill cor={dados.classificacaoImme?.cor} label={dados.classificacaoImme?.label} />
+                </View>
               </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.imme, 2)} kg/m²</Text>
-              <View style={styles.ccColEval}>
-                <EvalPill cor={dados.classificacaoImme?.cor} label={dados.classificacaoImme?.label} />
-              </View>
-            </View>
 
-            <View style={styles.ccRow}>
-              <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>Massa livre de gordura</Text>
+              <View style={styles.ccRow}>
+                <View style={styles.ccColParam}>
+                  <Text style={styles.ccColParamText}>Massa livre de gordura</Text>
+                </View>
+                <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
+                <View style={styles.ccColEval}>
+                  <EvalPill cor={dados.classificacaoFfmi?.cor} label={dados.classificacaoFfmi?.label} />
+                </View>
               </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
-              <View style={styles.ccColEval}>
-                <EvalPill cor={dados.classificacaoFfmi?.cor} label={dados.classificacaoFfmi?.label} />
-              </View>
-            </View>
 
-            <View style={styles.ccRow}>
-              <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>Massa adiposa</Text>
+              <View style={styles.ccRow}>
+                <View style={styles.ccColParam}>
+                  <Text style={styles.ccColParamText}>Massa adiposa</Text>
+                </View>
+                <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
+                <View style={styles.ccColEval}>
+                  <EvalPill
+                    cor={(dados.classificacaoMassaAdiposa || dados.classificacaoImg)?.cor}
+                    label={(dados.classificacaoMassaAdiposa || dados.classificacaoImg)?.label}
+                  />
+                </View>
               </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
-              <View style={styles.ccColEval}>
-                <EvalPill
-                  cor={(dados.classificacaoMassaAdiposa || dados.classificacaoImg)?.cor}
-                  label={(dados.classificacaoMassaAdiposa || dados.classificacaoImg)?.label}
-                />
-              </View>
-            </View>
 
-            <View style={styles.ccRow}>
-              <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>Índice de massa gorda</Text>
+              <View style={styles.ccRow}>
+                <View style={styles.ccColParam}>
+                  <Text style={styles.ccColParamText}>Índice de massa gorda</Text>
+                </View>
+                <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
+                <View style={styles.ccColEval}>
+                  {dados.classificacaoImg?.label ? (
+                    <EvalPill cor={dados.classificacaoImg.cor} label={dados.classificacaoImg.label} />
+                  ) : (
+                    <AcimaPill />
+                  )}
+                </View>
               </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
-              <View style={styles.ccColEval}>
-                {dados.classificacaoImg?.label ? (
-                  <EvalPill cor={dados.classificacaoImg.cor} label={dados.classificacaoImg.label} />
-                ) : (
-                  <AcimaPill />
-                )}
-              </View>
-            </View>
 
-            <View style={styles.ccRow}>
-              <View style={styles.ccColParam}>
-                <Text style={styles.ccColParamText}>% de gordura</Text>
-              </View>
-              <Text style={styles.ccColRes}>{toFixedPt(dados.bfPct)} %</Text>
-              <View style={styles.ccColEval}>
-                {dados.classificacaoGordura?.label ? (
-                  <EvalPill cor={dados.classificacaoGordura.cor} label={dados.classificacaoGordura.label} />
-                ) : (
-                  <AcimaPill />
-                )}
+              <View style={styles.ccRow}>
+                <View style={styles.ccColParam}>
+                  <Text style={styles.ccColParamText}>% de gordura</Text>
+                </View>
+                <Text style={styles.ccColRes}>{toFixedPt(dados.bfPct)} %</Text>
+                <View style={styles.ccColEval}>
+                  {dados.classificacaoGordura?.label ? (
+                    <EvalPill cor={dados.classificacaoGordura.cor} label={dados.classificacaoGordura.label} />
+                  ) : (
+                    <AcimaPill />
+                  )}
+                </View>
               </View>
             </View>
           </View>
