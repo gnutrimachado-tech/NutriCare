@@ -382,7 +382,9 @@ const styles = StyleSheet.create({
   },
 
   // Tabela composição corporal
-  ccTable: { width: "92%", alignSelf: "center" },
+  // Tabela agrupada e centralizada: largura reduzida para sobrar o MESMO
+  // espaço à esquerda e à direita dentro do card COMPOSIÇÃO CORPORAL.
+  ccTable: { width: "86%", alignSelf: "center" },
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   ccHeadTxt: { fontSize: 7.4, color: MUTED, fontWeight: 700 },
   ccRow: { flexDirection: "row", alignItems: "center", paddingVertical: 2.4 },
@@ -412,8 +414,10 @@ const styles = StyleSheet.create({
   // (layout da imagem da direita indicada pelas setas vermelhas).
   // Distâncias topo/base espelham o card COMPOSIÇÃO CORPORAL ("Peso" no topo
   // e "% de gordura" na base).
-  evoInfoCard: { flexGrow: 1, justifyContent: "space-between" },
-  evoInfoCol: { flexDirection: "column", alignItems: "center", marginTop: 0 },
+  // Conjunto (silhueta + texto + retângulo verde) AGRUPADO e descido até
+  // a base do card (posição do retângulo vermelho do mock).
+  evoInfoCard: { flexGrow: 1, justifyContent: "flex-end" },
+  evoInfoCol: { flexDirection: "column", alignItems: "center", marginTop: 0, width: "100%" },
   evoFigure: { width: 72, height: 56, objectFit: "contain", marginBottom: 5 },
   evoFigureSvg: { width: 72, height: 56, marginBottom: 5 },
   evoInfoTextWrap: { width: "100%" },
@@ -436,6 +440,7 @@ const styles = StyleSheet.create({
     marginHorizontal: -5.67,
     flexDirection: "row",
     alignItems: "center",
+    alignSelf: "stretch",
   },
   evoNoteIcon: { width: 14, height: 14, marginRight: 6 },
   evoNoteTextWrap: { flexGrow: 1, flexShrink: 1 },
@@ -472,7 +477,8 @@ const styles = StyleSheet.create({
   mColLabelText: { fontSize: 7.9, color: INK },
   mColRes: { width: "24%", fontSize: 7.9, color: INK, textAlign: "center" },
 
-  evoBlock: { marginBottom: 3 },
+  // ~1 mm (2.83pt) separando cada seção: título ↔ gráfico ↔ próximo título.
+  evoBlock: { marginBottom: 3, marginTop: 2.83 },
   evoHead: { flexDirection: "row", alignItems: "center", marginBottom: 2 },
   evoChart: { width: "100%", height: 50, marginTop: 0 },
 
@@ -503,6 +509,10 @@ const styles = StyleSheet.create({
   footDelta: { fontSize: 7.8, marginTop: 3 },
   footSince: { fontSize: 7, color: MUTED, marginTop: 2 },
   footChart: { width: "100%", height: 38, marginTop: 4 },
+  // Gráficos de linha do card EVOLUÇÃO COMPARATIVA (um embaixo do outro,
+  // mostrando oscilação com valores acima dos pontos e datas embaixo).
+  cmpSection: { marginTop: 8 },
+  cmpChart: { width: "100%", height: 64, marginTop: 3 },
 
   // ============ RODAPÉ FIXO (igual ao PDF de Orientações) ============
   // footerY (Orientações) = 56.  Nome fica em y=footerY+12 (baseline).
@@ -608,7 +618,7 @@ function MiniChart({
 
   return (
     <View style={styles.evoBlock}>
-      <Text style={{ fontSize: 7.8, fontWeight: 700, color: INK, marginBottom: 3 }}>
+      <Text style={{ fontSize: 7.8, fontWeight: 700, color: INK, marginBottom: 5.83 }}>
         {title}
       </Text>
       <Svg width={W} height={H} style={styles.evoChart}>
@@ -728,6 +738,99 @@ function EvolutionSparkline({
   );
 }
 
+// Gráfico de linha com oscilação (card EVOLUÇÃO COMPARATIVA) — referência:
+// avaliações selecionadas na aba Antropometria. Valor acima de cada ponto e
+// data embaixo, área suave preenchida abaixo da linha (igual imagem 1).
+function ComparativeLineChart({
+  title,
+  points,
+  color,
+}: {
+  title: string;
+  points: Array<{ data: string; value: number | null | undefined }>;
+  color: string;
+}) {
+  const W = 513;
+  const H = 64;
+  const left = 26;
+  const right = 26;
+  const top = 14;
+  const bottom = 13;
+  const valid = points.filter((p) => hasPositive(p.value));
+  if (!valid.length) return null;
+
+  const values = valid.map((p) => Number(p.value));
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const spread = Math.max(maxValue - minValue, Math.abs(maxValue) * 0.08, 1);
+  const scaleMin = minValue - spread * 0.3;
+  const scaleMax = maxValue + spread * 0.3;
+  const plotW = W - left - right;
+  const plotH = H - top - bottom;
+  const plotted = valid.map((p, i) => {
+    const x = valid.length === 1 ? left + plotW / 2 : left + (plotW * i) / (valid.length - 1);
+    const y =
+      top +
+      ((scaleMax - Number(p.value)) / Math.max(1, scaleMax - scaleMin)) * plotH;
+    return { ...p, x, y };
+  });
+  const lineD = plotted.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+  const first = plotted[0];
+  const last = plotted[plotted.length - 1];
+  const baselineY = top + plotH;
+  const areaD = `${lineD} L ${last.x} ${baselineY} L ${first.x} ${baselineY} Z`;
+  const gradientId = `cmp-gradient-${color.replace("#", "")}`;
+
+  return (
+    <View style={styles.cmpSection}>
+      <Text style={{ fontSize: 8.2, fontWeight: 700, color: INK }}>{title}</Text>
+      <Svg width={W} height={H} style={styles.cmpChart}>
+        <Defs>
+          <LinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0%" stopColor={color} stopOpacity={0.22} />
+            <Stop offset="100%" stopColor={color} stopOpacity={0.02} />
+          </LinearGradient>
+        </Defs>
+        <Path d={areaD} fill={`url(#${gradientId})`} stroke="none" />
+        <Path d={lineD} fill="none" stroke={color} strokeWidth={1.4} />
+        {plotted.map((p, i) => (
+          <Circle
+            key={`cmp-point-${i}`}
+            cx={p.x}
+            cy={p.y}
+            r={3}
+            fill="#fff"
+            stroke={color}
+            strokeWidth={1.3}
+          />
+        ))}
+        {plotted.map((p, i) => (
+          <Text
+            key={`cmp-value-${i}`}
+            x={p.x}
+            y={p.y - 6}
+            textAnchor="middle"
+            style={{ fontSize: 7, fill: INK, fontWeight: 700 }}
+          >
+            {toFixedPt(Number(p.value))}
+          </Text>
+        ))}
+        {plotted.map((p, i) => (
+          <Text
+            key={`cmp-date-${i}`}
+            x={p.x}
+            y={H - 2}
+            textAnchor="middle"
+            style={{ fontSize: 6, fill: "#9a9a9a" }}
+          >
+            {p.data}
+          </Text>
+        ))}
+      </Svg>
+    </View>
+  );
+}
+
 // Silhueta (usa /public/images/avaliacao/silueta.* se existir; senão SVG).
 function SilhuetaImgOrSvg() {
   const silhuetaCandidates = [
@@ -771,7 +874,8 @@ function GraficoIconeSvg() {
 function EvolucaoInfoCard() {
   return (
     <View style={styles.evoInfoCard}>
-      {/* Silhueta CENTRALIZADA acima, texto CENTRALIZADO abaixo. */}
+      {/* TUDO AGRUPADO (silhueta + texto + retângulo verde) e descido até a
+          base do card. Só aparece quando o nutri NÃO marca comparação. */}
       <View style={styles.evoInfoCol}>
         <SilhuetaImgOrSvg />
         <View style={styles.evoInfoTextWrap}>
@@ -779,15 +883,15 @@ function EvolucaoInfoCard() {
             Acompanhe aqui seus resultados ao longo do tempo, com base nos parâmetros avaliados
           </Text>
         </View>
-      </View>
-      <View style={styles.evoNoteBox}>
-        <GraficoIconeSvg />
-        <View style={styles.evoNoteTextWrap}>
-          <Text style={styles.evoNoteText}>
-            Na sua próxima avaliação, este espaço{"\n"}
-            exibirá um gráfico com sua evolução{"\n"}
-            de peso, massa muscular e % de gordura
-          </Text>
+        <View style={styles.evoNoteBox}>
+          <GraficoIconeSvg />
+          <View style={styles.evoNoteTextWrap}>
+            <Text style={styles.evoNoteText}>
+              Na sua próxima avaliação, este espaço{"\n"}
+              exibirá um gráfico com sua evolução{"\n"}
+              de peso, massa muscular e % de gordura
+            </Text>
+          </View>
         </View>
       </View>
     </View>
@@ -1126,9 +1230,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               ) : (
                 <Text style={styles.footDelta}>—</Text>
               )}
-              {showEvoCard ? (
-                <EvolutionSparkline points={pesoComparacaoPontos} color={CHART_GREEN} />
-              ) : null}
             </View>
 
             <View style={styles.footBox}>
@@ -1142,9 +1243,6 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               ) : (
                 <Text style={styles.footDelta}>—</Text>
               )}
-              {showEvoCard ? (
-                <EvolutionSparkline points={musculoComparacaoPontos} color={CHART_BLUE} />
-              ) : null}
             </View>
 
             <View style={styles.footBox}>
@@ -1158,11 +1256,17 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
               ) : (
                 <Text style={styles.footDelta}>—</Text>
               )}
-              {showEvoCard ? (
-                <EvolutionSparkline points={bfComparacaoPontos} color={CHART_RED} />
-              ) : null}
             </View>
           </View>
+          {/* Gráficos de oscilação (somente aqui, no card EVOLUÇÃO COMPARATIVA),
+              com base nas avaliações selecionadas na aba Antropometria. */}
+          {showEvoCard ? (
+            <>
+              <ComparativeLineChart title="Peso (kg)" points={pesoComparacaoPontos} color={CHART_GREEN} />
+              <ComparativeLineChart title="Massa Muscular (kg)" points={musculoComparacaoPontos} color={CHART_BLUE} />
+              <ComparativeLineChart title="% de Gordura (%)" points={bfComparacaoPontos} color={CHART_RED} />
+            </>
+          ) : null}
         </View>
 
         {/* ============ RODAPÉ FIXO (idêntico ao PDF de Orientações) ============ */}
