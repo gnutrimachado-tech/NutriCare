@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
     // ==============================
     // 1) SALVA no histórico ANTES de renderizar o PDF (rotação 1ª/2ª/3ª)
     // ==============================
-    await salvarAvaliacaoHistorico({
+    const registroAtual = await salvarAvaliacaoHistorico({
       pacienteId,
       protocolLabel: body.protocolLabel || "",
       currentDobras: body.currentDobras || {},
@@ -114,10 +114,15 @@ export async function POST(req: NextRequest) {
     });
 
     // ==============================
-    // 2) Monta evolução com os 3 registros já rotacionados
+    // 2) Monta evolução com os registros anteriores. O resultado atual já
+    // será acrescentado pelo PDF como último ponto; não o duplica na série.
     // ==============================
     const rotativas = await listarUltimasTresAvaliacoes(pacienteId);
-    const evolucao = rotativas.map((r) => {
+    const historicoAnterior = rotativas.filter((r) => r.id !== registroAtual.id);
+    const criadoEmAtual = registroAtual.createdAt
+      ? new Date(registroAtual.createdAt)
+      : new Date();
+    const evolucao = historicoAnterior.map((r) => {
       const snap = extrairSnapshotDeEvolucao(r);
       return {
         data: fmtData(r.created_at),
@@ -127,17 +132,18 @@ export async function POST(req: NextRequest) {
       };
     });
     const evolucaoAtual = {
-      data: fmtData(new Date()),
+      data: fmtData(criadoEmAtual),
       peso: resumo.pesoKg,
       massaMuscular: resumo.massaMagraKg,
       bfPct: resumo.bfPct,
     };
     // Mesma lista com o id de cada avaliação — alimenta as caixas de seleção
-    const evolucaoHistorico = rotativas.map((r) => {
+    const evolucaoHistorico = historicoAnterior.map((r) => {
       const snap = extrairSnapshotDeEvolucao(r);
       return {
         id: r.id,
         data: fmtData(r.created_at),
+        createdAt: r.created_at?.toISOString?.() || null,
         peso: snap?.resumo.pesoKg ?? (Number(r.peso ?? 0) || null),
         massaMuscular: snap?.resumo.massaMuscularKg ?? (Number(r.massa_muscular ?? 0) || null),
         bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
@@ -145,7 +151,8 @@ export async function POST(req: NextRequest) {
     });
 
     const primeira = await primeiraAvaliacao(pacienteId);
-    const primeiraSnap = primeira ? extrairSnapshotDeEvolucao(primeira) : null;
+    const anterior = historicoAnterior[historicoAnterior.length - 1] || null;
+    const anteriorSnap = anterior ? extrairSnapshotDeEvolucao(anterior) : null;
     const dataAvaliacaoInicial = primeira?.created_at?.toISOString?.() || null;
 
     const imagemFrenteUrl = imagemFrontalUrl(sexo, resumo.imagem.codigo);
@@ -198,18 +205,18 @@ export async function POST(req: NextRequest) {
         currentCircunferencias: body.currentCircunferencias || {},
         previousDobras: body.previousDobras || {},
         previousCircunferencias: body.previousCircunferencias || {},
-        previousSummary: primeiraSnap
+        previousSummary: anteriorSnap
           ? {
-              pesoKg: primeiraSnap.resumo.pesoKg,
-              bodyFatPct: primeiraSnap.resumo.bodyFatPct,
-              massaMuscularKg: primeiraSnap.resumo.massaMuscularKg,
-              massaAdiposaKg: primeiraSnap.resumo.massaAdiposaKg,
-              aguaPct: primeiraSnap.resumo.aguaPct,
-              imme: primeiraSnap.resumo.imme,
-              img: primeiraSnap.resumo.img,
-              ffmi: primeiraSnap.resumo.ffmi,
-              createdAt: primeira?.created_at?.toISOString?.() || null,
-              protocolLabel: primeiraSnap.resumo.protocolLabel || "",
+              pesoKg: anteriorSnap.resumo.pesoKg,
+              bodyFatPct: anteriorSnap.resumo.bodyFatPct,
+              massaMuscularKg: anteriorSnap.resumo.massaMuscularKg,
+              massaAdiposaKg: anteriorSnap.resumo.massaAdiposaKg,
+              aguaPct: anteriorSnap.resumo.aguaPct,
+              imme: anteriorSnap.resumo.imme,
+              img: anteriorSnap.resumo.img,
+              ffmi: anteriorSnap.resumo.ffmi,
+              createdAt: anterior?.created_at?.toISOString?.() || null,
+              protocolLabel: anteriorSnap.resumo.protocolLabel || "",
             }
           : null,
         evolucao,
@@ -218,6 +225,7 @@ export async function POST(req: NextRequest) {
           ? body.evolucaoSelecionadaIds
           : [],
         evolucaoAtual,
+        evolucaoAtualId: registroAtual.id,
         dataAvaliacaoInicial,
       },
       nutricionista,
