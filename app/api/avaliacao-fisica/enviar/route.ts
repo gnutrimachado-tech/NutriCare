@@ -134,7 +134,8 @@ export async function POST(req: NextRequest) {
     }
 
     const primeira = await primeiraAvaliacao(pacienteId);
-    const primeiraSnap = primeira ? extrairSnapshotDeEvolucao(primeira) : null;
+    const anterior = rotativas[rotativas.length - 1] || null;
+    const anteriorSnap = anterior ? extrairSnapshotDeEvolucao(anterior) : null;
     const dataAvaliacaoInicial = primeira?.created_at?.toISOString?.() || null;
 
     // Imagem do biotipo pela regra FFMI + BF%
@@ -188,18 +189,18 @@ export async function POST(req: NextRequest) {
         currentCircunferencias: body.currentCircunferencias || {},
         previousDobras: body.previousDobras || {},
         previousCircunferencias: body.previousCircunferencias || {},
-        previousSummary: primeiraSnap
+        previousSummary: anteriorSnap
           ? {
-              pesoKg: primeiraSnap.resumo.pesoKg,
-              bodyFatPct: primeiraSnap.resumo.bodyFatPct,
-              massaMuscularKg: primeiraSnap.resumo.massaMuscularKg,
-              massaAdiposaKg: primeiraSnap.resumo.massaAdiposaKg,
-              aguaPct: primeiraSnap.resumo.aguaPct,
-              imme: primeiraSnap.resumo.imme,
-              img: primeiraSnap.resumo.img,
-              ffmi: primeiraSnap.resumo.ffmi,
-              createdAt: primeira?.created_at?.toISOString?.() || null,
-              protocolLabel: primeiraSnap.resumo.protocolLabel || "",
+              pesoKg: anteriorSnap.resumo.pesoKg,
+              bodyFatPct: anteriorSnap.resumo.bodyFatPct,
+              massaMuscularKg: anteriorSnap.resumo.massaMuscularKg,
+              massaAdiposaKg: anteriorSnap.resumo.massaAdiposaKg,
+              aguaPct: anteriorSnap.resumo.aguaPct,
+              imme: anteriorSnap.resumo.imme,
+              img: anteriorSnap.resumo.img,
+              ffmi: anteriorSnap.resumo.ffmi,
+              createdAt: anterior?.created_at?.toISOString?.() || null,
+              protocolLabel: anteriorSnap.resumo.protocolLabel || "",
             }
           : null,
         evolucao,
