@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
   ccColParam: { width: "42%", flexDirection: "row", alignItems: "center" },
   ccColParamText: { fontSize: 7.8, color: INK },
   ccColRes: { width: "20%", fontSize: 7.8, color: INK },
-  ccColRef: { width: "21%", fontSize: 6.7, color: "#72a979" },
+  ccColRef: { width: "21%", fontSize: 7.8, color: INK },
   ccColEval: { width: "17%" },
 
   pill: {
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
 
   // Imagem de biotipo no card superior direito.
   bodyCardTitle: { alignSelf: "flex-start", marginBottom: 5.67 },
-  bodyImage: { width: 150, height: 150, objectFit: "contain" },
+  bodyImage: { width: "100%", height: 170, objectFit: "contain", alignSelf: "center" },
 
   // Evolução info — silhueta CENTRALIZADA acima e texto CENTRALIZADO abaixo
   // (layout da imagem da direita indicada pelas setas vermelhas).
@@ -1010,8 +1010,8 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             <View style={styles.ccTable}>
               <View style={styles.ccHead}>
                 <Text style={[styles.ccHeadTxt, { width: "42%" }]}>Parâmetro</Text>
-                <Text style={[styles.ccHeadTxt, { width: "20%" }]}>Resultado</Text>
                 <Text style={[styles.ccHeadTxt, { width: "21%" }]}>Referência</Text>
+                <Text style={[styles.ccHeadTxt, { width: "20%" }]}>Resultado</Text>
                 <Text style={[styles.ccHeadTxt, { width: "17%" }]}>Avaliação</Text>
               </View>
 
@@ -1019,8 +1019,8 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <View style={styles.ccColParam}>
                   <Text style={styles.ccColParamText}>Peso</Text>
                 </View>
-                <Text style={styles.ccColRes}>{toFixedPt(dados.pesoKg)} kg</Text>
                 <ReferenciaCelula parametro="peso" sexo={paciente.sexo} idade={paciente.idade} />
+                <Text style={styles.ccColRes}>{toFixedPt(dados.pesoKg)} kg</Text>
                 <View style={styles.ccColEval}><EvalPill /></View>
               </View>
 
@@ -1028,8 +1028,8 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <View style={styles.ccColParam}>
                   <Text style={styles.ccColParamText}>% de água corporal</Text>
                 </View>
-                <Text style={styles.ccColRes}>{toFixedPt(dados.pctAgua)} %</Text>
                 <ReferenciaCelula parametro="agua" sexo={paciente.sexo} idade={paciente.idade} />
+                <Text style={styles.ccColRes}>{toFixedPt(dados.pctAgua)} %</Text>
                 <View style={styles.ccColEval}>
                   <EvalPill
                     cor={dados.classificacaoAgua?.cor}
@@ -1042,8 +1042,8 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <View style={styles.ccColParam}>
                   <Text style={styles.ccColParamText}>Massa muscular</Text>
                 </View>
-                <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
                 <ReferenciaCelula parametro="massaMuscular" sexo={paciente.sexo} idade={paciente.idade} />
+                <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
                 <View style={styles.ccColEval}>
                   <EvalPill
                     cor={dados.classificacaoMassaMuscular?.cor}
@@ -1056,8 +1056,8 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <View style={styles.ccColParam}>
                   <Text style={styles.ccColParamText}>Músculo esquelético</Text>
                 </View>
-                <Text style={styles.ccColRes}>{toFixedPt(dados.imme, 2)} kg/m²</Text>
                 <ReferenciaCelula parametro="imme" sexo={paciente.sexo} idade={paciente.idade} />
+                <Text style={styles.ccColRes}>{toFixedPt(dados.imme, 2)} kg/m²</Text>
                 <View style={styles.ccColEval}>
                   <EvalPill cor={dados.classificacaoImme?.cor} label={dados.classificacaoImme?.label} />
                 </View>
@@ -1067,8 +1067,8 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <View style={styles.ccColParam}>
                   <Text style={styles.ccColParamText}>Massa livre de gordura</Text>
                 </View>
-                <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
                 <ReferenciaCelula parametro="massaMagra" sexo={paciente.sexo} idade={paciente.idade} />
+                <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
                 <View style={styles.ccColEval}>
                   <EvalPill cor={dados.classificacaoFfmi?.cor} label={dados.classificacaoFfmi?.label} />
                 </View>
@@ -1078,8 +1078,8 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <View style={styles.ccColParam}>
                   <Text style={styles.ccColParamText}>Massa adiposa</Text>
                 </View>
-                <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
                 <ReferenciaCelula parametro="massaAdiposa" sexo={paciente.sexo} idade={paciente.idade} />
+                <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
                 <View style={styles.ccColEval}>
                   <EvalPill
                     cor={(dados.classificacaoMassaAdiposa || dados.classificacaoImg)?.cor}
@@ -1092,8 +1092,8 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <View style={styles.ccColParam}>
                   <Text style={styles.ccColParamText}>Índice de massa gorda</Text>
                 </View>
-                <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
                 <ReferenciaCelula parametro="img" sexo={paciente.sexo} idade={paciente.idade} />
+                <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
                 <View style={styles.ccColEval}>
                   {dados.classificacaoImg?.label ? (
                     <EvalPill cor={dados.classificacaoImg.cor} label={dados.classificacaoImg.label} />
@@ -1107,8 +1107,8 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                 <View style={styles.ccColParam}>
                   <Text style={styles.ccColParamText}>% de gordura</Text>
                 </View>
-                <Text style={styles.ccColRes}>{toFixedPt(dados.bfPct)} %</Text>
                 <ReferenciaCelula parametro="gordura" sexo={paciente.sexo} idade={paciente.idade} />
+                <Text style={styles.ccColRes}>{toFixedPt(dados.bfPct)} %</Text>
                 <View style={styles.ccColEval}>
                   {dados.classificacaoGordura?.label ? (
                     <EvalPill cor={dados.classificacaoGordura.cor} label={dados.classificacaoGordura.label} />
