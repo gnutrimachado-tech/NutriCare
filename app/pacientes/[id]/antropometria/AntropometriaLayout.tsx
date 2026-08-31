@@ -7,6 +7,7 @@ import {
   classificarAgua,
   classificarIMME,
   classificarIMG,
+  classificarMassaMuscular,
   classificarFFMI,
   classificarPercentualGordura,
   calcularIMME,
@@ -1042,8 +1043,14 @@ export default function AntropometriaLayout({
       ? calcularFFMI(result.massaMuscular, alturaCm) : 0;
   const immeClass = immeVal > 0 ? classificarIMME(immeVal, sexoCodigo, idade) : null;
   const imgClass  = imgVal  > 0 ? classificarIMG(imgVal,  sexoCodigo, idade) : null;
+  const massaLivreGorduraClass =
+    result.massaMuscular !== null && result.massaMuscular > 0
+      ? classificarMassaMuscular(result.massaMuscular, sexoCodigo, idade)
+      : null;
   const ffmiClass = ffmiVal > 0 ? classificarFFMI(ffmiVal, sexoCodigo) : null;
-  const gorduraClass = result.bodyFatPct !== null ? classificarPercentualGordura(result.bodyFatPct, sexoCodigo) : null;
+  const gorduraClass = result.bodyFatPct !== null
+    ? classificarPercentualGordura(result.bodyFatPct, sexoCodigo, idade)
+    : null;
   const aguaClass =
     aguaCorporalPct !== null ? classificarAgua(aguaCorporalPct, sexoCodigo) : null;
   const vo2maxAtual = pacienteId ? readStoredVO2max(pacienteId) : null;
@@ -1056,22 +1063,26 @@ export default function AntropometriaLayout({
   // Seletor 1ª / 2ª / 3ª avaliação (para comparar)
   const historicoOrdenado = useMemo(() => {
     const arr = [...(historicoAvaliacoes || [])].filter((h) => h?.snapshot);
-    arr.sort((a, b) => {
-      const byCreatedAt =
-        new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
-      return byCreatedAt !== 0 ? byCreatedAt : a.id.localeCompare(b.id);
-    });
+    arr.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
     return arr;
   }, [historicoAvaliacoes]);
+  const [avaliacaoBaseId, setAvaliacaoBaseId] = useState<string>("");
   // Caixas de seleção: quais avaliações (1ª/2ª/3ª) entram na comparação.
-  // A 1ª avaliação é a base automática; as demais marcadas definem o ponto
-  // final dos cards inferiores.
+  // Nenhuma marcada = somente a primeira (a atual); 1 ou 2 marcadas = compara
+  // com 2 ou 3 pontos no gráfico de evolução.
   const [evolucaoSelecionadaIds, setEvolucaoSelecionadaIds] = useState<string[]>([]);
   function toggleEvolucaoSelecionada(id: string) {
     setEvolucaoSelecionadaIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
   }
+  useEffect(() => {
+    // Padrão: comparar contra a 1ª avaliação (mais antiga), se existir.
+    if (!avaliacaoBaseId && historicoOrdenado[0]?.id) {
+      setAvaliacaoBaseId(historicoOrdenado[0].id);
+    }
+  }, [historicoOrdenado, avaliacaoBaseId]);
+
   function classifPill(c: { cor: "verde" | "amarelo" }) {
     return {
       ...avaliacaoPillBaseStyle,
@@ -1569,7 +1580,7 @@ export default function AntropometriaLayout({
             </div>
           )}
         </div>
-        {immeClass && imgClass ? (
+        {immeClass && imgClass && massaLivreGorduraClass ? (
           <div style={avaliacaoExtrasCardStyle}>
             <div style={headerBlockStyle}>
               <div style={iconBubblePurple}>🏆</div>
@@ -1599,10 +1610,10 @@ export default function AntropometriaLayout({
               </div>
 
               <div style={{ ...resultItemStyle, border: "1px solid #dcfce7" }}>
-                <div style={{ ...resultIconGreen, background: metricClassColor("musculo").iconBg, color: metricClassColor("musculo").icon }}>🧩</div>
+                <div style={{ ...resultIconGreen, background: massaLivreGorduraClass.cor === "amarelo" ? "#fef3c7" : "#ecfdf5", color: massaLivreGorduraClass.cor === "amarelo" ? "#b45309" : "#16a34a" }}>🧩</div>
                 <div>
-                  <div style={{ ...resultTitleGreen, color: metricClassColor("musculo").text }}>Massa Livre de Gordura</div>
-                  <div style={resultValueStyle}>{formatPt(ffmiVal, " kg/m²")}</div>
+                  <div style={{ ...resultTitleGreen, color: massaLivreGorduraClass.cor === "amarelo" ? "#b45309" : "#16a34a" }}>Massa Livre de Gordura</div>
+                  <div style={resultValueStyle}>{formatPt(result.massaMuscular, " kg")}</div>
                 </div>
               </div>
             </div>
@@ -1678,9 +1689,35 @@ export default function AntropometriaLayout({
 
             {compararResultados ? (
               <div style={avaliacaoCompareSelectWrapStyle}>
-                <span style={compareHintStyle}>
-                  A comparação começa sempre na 1ª avaliação. Marque as demais para calcular o período até elas:
-                </span>
+                <span style={compareHintStyle}>Comparar com:</span>
+                <select
+                  value={avaliacaoBaseId}
+                  onChange={(e) => setAvaliacaoBaseId(e.target.value)}
+                  style={avaliacaoCompareSelectStyle}
+                >
+                  {historicoOrdenado.length === 0 ? (
+                    <option value="">Sem avaliações anteriores</option>
+                  ) : (
+                    historicoOrdenado.map((h, idx) => {
+                      const label =
+                        idx === 0
+                          ? "1ª avaliação"
+                          : idx === 1
+                          ? "2ª avaliação"
+                          : "3ª avaliação";
+                      const d = h.createdAt ? new Date(h.createdAt).toLocaleDateString("pt-BR") : "—";
+                      return (
+                        <option key={h.id} value={h.id}>
+                          {label} — {d}
+                        </option>
+                      );
+                    })
+                  )}
+                </select>
+
+                {/* Caixas de seleção: o gráfico de evolução do PDF responde a elas.
+                    Nenhuma marcada = somente a primeira (avaliação atual);
+                    1 marcada = compara com 2 meses; 2 marcadas = com 3 meses. */}
                 <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                   {historicoOrdenado.map((h, idx) => {
                     const label =
