@@ -23,40 +23,69 @@ export interface Classificacao {
 
 const IMME_TABLE = {
   F: [
-    { idadeMin: 18, idadeMax: 39, limite: 8.3, bom: 9.7 },
-    { idadeMin: 40, idadeMax: 59, limite: 8.1, bom: 9.4 },
-    { idadeMin: 60, idadeMax: 999, limite: 7.5, bom: 8.9 },
+    { idadeMin: 18, idadeMax: 25, limite: 8.3, bom: 9.7 },
+    { idadeMin: 26, idadeMax: 35, limite: 8.3, bom: 9.7 },
+    { idadeMin: 36, idadeMax: 45, limite: 8.3, bom: 9.7 },
+    { idadeMin: 46, idadeMax: 55, limite: 8.1, bom: 9.5 },
+    { idadeMin: 56, idadeMax: 999, limite: 7.5, bom: 8.9 },
   ],
   M: [
-    { idadeMin: 18, idadeMax: 39, limite: 10.8, bom: 12.6 },
-    { idadeMin: 40, idadeMax: 59, limite: 10.6, bom: 12.4 },
-    { idadeMin: 60, idadeMax: 999, limite: 9.7, bom: 11.5 },
+    { idadeMin: 18, idadeMax: 25, limite: 10.8, bom: 12.6 },
+    { idadeMin: 26, idadeMax: 35, limite: 10.8, bom: 12.6 },
+    { idadeMin: 36, idadeMax: 45, limite: 10.8, bom: 12.6 },
+    { idadeMin: 46, idadeMax: 55, limite: 10.6, bom: 12.4 },
+    { idadeMin: 56, idadeMax: 999, limite: 9.7, bom: 11.5 },
   ],
 } as const;
 
 const MASSA_MUSCULAR_TABLE = {
   F: [
-    { idadeMin: 18, idadeMax: 39, limite: 37.0, bom: 42.0 },
-    { idadeMin: 40, idadeMax: 59, limite: 35.5, bom: 40.5 },
-    { idadeMin: 60, idadeMax: 999, limite: 33.0, bom: 38.0 },
+    { idadeMin: 18, idadeMax: 25, limite: 37.0, bom: 42.0 },
+    { idadeMin: 26, idadeMax: 35, limite: 37.0, bom: 42.0 },
+    { idadeMin: 36, idadeMax: 45, limite: 37.0, bom: 42.0 },
+    { idadeMin: 46, idadeMax: 55, limite: 35.5, bom: 40.5 },
+    { idadeMin: 56, idadeMax: 999, limite: 33.0, bom: 38.0 },
   ],
   M: [
-    { idadeMin: 18, idadeMax: 39, limite: 51.0, bom: 58.0 },
-    { idadeMin: 40, idadeMax: 59, limite: 49.5, bom: 56.0 },
-    { idadeMin: 60, idadeMax: 999, limite: 46.0, bom: 53.0 },
+    { idadeMin: 18, idadeMax: 25, limite: 51.0, bom: 58.0 },
+    { idadeMin: 26, idadeMax: 35, limite: 51.0, bom: 58.0 },
+    { idadeMin: 36, idadeMax: 45, limite: 51.0, bom: 58.0 },
+    { idadeMin: 46, idadeMax: 55, limite: 49.5, bom: 56.0 },
+    { idadeMin: 56, idadeMax: 999, limite: 46.0, bom: 53.0 },
   ],
 } as const;
 
 const IMG_TABLE = {
   F: [
-    { idadeMin: 18, idadeMax: 39, limite: 4.4, otimoMax: 5.3, bom: 9.3 },
-    { idadeMin: 40, idadeMax: 59, limite: 5.4, otimoMax: 6.4, bom: 11.3 },
-    { idadeMin: 60, idadeMax: 999, limite: 6.1, otimoMax: 7.2, bom: 12.0 },
+    { idadeMin: 18, idadeMax: 25, limite: 4.4, otimoMax: 5.3, bom: 9.3 },
+    { idadeMin: 26, idadeMax: 35, limite: 4.4, otimoMax: 5.3, bom: 9.3 },
+    { idadeMin: 36, idadeMax: 45, limite: 4.4, otimoMax: 5.3, bom: 9.3 },
+    { idadeMin: 46, idadeMax: 55, limite: 5.4, otimoMax: 6.4, bom: 11.3 },
+    { idadeMin: 56, idadeMax: 999, limite: 6.1, otimoMax: 7.2, bom: 12.0 },
   ],
   M: [
-    { idadeMin: 18, idadeMax: 39, limite: 2.3, otimoMax: 2.9, bom: 6.0 },
-    { idadeMin: 40, idadeMax: 59, limite: 3.2, otimoMax: 3.9, bom: 7.4 },
-    { idadeMin: 60, idadeMax: 999, limite: 3.6, otimoMax: 4.5, bom: 8.2 },
+    { idadeMin: 18, idadeMax: 25, limite: 2.3, otimoMax: 2.9, bom: 6.0 },
+    { idadeMin: 26, idadeMax: 35, limite: 2.3, otimoMax: 2.9, bom: 6.0 },
+    { idadeMin: 36, idadeMax: 45, limite: 2.3, otimoMax: 2.9, bom: 6.0 },
+    { idadeMin: 46, idadeMax: 55, limite: 3.2, otimoMax: 3.9, bom: 7.4 },
+    { idadeMin: 56, idadeMax: 999, limite: 3.6, otimoMax: 4.5, bom: 8.2 },
+  ],
+} as const;
+
+const PERCENTUAL_GORDURA_TABLE = {
+  F: [
+    { idadeMin: 18, idadeMax: 25, otimoMin: 13.0, otimoMax: 16.0, bomMax: 19.0 },
+    { idadeMin: 26, idadeMax: 35, otimoMin: 14.0, otimoMax: 16.0, bomMax: 20.0 },
+    { idadeMin: 36, idadeMax: 45, otimoMin: 16.0, otimoMax: 19.0, bomMax: 23.0 },
+    { idadeMin: 46, idadeMax: 55, otimoMin: 17.0, otimoMax: 21.0, bomMax: 25.0 },
+    { idadeMin: 56, idadeMax: 999, otimoMin: 18.0, otimoMax: 22.0, bomMax: 26.0 },
+  ],
+  M: [
+    { idadeMin: 18, idadeMax: 25, otimoMin: 4.0, otimoMax: 6.0, bomMax: 10.0 },
+    { idadeMin: 26, idadeMax: 35, otimoMin: 8.0, otimoMax: 11.0, bomMax: 15.0 },
+    { idadeMin: 36, idadeMax: 45, otimoMin: 10.0, otimoMax: 14.0, bomMax: 18.0 },
+    { idadeMin: 46, idadeMax: 55, otimoMin: 12.0, otimoMax: 16.0, bomMax: 20.0 },
+    { idadeMin: 56, idadeMax: 999, otimoMin: 13.0, otimoMax: 18.0, bomMax: 21.0 },
   ],
 } as const;
 
@@ -72,12 +101,12 @@ function pegarFaixa<S extends "M" | "F">(sexo: S, idade: number, tabela: any) {
 
 function classificarTrinca(kind: "baixo-bom-alto" | "baixo-bom-excesso", value: number, limite: number, bom: number): Classificacao {
   if (kind === "baixo-bom-alto") {
-    if (value > bom) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
+    if (value >= bom) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
     if (value >= limite) return { status: "BOM", cor: "verde", label: "Bom" };
     return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
   }
 
-  if (value > bom) return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
+  if (value >= bom) return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
   if (value >= limite) return { status: "BOM", cor: "verde", label: "Bom" };
   return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
 }
@@ -152,28 +181,37 @@ export function classificarFFMI(ffmi: number, sexo: Sexo): Classificacao {
   return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
 }
 
-export function classificarPercentualGordura(bfPct: number, sexo: Sexo): Classificacao {
-  if (sexo === "M") {
-    if (bfPct <= 12) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
-    if (bfPct <= 16) return { status: "BOM", cor: "verde", label: "Bom" };
-    return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
+export function classificarPercentualGordura(
+  bfPct: number,
+  sexo: Sexo,
+  idade: number,
+): Classificacao {
+  const faixa = pegarFaixa(sexo, idade, PERCENTUAL_GORDURA_TABLE);
+  if (bfPct >= faixa.otimoMin && bfPct <= faixa.otimoMax) {
+    return { status: "OTIMO", cor: "verde", label: "Ótimo" };
   }
-
-  if (bfPct <= 20) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
-  if (bfPct <= 26) return { status: "BOM", cor: "verde", label: "Bom" };
+  if (bfPct <= faixa.bomMax && bfPct >= faixa.otimoMin) {
+    return { status: "BOM", cor: "verde", label: "Bom" };
+  }
   return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
 }
 
 export function escolherImagemFrontal(sexo: Sexo, ffmi: number, bfPct: number): CodigoImagem {
   if (sexo === "M") {
-    if (ffmi >= 21.5) return bfPct <= 12 ? 3 : 4;
-    if (ffmi >= 17.5) return bfPct <= 16 ? 1 : 5;
-    return bfPct <= 16 ? 6 : 2;
+    if (ffmi >= 21.5 && bfPct <= 12) return 3;
+    if (ffmi >= 21.5 && bfPct > 12) return 4;
+    if (ffmi >= 17.5 && ffmi <= 21.4 && bfPct <= 16) return 1;
+    if (ffmi >= 17.5 && ffmi <= 21.4 && bfPct > 16) return 5;
+    if (ffmi < 17.5 && bfPct > 16) return 2;
+    return 6;
   }
 
-  if (ffmi >= 19) return bfPct <= 20 ? 3 : 4;
-  if (ffmi >= 14.5) return bfPct <= 26 ? 1 : 5;
-  return bfPct <= 26 ? 6 : 2;
+  if (ffmi >= 19 && bfPct <= 20) return 3;
+  if (ffmi >= 19 && bfPct > 20) return 4;
+  if (ffmi >= 14.5 && ffmi <= 18.9 && bfPct <= 26) return 1;
+  if (ffmi >= 14.5 && ffmi <= 18.9 && bfPct > 26) return 5;
+  if (ffmi < 14.5 && bfPct > 26) return 2;
+  return 6;
 }
 
 function imagemPrefixo(sexo: Sexo) {
@@ -181,8 +219,9 @@ function imagemPrefixo(sexo: Sexo) {
 }
 
 export function imagemFrontalUrl(sexo: Sexo, code: CodigoImagem): string {
-  // Os arquivos atuais da pasta public/images/avaliacao foram salvos com
-  // .png.jpg para as imagens 1–3 e .png.png para as imagens 4–6.
+  // Os arquivos 1–3 foram enviados ao repositório como .png.jpg e os
+  // arquivos 4–6 como .png.png. Mantemos os nomes reais para não quebrar
+  // os assets que já estão publicados.
   const extensao = code <= 3 ? "png.jpg" : "png.png";
   return `/images/avaliacao/${imagemPrefixo(sexo)}-frente-${code}.${extensao}`;
 }
@@ -217,7 +256,7 @@ export function resumoCompleto(input: AvaliacaoInput) {
       imme: classificarIMME(imme, input.sexo, input.idade),
       img: classificarIMG(img, input.sexo, input.idade),
       ffmi: classificarFFMI(ffmi, input.sexo),
-      gordura: classificarPercentualGordura(input.bfPct, input.sexo),
+      gordura: classificarPercentualGordura(input.bfPct, input.sexo, input.idade),
     },
     imagem: {
       codigo: code,
