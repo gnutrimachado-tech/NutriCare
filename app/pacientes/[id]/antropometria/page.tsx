@@ -56,8 +56,15 @@ export default async function AntropometriaPage({ params }: Props) {
     snapshot: extrairSnapshotDeEvolucao(r),
   }));
 
+  // A referência para "Antes" é sempre a avaliação imediatamente anterior
+  // na ordem real de criação. Isso também funciona quando várias avaliações
+  // têm a mesma data de calendário.
   const primeira = await primeiraAvaliacao(id);
-  const avaliacaoAnterior = primeira ? extrairSnapshotDeEvolucao(primeira) : null;
+  const avaliacaoAnterior = rotativas.length
+    ? extrairSnapshotDeEvolucao(rotativas[rotativas.length - 1])
+    : primeira
+      ? extrairSnapshotDeEvolucao(primeira)
+      : null;
 
   return (
     <div>
