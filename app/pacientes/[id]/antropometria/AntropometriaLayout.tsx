@@ -1056,7 +1056,11 @@ export default function AntropometriaLayout({
   // Seletor 1ª / 2ª / 3ª avaliação (para comparar)
   const historicoOrdenado = useMemo(() => {
     const arr = [...(historicoAvaliacoes || [])].filter((h) => h?.snapshot);
-    arr.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+    arr.sort((a, b) => {
+      const byCreatedAt =
+        new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+      return byCreatedAt !== 0 ? byCreatedAt : a.id.localeCompare(b.id);
+    });
     return arr;
   }, [historicoAvaliacoes]);
   // Caixas de seleção: quais avaliações (1ª/2ª/3ª) entram na comparação.
