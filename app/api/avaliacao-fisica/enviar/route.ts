@@ -109,6 +109,7 @@ export async function POST(req: NextRequest) {
       return {
         id: r.id,
         data: fmtData(r.created_at),
+        createdAt: r.created_at?.toISOString?.() || null,
         peso: snap?.resumo.pesoKg ?? (Number(r.peso ?? 0) || null),
         massaMuscular: snap?.resumo.massaMuscularKg ?? (Number(r.massa_muscular ?? 0) || null),
         bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
