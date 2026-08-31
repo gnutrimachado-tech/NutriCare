@@ -190,10 +190,45 @@ export function classificarPercentualGordura(
   if (bfPct >= faixa.otimoMin && bfPct <= faixa.otimoMax) {
     return { status: "OTIMO", cor: "verde", label: "Ótimo" };
   }
-  if (bfPct <= faixa.bomMax && bfPct >= faixa.otimoMin) {
+  if (bfPct > faixa.otimoMax && bfPct <= faixa.bomMax) {
     return { status: "BOM", cor: "verde", label: "Bom" };
   }
   return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
+}
+
+function formatarReferencia(value: number) {
+  return value.toLocaleString("pt-BR", {
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 1,
+    maximumFractionDigits: 1,
+  });
+}
+
+function faixaTrincaReferencia(
+  faixa: { limite: number; bom: number },
+  unidade: string,
+) {
+  const limite = formatarReferencia(faixa.limite);
+  const bom = formatarReferencia(faixa.bom);
+  return `Atenção < ${limite}${unidade}\nBom ≥ ${limite} e < ${bom}${unidade}\nÓtimo ≥ ${bom}${unidade}`;
+}
+
+export function obterReferenciasComposicao(sexo: Sexo, idade: number) {
+  const imme = pegarFaixa(sexo, idade, IMME_TABLE);
+  const massa = pegarFaixa(sexo, idade, MASSA_MUSCULAR_TABLE);
+  const img = pegarFaixa(sexo, idade, IMG_TABLE);
+  const gordura = pegarFaixa(sexo, idade, PERCENTUAL_GORDURA_TABLE);
+  const agua = sexo === "M"
+    ? { limite: 50, bom: 58 }
+    : { limite: 42, bom: 50 };
+
+  return {
+    agua: `Atenção < ${formatarReferencia(agua.limite)}%\nBom ≥ ${formatarReferencia(agua.limite)}% e < ${formatarReferencia(agua.bom)}%\nÓtimo ≥ ${formatarReferencia(agua.bom)}%`,
+    massaMuscular: faixaTrincaReferencia(massa, " kg"),
+    imme: faixaTrincaReferencia(imme, " kg/m²"),
+    massaLivreGordura: faixaTrincaReferencia(massa, " kg"),
+    img: `Atenção < ${formatarReferencia(img.limite)} ou > ${formatarReferencia(img.bom)} kg/m²\nÓtimo ${formatarReferencia(img.limite)}–${formatarReferencia(img.otimoMax)} kg/m²\nBom > ${formatarReferencia(img.otimoMax)} e ≤ ${formatarReferencia(img.bom)} kg/m²`,
+    gordura: `Ótimo ${formatarReferencia(gordura.otimoMin)}–${formatarReferencia(gordura.otimoMax)}%\nBom > ${formatarReferencia(gordura.otimoMax)} e ≤ ${formatarReferencia(gordura.bomMax)}%`,
+  };
 }
 
 export function escolherImagemFrontal(sexo: Sexo, ffmi: number, bfPct: number): CodigoImagem {
