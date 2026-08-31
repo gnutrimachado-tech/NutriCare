@@ -126,7 +126,7 @@ export function extrairSnapshotDeEvolucao(item: {
 export async function listarUltimasTresAvaliacoes(pacienteId: string) {
   const rows = await prisma.evolucao_corporal.findMany({
     where: { paciente_id: pacienteId },
-    orderBy: { created_at: "asc" },
+    orderBy: [{ created_at: "asc" }, { id: "asc" }],
   });
 
   // Regra: mantém 1ª (mais antiga) + últimas 2 (rotativas).
@@ -139,14 +139,14 @@ export async function listarUltimasTresAvaliacoes(pacienteId: string) {
 export async function primeiraAvaliacao(pacienteId: string) {
   return prisma.evolucao_corporal.findFirst({
     where: { paciente_id: pacienteId },
-    orderBy: { created_at: "asc" },
+    orderBy: [{ created_at: "asc" }, { id: "asc" }],
   });
 }
 
 export async function ultimaAvaliacao(pacienteId: string) {
   return prisma.evolucao_corporal.findFirst({
     where: { paciente_id: pacienteId },
-    orderBy: { created_at: "desc" },
+    orderBy: [{ created_at: "desc" }, { id: "desc" }],
   });
 }
 
@@ -162,7 +162,7 @@ export async function salvarAvaliacaoHistorico(args: PersistArgs) {
   // os que continuam vivos (o mais antigo é a 1ª e não sai).
   const existentes = await prisma.evolucao_corporal.findMany({
     where: { paciente_id: args.pacienteId },
-    orderBy: { created_at: "asc" },
+    orderBy: [{ created_at: "asc" }, { id: "asc" }],
     select: { id: true, created_at: true },
   });
 
@@ -179,7 +179,19 @@ export async function salvarAvaliacaoHistorico(args: PersistArgs) {
     // passa a ocupar a posição de "3ª" (created_at mais recente).
   }
 
-  await prisma.evolucao_corporal.create({
+  // `created_at` é a ordem real da avaliação. O ajuste de 1 ms evita empate
+  // quando duas avaliações são registradas no mesmo instante, inclusive no
+  // mesmo dia, sem exibir hora/minuto/segundo na interface.
+  const agora = new Date();
+  const ultimoCriado = existentes[existentes.length - 1]?.created_at;
+  const createdAt =
+    ultimoCriado && ultimoCriado.getTime() >= agora.getTime()
+      ? new Date(ultimoCriado.getTime() + 1)
+      : agora;
+  snapshot.createdAt = createdAt.toISOString();
+  snapshot.resumo.createdAt = createdAt.toISOString();
+
+  const criado = await prisma.evolucao_corporal.create({
     data: {
       paciente_id: args.pacienteId,
       peso: snapshot.resumo.pesoKg,
@@ -187,8 +199,13 @@ export async function salvarAvaliacaoHistorico(args: PersistArgs) {
       massa_muscular: snapshot.resumo.massaMuscularKg,
       circunferencia_abdominal: abdomen ?? cintura,
       observacoes: JSON.stringify({ tipo: "avaliacao_fisica", snapshot }),
+      created_at: createdAt,
     },
   });
 
-  return snapshot;
+  return {
+    snapshot,
+    id: criado.id,
+    createdAt: criado.created_at?.toISOString?.() || createdAt.toISOString(),
+  };
 }
