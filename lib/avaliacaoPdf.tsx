@@ -384,11 +384,11 @@ const styles = StyleSheet.create({
   },
 
   // Tabela composição corporal
-  ccTable: { width: "90%", alignSelf: "center", position: "relative", left: 10 },
+  ccTable: { width: "100%", alignSelf: "stretch" },
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   ccHeadTxt: { fontSize: 7.4, color: MUTED, fontWeight: 700 },
   ccRow: { flexDirection: "row", alignItems: "center", paddingVertical: 2.4 },
-  ccColParam: { width: "52%", flexDirection: "row", alignItems: "center", paddingLeft: 10 },
+  ccColParam: { width: "52%", flexDirection: "row", alignItems: "center" },
   ccColParamText: { fontSize: 8.2, color: INK },
   ccColRes: { width: "24%", fontSize: 8.2, color: INK },
   ccColEval: { width: "24%" },
@@ -504,7 +504,7 @@ const styles = StyleSheet.create({
   footBig: { fontSize: 13, fontWeight: 800, color: INK },
   footDelta: { fontSize: 7.8, marginTop: 3 },
   footSince: { fontSize: 7, color: MUTED, marginTop: 2 },
-  footChart: { width: "100%", height: 38, marginTop: 4 },
+  footChart: { width: 116, height: 38, marginTop: 4, alignSelf: "center" },
 
   // ============ RODAPÉ FIXO (igual ao PDF de Orientações) ============
   // footerY (Orientações) = 56.  Nome fica em y=footerY+12 (baseline).
@@ -962,7 +962,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
             <View style={styles.ccTable}>
               <View style={styles.ccHead}>
-                <Text style={[styles.ccHeadTxt, { width: "52%", paddingLeft: 10 }]}>Parâmetro</Text>
+                <Text style={[styles.ccHeadTxt, { width: "52%" }]}>Parâmetro</Text>
                 <Text style={[styles.ccHeadTxt, { width: "24%" }]}>Resultado</Text>
                 <Text style={[styles.ccHeadTxt, { width: "24%" }]}>Avaliação</Text>
               </View>
