@@ -225,20 +225,14 @@ export function obterReferenciasComposicao(sexo: Sexo, idade: number) {
 
 export function escolherImagemFrontal(sexo: Sexo, ffmi: number, bfPct: number): CodigoImagem {
   if (sexo === "M") {
-    if (ffmi >= 21.5 && bfPct <= 12) return 3;
-    if (ffmi >= 21.5 && bfPct > 12) return 4;
-    if (ffmi >= 17.5 && ffmi <= 21.4 && bfPct <= 16) return 1;
-    if (ffmi >= 17.5 && ffmi <= 21.4 && bfPct > 16) return 5;
-    if (ffmi < 17.5 && bfPct > 16) return 2;
-    return 6;
+    if (ffmi >= 21.5) return bfPct <= 12 ? 3 : 4;
+    if (ffmi >= 17.5 && ffmi < 21.5) return bfPct <= 16 ? 1 : 5;
+    return bfPct <= 16 ? 6 : 2;
   }
 
-  if (ffmi >= 19 && bfPct <= 20) return 3;
-  if (ffmi >= 19 && bfPct > 20) return 4;
-  if (ffmi >= 14.5 && ffmi <= 18.9 && bfPct <= 26) return 1;
-  if (ffmi >= 14.5 && ffmi <= 18.9 && bfPct > 26) return 5;
-  if (ffmi < 14.5 && bfPct > 26) return 2;
-  return 6;
+  if (ffmi >= 19) return bfPct <= 20 ? 3 : 4;
+  if (ffmi >= 14.5 && ffmi < 19) return bfPct <= 26 ? 1 : 5;
+  return bfPct <= 26 ? 6 : 2;
 }
 
 function imagemPrefixo(sexo: Sexo) {
