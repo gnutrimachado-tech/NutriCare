@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
   },
 
   // Tabela composição corporal
-  ccTable: { width: "100%", alignSelf: "stretch" },
+  ccTable: { width: "100%", alignSelf: "stretch", marginTop: 2.83 },
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   ccHeadTxt: { fontSize: 7, color: MUTED, fontWeight: 700 },
   ccRow: { flexDirection: "row", alignItems: "center", paddingVertical: 2.4 },
