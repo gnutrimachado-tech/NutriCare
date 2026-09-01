@@ -23,69 +23,76 @@ export interface Classificacao {
 
 const IMME_TABLE = {
   F: [
-    { idadeMin: 18, idadeMax: 25, limite: 8.3, bom: 9.7 },
-    { idadeMin: 26, idadeMax: 35, limite: 8.3, bom: 9.7 },
-    { idadeMin: 36, idadeMax: 45, limite: 8.3, bom: 9.7 },
-    { idadeMin: 46, idadeMax: 55, limite: 8.1, bom: 9.5 },
-    { idadeMin: 56, idadeMax: 999, limite: 7.5, bom: 8.9 },
+    { idadeMin: 18, idadeMax: 39, limite: 8.3, bom: 9.7 },
+    { idadeMin: 40, idadeMax: 59, limite: 8.1, bom: 9.4 },
+    { idadeMin: 60, idadeMax: 999, limite: 7.5, bom: 8.9 },
   ],
   M: [
-    { idadeMin: 18, idadeMax: 25, limite: 10.8, bom: 12.6 },
-    { idadeMin: 26, idadeMax: 35, limite: 10.8, bom: 12.6 },
-    { idadeMin: 36, idadeMax: 45, limite: 10.8, bom: 12.6 },
-    { idadeMin: 46, idadeMax: 55, limite: 10.6, bom: 12.4 },
-    { idadeMin: 56, idadeMax: 999, limite: 9.7, bom: 11.5 },
+    { idadeMin: 18, idadeMax: 39, limite: 10.8, bom: 12.6 },
+    { idadeMin: 40, idadeMax: 59, limite: 10.6, bom: 12.4 },
+    { idadeMin: 60, idadeMax: 999, limite: 9.7, bom: 11.5 },
   ],
 } as const;
 
 const MASSA_MUSCULAR_TABLE = {
   F: [
-    { idadeMin: 18, idadeMax: 25, limite: 37.0, bom: 42.0 },
-    { idadeMin: 26, idadeMax: 35, limite: 37.0, bom: 42.0 },
-    { idadeMin: 36, idadeMax: 45, limite: 37.0, bom: 42.0 },
-    { idadeMin: 46, idadeMax: 55, limite: 35.5, bom: 40.5 },
-    { idadeMin: 56, idadeMax: 999, limite: 33.0, bom: 38.0 },
+    { idadeMin: 18, idadeMax: 39, limite: 37.0, bom: 42.0 },
+    { idadeMin: 40, idadeMax: 59, limite: 35.5, bom: 40.5 },
+    { idadeMin: 60, idadeMax: 999, limite: 33.0, bom: 38.0 },
   ],
   M: [
-    { idadeMin: 18, idadeMax: 25, limite: 51.0, bom: 58.0 },
-    { idadeMin: 26, idadeMax: 35, limite: 51.0, bom: 58.0 },
-    { idadeMin: 36, idadeMax: 45, limite: 51.0, bom: 58.0 },
-    { idadeMin: 46, idadeMax: 55, limite: 49.5, bom: 56.0 },
-    { idadeMin: 56, idadeMax: 999, limite: 46.0, bom: 53.0 },
+    { idadeMin: 18, idadeMax: 39, limite: 51.0, bom: 58.0 },
+    { idadeMin: 40, idadeMax: 59, limite: 49.5, bom: 56.0 },
+    { idadeMin: 60, idadeMax: 999, limite: 46.0, bom: 53.0 },
   ],
 } as const;
 
 const IMG_TABLE = {
   F: [
-    { idadeMin: 18, idadeMax: 25, limite: 4.4, otimoMax: 5.3, bom: 9.3 },
-    { idadeMin: 26, idadeMax: 35, limite: 4.4, otimoMax: 5.3, bom: 9.3 },
-    { idadeMin: 36, idadeMax: 45, limite: 4.4, otimoMax: 5.3, bom: 9.3 },
-    { idadeMin: 46, idadeMax: 55, limite: 5.4, otimoMax: 6.4, bom: 11.3 },
-    { idadeMin: 56, idadeMax: 999, limite: 6.1, otimoMax: 7.2, bom: 12.0 },
+    { idadeMin: 18, idadeMax: 39, limite: 4.4, otimoMax: 5.3, bom: 9.3 },
+    { idadeMin: 40, idadeMax: 59, limite: 5.4, otimoMax: 6.4, bom: 11.3 },
+    { idadeMin: 60, idadeMax: 999, limite: 6.1, otimoMax: 7.2, bom: 12.0 },
   ],
   M: [
-    { idadeMin: 18, idadeMax: 25, limite: 2.3, otimoMax: 2.9, bom: 6.0 },
-    { idadeMin: 26, idadeMax: 35, limite: 2.3, otimoMax: 2.9, bom: 6.0 },
-    { idadeMin: 36, idadeMax: 45, limite: 2.3, otimoMax: 2.9, bom: 6.0 },
-    { idadeMin: 46, idadeMax: 55, limite: 3.2, otimoMax: 3.9, bom: 7.4 },
-    { idadeMin: 56, idadeMax: 999, limite: 3.6, otimoMax: 4.5, bom: 8.2 },
+    { idadeMin: 18, idadeMax: 39, limite: 2.3, otimoMax: 2.9, bom: 6.0 },
+    { idadeMin: 40, idadeMax: 59, limite: 3.2, otimoMax: 3.9, bom: 7.4 },
+    { idadeMin: 60, idadeMax: 999, limite: 3.6, otimoMax: 4.5, bom: 8.2 },
   ],
 } as const;
 
 const PERCENTUAL_GORDURA_TABLE = {
   F: [
-    { idadeMin: 18, idadeMax: 25, otimoMin: 13.0, otimoMax: 16.0, bomMax: 19.0 },
-    { idadeMin: 26, idadeMax: 35, otimoMin: 14.0, otimoMax: 16.0, bomMax: 20.0 },
-    { idadeMin: 36, idadeMax: 45, otimoMin: 16.0, otimoMax: 19.0, bomMax: 23.0 },
-    { idadeMin: 46, idadeMax: 55, otimoMin: 17.0, otimoMax: 21.0, bomMax: 25.0 },
-    { idadeMin: 56, idadeMax: 999, otimoMin: 18.0, otimoMax: 22.0, bomMax: 26.0 },
+    { idadeMin: 18, idadeMax: 25, otimoMin: 13.0, otimoMax: 16.0, bomMin: 17.0, bomMax: 19.0 },
+    { idadeMin: 26, idadeMax: 35, otimoMin: 14.0, otimoMax: 16.0, bomMin: 18.0, bomMax: 20.0 },
+    { idadeMin: 36, idadeMax: 45, otimoMin: 16.0, otimoMax: 19.0, bomMin: 20.0, bomMax: 23.0 },
+    { idadeMin: 46, idadeMax: 55, otimoMin: 17.0, otimoMax: 21.0, bomMin: 23.0, bomMax: 25.0 },
+    { idadeMin: 56, idadeMax: 999, otimoMin: 18.0, otimoMax: 22.0, bomMin: 24.0, bomMax: 26.0 },
   ],
   M: [
-    { idadeMin: 18, idadeMax: 25, otimoMin: 4.0, otimoMax: 6.0, bomMax: 10.0 },
-    { idadeMin: 26, idadeMax: 35, otimoMin: 8.0, otimoMax: 11.0, bomMax: 15.0 },
-    { idadeMin: 36, idadeMax: 45, otimoMin: 10.0, otimoMax: 14.0, bomMax: 18.0 },
-    { idadeMin: 46, idadeMax: 55, otimoMin: 12.0, otimoMax: 16.0, bomMax: 20.0 },
-    { idadeMin: 56, idadeMax: 999, otimoMin: 13.0, otimoMax: 18.0, bomMax: 21.0 },
+    { idadeMin: 18, idadeMax: 25, otimoMin: 4.0, otimoMax: 6.0, bomMin: 8.0, bomMax: 10.0 },
+    { idadeMin: 26, idadeMax: 35, otimoMin: 8.0, otimoMax: 11.0, bomMin: 12.0, bomMax: 15.0 },
+    { idadeMin: 36, idadeMax: 45, otimoMin: 10.0, otimoMax: 14.0, bomMin: 16.0, bomMax: 18.0 },
+    { idadeMin: 46, idadeMax: 55, otimoMin: 12.0, otimoMax: 16.0, bomMin: 18.0, bomMax: 20.0 },
+    { idadeMin: 56, idadeMax: 999, otimoMin: 13.0, otimoMax: 18.0, bomMin: 20.0, bomMax: 21.0 },
+  ],
+} as const;
+
+// Estas são as faixas do TXT enviado pelo usuário. Elas aparecem somente na
+// coluna "Referência" do card, como valor adequado por sexo e idade.
+const REFERENCIA_ADEQUADA_TABLE = {
+  F: [
+    { idadeMin: 18, idadeMax: 25, agua: 50.0, massaMuscular: 42.0, imme: 9.7, imgMin: 4.4, imgMax: 5.3, gorduraMin: 16.1, gorduraMax: 19.0 },
+    { idadeMin: 26, idadeMax: 35, agua: 50.0, massaMuscular: 42.0, imme: 9.7, imgMin: 4.4, imgMax: 5.3, gorduraMin: 16.1, gorduraMax: 20.0 },
+    { idadeMin: 36, idadeMax: 45, agua: 50.0, massaMuscular: 42.0, imme: 9.7, imgMin: 4.4, imgMax: 5.3, gorduraMin: 19.1, gorduraMax: 23.0 },
+    { idadeMin: 46, idadeMax: 55, agua: 50.0, massaMuscular: 40.5, imme: 9.5, imgMin: 5.4, imgMax: 6.4, gorduraMin: 21.1, gorduraMax: 25.0 },
+    { idadeMin: 56, idadeMax: 999, agua: 50.0, massaMuscular: 38.0, imme: 8.9, imgMin: 6.1, imgMax: 7.2, gorduraMin: 22.1, gorduraMax: 26.0 },
+  ],
+  M: [
+    { idadeMin: 18, idadeMax: 25, agua: 58.0, massaMuscular: 58.0, imme: 12.6, imgMin: 2.3, imgMax: 2.9, gorduraMin: 6.1, gorduraMax: 10.0 },
+    { idadeMin: 26, idadeMax: 35, agua: 58.0, massaMuscular: 58.0, imme: 12.6, imgMin: 2.3, imgMax: 2.9, gorduraMin: 11.1, gorduraMax: 15.0 },
+    { idadeMin: 36, idadeMax: 45, agua: 58.0, massaMuscular: 58.0, imme: 12.6, imgMin: 2.3, imgMax: 2.9, gorduraMin: 14.1, gorduraMax: 18.0 },
+    { idadeMin: 46, idadeMax: 55, agua: 58.0, massaMuscular: 56.0, imme: 12.4, imgMin: 3.2, imgMax: 3.9, gorduraMin: 16.1, gorduraMax: 20.0 },
+    { idadeMin: 56, idadeMax: 999, agua: 58.0, massaMuscular: 53.0, imme: 11.5, imgMin: 3.6, imgMax: 4.5, gorduraMin: 18.1, gorduraMax: 21.0 },
   ],
 } as const;
 
@@ -190,7 +197,7 @@ export function classificarPercentualGordura(
   if (bfPct >= faixa.otimoMin && bfPct <= faixa.otimoMax) {
     return { status: "OTIMO", cor: "verde", label: "Ótimo" };
   }
-  if (bfPct > faixa.otimoMax && bfPct <= faixa.bomMax) {
+  if (bfPct >= faixa.bomMin && bfPct <= faixa.bomMax) {
     return { status: "BOM", cor: "verde", label: "Bom" };
   }
   return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
@@ -203,31 +210,16 @@ function formatarReferencia(value: number) {
   });
 }
 
-function faixaTrincaReferencia(
-  faixa: { limite: number; bom: number },
-  unidade: string,
-) {
-  const limite = formatarReferencia(faixa.limite);
-  const bom = formatarReferencia(faixa.bom);
-  return `Atenção < ${limite}${unidade}\nBom ≥ ${limite} e < ${bom}${unidade}\nÓtimo ≥ ${bom}${unidade}`;
-}
-
 export function obterReferenciasComposicao(sexo: Sexo, idade: number) {
-  const imme = pegarFaixa(sexo, idade, IMME_TABLE);
-  const massa = pegarFaixa(sexo, idade, MASSA_MUSCULAR_TABLE);
-  const img = pegarFaixa(sexo, idade, IMG_TABLE);
-  const gordura = pegarFaixa(sexo, idade, PERCENTUAL_GORDURA_TABLE);
-  const agua = sexo === "M"
-    ? { limite: 50, bom: 58 }
-    : { limite: 42, bom: 50 };
+  const adequado = pegarFaixa(sexo, idade, REFERENCIA_ADEQUADA_TABLE);
 
   return {
-    agua: `Atenção < ${formatarReferencia(agua.limite)}%\nBom ≥ ${formatarReferencia(agua.limite)}% e < ${formatarReferencia(agua.bom)}%\nÓtimo ≥ ${formatarReferencia(agua.bom)}%`,
-    massaMuscular: faixaTrincaReferencia(massa, " kg"),
-    imme: faixaTrincaReferencia(imme, " kg/m²"),
-    massaLivreGordura: faixaTrincaReferencia(massa, " kg"),
-    img: `Atenção < ${formatarReferencia(img.limite)} ou > ${formatarReferencia(img.bom)} kg/m²\nÓtimo ${formatarReferencia(img.limite)}–${formatarReferencia(img.otimoMax)} kg/m²\nBom > ${formatarReferencia(img.otimoMax)} e ≤ ${formatarReferencia(img.bom)} kg/m²`,
-    gordura: `Ótimo ${formatarReferencia(gordura.otimoMin)}–${formatarReferencia(gordura.otimoMax)}%\nBom > ${formatarReferencia(gordura.otimoMax)} e ≤ ${formatarReferencia(gordura.bomMax)}%`,
+    agua: `Adequado ≥ ${formatarReferencia(adequado.agua)}%`,
+    massaMuscular: `Adequado ≥ ${formatarReferencia(adequado.massaMuscular)} kg`,
+    imme: `Adequado ≥ ${formatarReferencia(adequado.imme)} kg/m²`,
+    massaLivreGordura: `Adequado ≥ ${formatarReferencia(adequado.massaMuscular)} kg`,
+    img: `Adequado ${formatarReferencia(adequado.imgMin)}–${formatarReferencia(adequado.imgMax)} kg/m²`,
+    gordura: `Adequado ${formatarReferencia(adequado.gorduraMin)}–${formatarReferencia(adequado.gorduraMax)}%`,
   };
 }
 
