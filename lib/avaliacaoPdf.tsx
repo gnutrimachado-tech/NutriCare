@@ -574,18 +574,18 @@ type ReferenciaFaixa = Record<Exclude<ReferenciaParametro, "peso">, string>;
 
 const REFERENCIAS_COMPOSICAO: Record<"M" | "F", ReferenciaFaixa[]> = {
   M: [
-    { agua: "≥ 58,0%", massaMuscular: "≥ 58,0 kg", imme: "≥ 12,6 kg/m²", massaMagra: "≥ 58,0 kg", massaAdiposa: "2,3–2,9 kg/m²", img: "2,3–2,9 kg/m²", gordura: "6,1–10,0%" },
-    { agua: "≥ 58,0%", massaMuscular: "≥ 58,0 kg", imme: "≥ 12,6 kg/m²", massaMagra: "≥ 58,0 kg", massaAdiposa: "2,3–2,9 kg/m²", img: "2,3–2,9 kg/m²", gordura: "11,1–15,0%" },
-    { agua: "≥ 58,0%", massaMuscular: "≥ 58,0 kg", imme: "≥ 12,6 kg/m²", massaMagra: "≥ 58,0 kg", massaAdiposa: "2,3–2,9 kg/m²", img: "2,3–2,9 kg/m²", gordura: "14,1–18,0%" },
-    { agua: "≥ 58,0%", massaMuscular: "≥ 56,0 kg", imme: "≥ 12,4 kg/m²", massaMagra: "≥ 56,0 kg", massaAdiposa: "3,2–3,9 kg/m²", img: "3,2–3,9 kg/m²", gordura: "16,1–20,0%" },
-    { agua: "≥ 58,0%", massaMuscular: "≥ 53,0 kg", imme: "≥ 11,5 kg/m²", massaMagra: "≥ 53,0 kg", massaAdiposa: "3,6–4,5 kg/m²", img: "3,6–4,5 kg/m²", gordura: "18,1–21,0%" },
+    { agua: "58,0%", massaMuscular: "58,0 kg", imme: "12,6 kg/m²", massaMagra: "58,0 kg", massaAdiposa: "2,3–2,9 kg/m²", img: "2,3–2,9 kg/m²", gordura: "6,1–10,0%" },
+    { agua: "58,0%", massaMuscular: "58,0 kg", imme: "12,6 kg/m²", massaMagra: "58,0 kg", massaAdiposa: "2,3–2,9 kg/m²", img: "2,3–2,9 kg/m²", gordura: "11,1–15,0%" },
+    { agua: "58,0%", massaMuscular: "58,0 kg", imme: "12,6 kg/m²", massaMagra: "58,0 kg", massaAdiposa: "2,3–2,9 kg/m²", img: "2,3–2,9 kg/m²", gordura: "14,1–18,0%" },
+    { agua: "58,0%", massaMuscular: "56,0 kg", imme: "12,4 kg/m²", massaMagra: "56,0 kg", massaAdiposa: "3,2–3,9 kg/m²", img: "3,2–3,9 kg/m²", gordura: "16,1–20,0%" },
+    { agua: "58,0%", massaMuscular: "53,0 kg", imme: "11,5 kg/m²", massaMagra: "53,0 kg", massaAdiposa: "3,6–4,5 kg/m²", img: "3,6–4,5 kg/m²", gordura: "18,1–21,0%" },
   ],
   F: [
-    { agua: "≥ 50,0%", massaMuscular: "≥ 42,0 kg", imme: "≥ 9,7 kg/m²", massaMagra: "≥ 42,0 kg", massaAdiposa: "4,4–5,3 kg/m²", img: "4,4–5,3 kg/m²", gordura: "16,1–19,0%" },
-    { agua: "≥ 50,0%", massaMuscular: "≥ 42,0 kg", imme: "≥ 9,7 kg/m²", massaMagra: "≥ 42,0 kg", massaAdiposa: "4,4–5,3 kg/m²", img: "4,4–5,3 kg/m²", gordura: "16,1–20,0%" },
-    { agua: "≥ 50,0%", massaMuscular: "≥ 42,0 kg", imme: "≥ 9,7 kg/m²", massaMagra: "≥ 42,0 kg", massaAdiposa: "4,4–5,3 kg/m²", img: "4,4–5,3 kg/m²", gordura: "19,1–23,0%" },
-    { agua: "≥ 50,0%", massaMuscular: "≥ 40,5 kg", imme: "≥ 9,5 kg/m²", massaMagra: "≥ 40,5 kg", massaAdiposa: "5,4–6,4 kg/m²", img: "5,4–6,4 kg/m²", gordura: "21,1–25,0%" },
-    { agua: "≥ 50,0%", massaMuscular: "≥ 38,0 kg", imme: "≥ 8,9 kg/m²", massaMagra: "≥ 38,0 kg", massaAdiposa: "6,1–7,2 kg/m²", img: "6,1–7,2 kg/m²", gordura: "22,1–26,0%" },
+    { agua: "50,0%", massaMuscular: "42,0 kg", imme: "9,7 kg/m²", massaMagra: "42,0 kg", massaAdiposa: "4,4–5,3 kg/m²", img: "4,4–5,3 kg/m²", gordura: "16,1–19,0%" },
+    { agua: "50,0%", massaMuscular: "42,0 kg", imme: "9,7 kg/m²", massaMagra: "42,0 kg", massaAdiposa: "4,4–5,3 kg/m²", img: "4,4–5,3 kg/m²", gordura: "16,1–20,0%" },
+    { agua: "50,0%", massaMuscular: "42,0 kg", imme: "9,7 kg/m²", massaMagra: "42,0 kg", massaAdiposa: "4,4–5,3 kg/m²", img: "4,4–5,3 kg/m²", gordura: "19,1–23,0%" },
+    { agua: "50,0%", massaMuscular: "40,5 kg", imme: "9,5 kg/m²", massaMagra: "40,5 kg", massaAdiposa: "5,4–6,4 kg/m²", img: "5,4–6,4 kg/m²", gordura: "21,1–25,0%" },
+    { agua: "50,0%", massaMuscular: "38,0 kg", imme: "8,9 kg/m²", massaMagra: "38,0 kg", massaAdiposa: "6,1–7,2 kg/m²", img: "6,1–7,2 kg/m²", gordura: "22,1–26,0%" },
   ],
 };
 
