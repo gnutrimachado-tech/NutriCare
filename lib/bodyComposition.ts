@@ -214,12 +214,12 @@ export function obterReferenciasComposicao(sexo: Sexo, idade: number) {
   const adequado = pegarFaixa(sexo, idade, REFERENCIA_ADEQUADA_TABLE);
 
   return {
-    agua: `Adequado ≥ ${formatarReferencia(adequado.agua)}%`,
-    massaMuscular: `Adequado ≥ ${formatarReferencia(adequado.massaMuscular)} kg`,
-    imme: `Adequado ≥ ${formatarReferencia(adequado.imme)} kg/m²`,
-    massaLivreGordura: `Adequado ≥ ${formatarReferencia(adequado.massaMuscular)} kg`,
-    img: `Adequado ${formatarReferencia(adequado.imgMin)}–${formatarReferencia(adequado.imgMax)} kg/m²`,
-    gordura: `Adequado ${formatarReferencia(adequado.gorduraMin)}–${formatarReferencia(adequado.gorduraMax)}%`,
+    agua: `Adequado: ${formatarReferencia(adequado.agua)}% ou mais`,
+    massaMuscular: `Adequado: ${formatarReferencia(adequado.massaMuscular)} kg ou mais`,
+    imme: `Adequado: ${formatarReferencia(adequado.imme)} kg/m² ou mais`,
+    massaLivreGordura: `Adequado: ${formatarReferencia(adequado.massaMuscular)} kg ou mais`,
+    img: `Adequado: ${formatarReferencia(adequado.imgMin)}–${formatarReferencia(adequado.imgMax)} kg/m²`,
+    gordura: `Adequado: ${formatarReferencia(adequado.gorduraMin)}–${formatarReferencia(adequado.gorduraMax)}%`,
   };
 }
 
