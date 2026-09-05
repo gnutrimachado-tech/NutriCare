@@ -66,6 +66,7 @@ export type EvolucaoHistoricoPonto = {
   id: string;
   data: string;
   createdAt?: string | null;
+  dataAvaliacao?: string | null;
   peso?: number | null;
   massaMuscular?: number | null;
   bfPct?: number | null;
@@ -81,6 +82,7 @@ type PdfProps = {
   };
   dados: {
     data: string;
+    dataAvaliacao?: string | null;
     pesoKg: number;
     pctAgua: number;
     massaMagraKg: number;
@@ -201,6 +203,14 @@ function formatBirth(v?: string | null) {
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return v;
   return d.toLocaleDateString("pt-BR");
+}
+function formatAssessmentDate(v?: string | null) {
+  if (!v) return "—";
+  if (/^\d{4}-\d{2}-\d{2}/.test(v)) {
+    const [yyyy, mm, dd] = v.slice(0, 10).split("-");
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  return formatBirth(v);
 }
 function labelSexo(s: "M" | "F") {
   return s === "F" ? "feminino" : "masculino";
@@ -416,7 +426,7 @@ const styles = StyleSheet.create({
   // Distâncias topo/base espelham o card COMPOSIÇÃO CORPORAL ("Peso" no topo
   // e "% de gordura" na base).
   evoInfoCard: { flexGrow: 1, justifyContent: "space-between" },
-  evoInfoCol: { flexDirection: "column", alignItems: "center", marginTop: 0 },
+  evoInfoCol: { flexDirection: "column", alignItems: "center", marginTop: 14.17 },
   evoFigure: { width: 72, height: 56, objectFit: "contain", marginBottom: 5 },
   evoFigureSvg: { width: 72, height: 56, marginBottom: 5 },
   evoInfoTextWrap: { width: "100%" },
@@ -877,8 +887,8 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   // A lista vem do banco em ordem cronológica. O ID é usado para localizar
   // com precisão o registro recém-criado quando ele já foi persistido.
   const historico = [...(dados.evolucaoHistorico || [])].sort((a, b) => {
-    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    const aTime = new Date(a.dataAvaliacao || a.createdAt || 0).getTime();
+    const bTime = new Date(b.dataAvaliacao || b.createdAt || 0).getTime();
     const byCreatedAt = aTime - bTime;
     return byCreatedAt !== 0 ? byCreatedAt : a.id.localeCompare(b.id);
   });
@@ -958,13 +968,13 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
     indiceAtual > 0
       ? historico[indiceAtual - 1]
       : historico[historico.length - 1] || null;
-  const base = avaliacaoAnteriorImediata
+  const base = previous || (avaliacaoAnteriorImediata
     ? {
         pesoKg: avaliacaoAnteriorImediata.peso,
         massaMuscularKg: avaliacaoAnteriorImediata.massaMuscular,
         bodyFatPct: avaliacaoAnteriorImediata.bfPct,
       }
-    : previous;
+    : null);
   const pesoComparado = atual?.peso ?? dados.pesoKg;
   const massaMuscularComparada = atual?.massaMuscular ?? dados.massaMagraKg;
   const gorduraComparada = atual?.bfPct ?? dados.bfPct;
@@ -1002,7 +1012,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             {`nascimento: ${formatBirth(paciente.nascimento)} | peso: ${toFixedPt(dados.pesoKg)}kg`}
           </Text>
           <Text style={styles.headerInfoLine2}>
-            {`altura: ${toFixedPt(paciente.altura_cm, 0)}cm | sexo: ${labelSexo(paciente.sexo)}`}
+            {`altura: ${toFixedPt(paciente.altura_cm, 0)}cm | sexo: ${labelSexo(paciente.sexo)} | avaliação: ${formatAssessmentDate(dados.dataAvaliacao)}`}
           </Text>
           <View style={styles.headerRule} />
           <Text style={styles.headerTitle}>AVALIAÇÃO FÍSICA</Text>
