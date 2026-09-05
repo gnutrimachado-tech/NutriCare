@@ -56,13 +56,36 @@ export default async function AntropometriaPage({ params }: Props) {
     snapshot: extrairSnapshotDeEvolucao(r),
   }));
 
-  // A referência para "Antes" é sempre a avaliação imediatamente anterior
-  // na ordem real de criação. Isso também funciona quando várias avaliações
-  // têm a mesma data de calendário.
+  // "Antes" é a avaliação imediatamente anterior à data informada na Anamnese.
+  // Assim, uma avaliação antiga não passa a ser comparada com uma avaliação
+  // posterior apenas porque foi digitada agora.
+  const dataAvaliacaoAtual = anamnese?.data_avaliacao?.getTime?.() ?? Date.now();
+  const avaliacoesAnteriores = rotativas
+    .filter((r) => {
+      const snapshot = extrairSnapshotDeEvolucao(r);
+      const dataRegistro =
+        snapshot?.dataAvaliacao ||
+        r.data_avaliacao?.toISOString?.() ||
+        r.created_at?.toISOString?.() ||
+        null;
+      const timestamp = dataRegistro ? new Date(dataRegistro).getTime() : 0;
+      return timestamp < dataAvaliacaoAtual;
+    })
+    .sort((a, b) => {
+      const dataA = extrairSnapshotDeEvolucao(a)?.dataAvaliacao || a.data_avaliacao?.toISOString?.() || a.created_at?.toISOString?.() || "";
+      const dataB = extrairSnapshotDeEvolucao(b)?.dataAvaliacao || b.data_avaliacao?.toISOString?.() || b.created_at?.toISOString?.() || "";
+      return new Date(dataB).getTime() - new Date(dataA).getTime();
+    });
+
   const primeira = await primeiraAvaliacao(id);
-  const avaliacaoAnterior = rotativas.length
-    ? extrairSnapshotDeEvolucao(rotativas[rotativas.length - 1])
-    : primeira
+  const avaliacaoAnterior = avaliacoesAnteriores.length
+    ? extrairSnapshotDeEvolucao(avaliacoesAnteriores[0])
+    : primeira && new Date(
+        extrairSnapshotDeEvolucao(primeira)?.dataAvaliacao ||
+        primeira.data_avaliacao?.toISOString?.() ||
+        primeira.created_at?.toISOString?.() ||
+        0
+      ).getTime() < dataAvaliacaoAtual
       ? extrairSnapshotDeEvolucao(primeira)
       : null;
 
@@ -85,6 +108,7 @@ export default async function AntropometriaPage({ params }: Props) {
         idade={idade}
         pesoKg={pesoKg}
         alturaCm={alturaCm}
+        dataAvaliacao={anamnese?.data_avaliacao?.toISOString?.() || null}
         avaliacaoAnteriorInicial={avaliacaoAnterior}
         historicoAvaliacoes={historico}
       />
