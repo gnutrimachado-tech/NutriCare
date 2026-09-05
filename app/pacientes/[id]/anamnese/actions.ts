@@ -7,6 +7,13 @@ import { redirect } from "next/navigation";
 const CUSTOM_SECTION_TITLE = "--- Perguntas personalizadas ---";
 
 function parseFormData(formData: FormData) {
+  const dataAvaliacaoRaw = String(formData.get("data_avaliacao") || "").trim();
+  const dataAvaliacao =
+    /^\d{4}-\d{2}-\d{2}$/.test(dataAvaliacaoRaw) &&
+    !Number.isNaN(new Date(`${dataAvaliacaoRaw}T12:00:00.000Z`).getTime())
+      ? new Date(`${dataAvaliacaoRaw}T12:00:00.000Z`)
+      : null;
+
   const toDecimal = (valor: FormDataEntryValue | null) => {
     const texto = String(valor || "").replace(",", ".").trim();
     if (!texto) return null;
@@ -35,6 +42,7 @@ function parseFormData(formData: FormData) {
     .join("\n\n");
 
   return {
+    data_avaliacao: dataAvaliacao,
     peso: toDecimal(formData.get("peso")),
     altura: toDecimal(formData.get("altura")),
     percentual_gordura: toDecimal(formData.get("percentual_gordura")),
