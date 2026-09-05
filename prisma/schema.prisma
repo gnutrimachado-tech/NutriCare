@@ -38,6 +38,7 @@ model alimentos {
 model anamneses {
   id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   paciente_id         String    @db.Uuid
+  data_avaliacao      DateTime? @db.Date
   peso                Decimal?  @db.Decimal(6, 2)
   altura              Decimal?  @db.Decimal(6, 2)
   imc                 Decimal?  @db.Decimal(6, 2)
