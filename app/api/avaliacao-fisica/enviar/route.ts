@@ -38,17 +38,49 @@ type BodyShape = {
   currentCircunferencias?: Record<string, number>;
   previousDobras?: Record<string, number>;
   previousCircunferencias?: Record<string, number>;
+  dataAvaliacao?: string | null;
   // Ids das avaliações (1ª/2ª/3ª) marcadas nas caixas de seleção da aba Antropometria
   evolucaoSelecionadaIds?: string[];
 };
 
 function fmtData(d: Date | string | null | undefined) {
   if (!d) return "";
+  if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}/.test(d)) {
+    const [yyyy, mm, dd] = d.slice(0, 10).split("-");
+    return `${dd}/${mm}`;
+  }
   const date = new Date(d);
   if (Number.isNaN(date.getTime())) return "";
   const dd = String(date.getDate()).padStart(2, "0");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   return `${dd}/${mm}`;
+}
+
+function dataAvaliacaoDoRegistro(
+  registro: Parameters<typeof extrairSnapshotDeEvolucao>[0],
+  snapshot: ReturnType<typeof extrairSnapshotDeEvolucao>
+) {
+  return snapshot?.dataAvaliacao || registro.data_avaliacao?.toISOString?.() || registro.created_at?.toISOString?.() || null;
+}
+
+function escolherAnteriorPorData(
+  registros: Array<Parameters<typeof extrairSnapshotDeEvolucao>[0]>,
+  dataAtual: string | null | undefined
+) {
+  const dataAtualMs = dataAtual ? new Date(`${dataAtual.slice(0, 10)}T12:00:00.000Z`).getTime() : Date.now();
+  return (
+    [...registros]
+      .filter((registro) => {
+        const snapshot = extrairSnapshotDeEvolucao(registro);
+        const data = dataAvaliacaoDoRegistro(registro, snapshot);
+        return data ? new Date(data).getTime() < dataAtualMs : false;
+      })
+      .sort((a, b) => {
+        const dataA = dataAvaliacaoDoRegistro(a, extrairSnapshotDeEvolucao(a)) || "";
+        const dataB = dataAvaliacaoDoRegistro(b, extrairSnapshotDeEvolucao(b)) || "";
+        return new Date(dataB).getTime() - new Date(dataA).getTime();
+      })[0] || null
+  );
 }
 
 export async function POST(req: NextRequest) {
@@ -97,7 +129,7 @@ export async function POST(req: NextRequest) {
     const evolucaoBanco = rotativas.map((r) => {
       const snap = extrairSnapshotDeEvolucao(r);
       return {
-        data: fmtData(r.created_at),
+        data: fmtData(dataAvaliacaoDoRegistro(r, snap)),
         peso: snap?.resumo.pesoKg ?? (Number(r.peso ?? 0) || null),
         massaMuscular: snap?.resumo.massaMuscularKg ?? (Number(r.massa_muscular ?? 0) || null),
         bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
@@ -108,8 +140,9 @@ export async function POST(req: NextRequest) {
       const snap = extrairSnapshotDeEvolucao(r);
       return {
         id: r.id,
-        data: fmtData(r.created_at),
+        data: fmtData(dataAvaliacaoDoRegistro(r, snap)),
         createdAt: r.created_at?.toISOString?.() || null,
+        dataAvaliacao: snap?.dataAvaliacao || r.data_avaliacao?.toISOString?.() || null,
         peso: snap?.resumo.pesoKg ?? (Number(r.peso ?? 0) || null),
         massaMuscular: snap?.resumo.massaMuscularKg ?? (Number(r.massa_muscular ?? 0) || null),
         bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
@@ -119,7 +152,7 @@ export async function POST(req: NextRequest) {
     // Acrescenta o ponto ATUAL (envio de hoje) no final, sem persistir.
     const hoje = new Date();
     const atualPonto = {
-      data: fmtData(hoje),
+      data: fmtData(body.dataAvaliacao || hoje),
       peso: resumo.pesoKg,
       massaMuscular: resumo.massaMagraKg,
       bfPct: resumo.bfPct,
@@ -134,9 +167,12 @@ export async function POST(req: NextRequest) {
     }
 
     const primeira = await primeiraAvaliacao(pacienteId);
-    const anterior = rotativas[rotativas.length - 1] || null;
+    const anterior = escolherAnteriorPorData(rotativas, body.dataAvaliacao);
     const anteriorSnap = anterior ? extrairSnapshotDeEvolucao(anterior) : null;
-    const dataAvaliacaoInicial = primeira?.created_at?.toISOString?.() || null;
+    const primeiraSnapshot = primeira ? extrairSnapshotDeEvolucao(primeira) : null;
+    const dataAvaliacaoInicial = primeira
+      ? dataAvaliacaoDoRegistro(primeira, primeiraSnapshot)
+      : null;
 
     // Imagem do biotipo pela regra FFMI + BF%
     const imagemFrenteUrl = imagemFrontalUrl(sexo, resumo.imagem.codigo);
@@ -167,6 +203,7 @@ export async function POST(req: NextRequest) {
       },
       dados: {
         data: new Date().toLocaleDateString("pt-BR"),
+        dataAvaliacao: body.dataAvaliacao || hoje.toISOString(),
         pesoKg: resumo.pesoKg,
         pctAgua: resumo.pctAgua,
         massaMagraKg: resumo.massaMagraKg,
@@ -199,7 +236,7 @@ export async function POST(req: NextRequest) {
               imme: anteriorSnap.resumo.imme,
               img: anteriorSnap.resumo.img,
               ffmi: anteriorSnap.resumo.ffmi,
-              createdAt: anterior?.created_at?.toISOString?.() || null,
+              createdAt: anterior ? dataAvaliacaoDoRegistro(anterior, anteriorSnap) : null,
               protocolLabel: anteriorSnap.resumo.protocolLabel || "",
             }
           : null,
