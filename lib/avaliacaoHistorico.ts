@@ -27,6 +27,7 @@ export type AvaliacaoHistoricoResumo = {
 
 export type AvaliacaoHistoricoSnapshot = {
   createdAt: string;
+  dataAvaliacao?: string | null;
   protocolLabel: string;
   dobras: Record<string, string | number>;
   circunferencias: Record<string, string | number>;
@@ -35,6 +36,7 @@ export type AvaliacaoHistoricoSnapshot = {
 
 type PersistArgs = {
   pacienteId: string;
+  dataAvaliacao?: string | null;
   protocolLabel?: string;
   currentDobras?: Record<string, number>;
   currentCircunferencias?: Record<string, number>;
@@ -49,6 +51,7 @@ function toNullableNumber(value: unknown) {
 export function buildAvaliacaoSnapshot(args: PersistArgs): AvaliacaoHistoricoSnapshot {
   return {
     createdAt: new Date().toISOString(),
+    dataAvaliacao: normalizeDataAvaliacao(args.dataAvaliacao) || new Date().toISOString(),
     protocolLabel: args.protocolLabel || "",
     dobras: Object.fromEntries(
       Object.entries(args.currentDobras || {}).map(([k, v]) => [k, String(v).replace(".", ",")])
@@ -74,6 +77,7 @@ export function buildAvaliacaoSnapshot(args: PersistArgs): AvaliacaoHistoricoSna
 export function extrairSnapshotDeEvolucao(item: {
   observacoes?: string | null;
   created_at?: Date | null;
+  data_avaliacao?: Date | null;
   peso?: unknown;
   percentual_gordura?: unknown;
   massa_muscular?: unknown;
@@ -101,6 +105,10 @@ export function extrairSnapshotDeEvolucao(item: {
 
   return {
     createdAt: item?.created_at?.toISOString?.() || new Date().toISOString(),
+    dataAvaliacao:
+      item?.data_avaliacao?.toISOString?.() ||
+      item?.created_at?.toISOString?.() ||
+      null,
     protocolLabel: "",
     dobras: {},
     circunferencias: item?.circunferencia_abdominal
@@ -198,6 +206,7 @@ export async function salvarAvaliacaoHistorico(args: PersistArgs) {
       percentual_gordura: snapshot.resumo.bodyFatPct,
       massa_muscular: snapshot.resumo.massaMuscularKg,
       circunferencia_abdominal: abdomen ?? cintura,
+      data_avaliacao: toDateOnly(snapshot.dataAvaliacao),
       observacoes: JSON.stringify({ tipo: "avaliacao_fisica", snapshot }),
       created_at: createdAt,
     },
@@ -208,4 +217,25 @@ export async function salvarAvaliacaoHistorico(args: PersistArgs) {
     id: criado.id,
     createdAt: criado.created_at?.toISOString?.() || createdAt.toISOString(),
   };
+}
+
+function normalizeDataAvaliacao(value?: string | null) {
+  if (!value) return null;
+  const texto = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+    const date = new Date(`${texto}T12:00:00.000Z`);
+    return Number.isNaN(date.getTime()) ? null : texto;
+  }
+  const date = new Date(texto);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
+function toDateOnly(value?: string | null) {
+  const normalized = normalizeDataAvaliacao(value);
+  if (!normalized) return new Date();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return new Date(`${normalized}T12:00:00.000Z`);
+  }
+  return new Date(normalized);
 }
