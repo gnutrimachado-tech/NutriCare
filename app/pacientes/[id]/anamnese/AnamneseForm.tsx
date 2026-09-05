@@ -96,6 +96,12 @@ function normalizeLabel(value: string) {
     .toLowerCase();
 }
 
+function valorData(valor: unknown) {
+  if (!valor) return "";
+  const texto = String(valor);
+  return /^\d{4}-\d{2}-\d{2}/.test(texto) ? texto.slice(0, 10) : "";
+}
+
 function extraKey(fieldId: string | undefined, label: string) {
   if (fieldId && fieldId.startsWith("field_")) return `field:${fieldId}`;
   return `label:${normalizeLabel(label)}`;
@@ -445,6 +451,21 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
           </div>
         </div>
 
+        <div style={dataAvaliacaoRowStyle}>
+          <div style={dataAvaliacaoFieldStyle}>
+            <label style={campoLabelStyle}>Data da avaliação</label>
+            <input
+              type="date"
+              name="data_avaliacao"
+              style={inputLinhaStyle}
+              defaultValue={valorData(dados?.data_avaliacao)}
+            />
+          </div>
+          <span style={dataAvaliacaoHintStyle}>
+            Use a data em que esta avaliação foi realizada para separar medidas antigas das atuais no PDF.
+          </span>
+        </div>
+
         {/* Campos de medição numérica */}
         <div style={rowStyle}>
           <div style={campoPequenoStyle}>
@@ -581,6 +602,9 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
 }
 
 const rowStyle = { display: "flex", gap: "12px", marginBottom: "12px", flexWrap: "nowrap" as const, alignItems: "stretch" };
+const dataAvaliacaoRowStyle = { display: "flex", gap: "12px", marginBottom: "20px", alignItems: "flex-end", flexWrap: "wrap" as const };
+const dataAvaliacaoFieldStyle = { width: "220px", display: "flex" as const, flexDirection: "column" as const };
+const dataAvaliacaoHintStyle = { fontSize: "12px", color: "#64748b", paddingBottom: "12px", maxWidth: "620px" };
 const campoPequenoStyle = { flex: 1, minWidth: 0, display: "flex" as const, flexDirection: "column" as const };
 const campoLabelStyle = { fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "4px" } as const;
 const inputLinhaStyle  = { width: "100%", padding: "12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "14px" } as const;
