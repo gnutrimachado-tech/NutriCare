@@ -31,6 +31,7 @@ type Props = {
   idade: number;
   pesoKg: number;
   alturaCm: number;
+  dataAvaliacao?: string | null;
   avaliacaoAnteriorInicial?: AvaliacaoHistoricoSnapshot | null;
   historicoAvaliacoes?: HistoricoItem[];
 };
@@ -375,6 +376,10 @@ function readStoredVO2max(pacienteId: string) {
 
 function getSnapshotDateLabel(value?: string) {
   if (!value) return "—";
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+    const [yyyy, mm, dd] = value.slice(0, 10).split("-");
+    return `${dd}/${mm}/${yyyy}`;
+  }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleDateString("pt-BR");
@@ -761,6 +766,7 @@ export default function AntropometriaLayout({
   idade,
   pesoKg,
   alturaCm,
+  dataAvaliacao = null,
   avaliacaoAnteriorInicial = null,
   historicoAvaliacoes = [],
 }: Props) {
@@ -832,6 +838,12 @@ export default function AntropometriaLayout({
   const [compararResultados, setCompararResultados] = useState(false);
   const [avaliacaoAnterior, setAvaliacaoAnterior] =
     useState<AvaliacaoHistoricoSnapshot | null>(avaliacaoAnteriorInicial);
+
+  const dataAvaliacaoAtual = useMemo(() => {
+    if (!dataAvaliacao) return null;
+    const texto = String(dataAvaliacao);
+    return /^\d{4}-\d{2}-\d{2}/.test(texto) ? texto.slice(0, 10) : null;
+  }, [dataAvaliacao]);
 
   useEffect(() => {
     if (!pacienteId) {
@@ -1063,7 +1075,11 @@ export default function AntropometriaLayout({
   // Seletor 1ª / 2ª / 3ª avaliação (para comparar)
   const historicoOrdenado = useMemo(() => {
     const arr = [...(historicoAvaliacoes || [])].filter((h) => h?.snapshot);
-    arr.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+    arr.sort((a, b) => {
+      const aDate = a.snapshot?.dataAvaliacao || a.createdAt || 0;
+      const bDate = b.snapshot?.dataAvaliacao || b.createdAt || 0;
+      return new Date(aDate).getTime() - new Date(bDate).getTime();
+    });
     return arr;
   }, [historicoAvaliacoes]);
   const [avaliacaoBaseId, setAvaliacaoBaseId] = useState<string>("");
@@ -1219,6 +1235,7 @@ export default function AntropometriaLayout({
   function buildCurrentSnapshot(): AvaliacaoHistoricoSnapshot {
     return {
       createdAt: new Date().toISOString(),
+      dataAvaliacao: dataAvaliacaoAtual,
       protocolLabel: protocoloAtual?.label ?? "",
       dobras: currentDobras,
       circunferencias: currentCircunferencias,
@@ -1250,6 +1267,7 @@ export default function AntropometriaLayout({
     const snapshot = buildCurrentSnapshot();
     return {
       pacienteId,
+      dataAvaliacao: dataAvaliacaoAtual,
       sex: sexoCodigo,
       idade,
       alturaCm,
@@ -1705,7 +1723,7 @@ export default function AntropometriaLayout({
                           : idx === 1
                           ? "2ª avaliação"
                           : "3ª avaliação";
-                      const d = h.createdAt ? new Date(h.createdAt).toLocaleDateString("pt-BR") : "—";
+                      const d = getSnapshotDateLabel(h.snapshot?.dataAvaliacao || h.createdAt || undefined);
                       return (
                         <option key={h.id} value={h.id}>
                           {label} — {d}
@@ -1722,7 +1740,7 @@ export default function AntropometriaLayout({
                   {historicoOrdenado.map((h, idx) => {
                     const label =
                       idx === 0 ? "1ª avaliação" : idx === 1 ? "2ª avaliação" : "3ª avaliação";
-                    const d = h.createdAt ? new Date(h.createdAt).toLocaleDateString("pt-BR") : "—";
+                    const d = getSnapshotDateLabel(h.snapshot?.dataAvaliacao || h.createdAt || undefined);
                     return (
                       <label key={h.id} style={avaliacaoCompareToggleStyle}>
                         <input
