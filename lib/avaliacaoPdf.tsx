@@ -517,9 +517,21 @@ const styles = StyleSheet.create({
   footSince: { fontSize: 7, color: MUTED, marginTop: 2 },
   footChart: { width: 116, height: 38, marginTop: 4, alignSelf: "center" },
 
-  // ============ RODAPÉ FIXO (igual ao PDF de Orientações) ============
-  // footerY (Orientações) = 56.  Nome fica em y=footerY+12 (baseline).
-  // Convertendo para top: PAGE_HEIGHT - (footerY + 12) - fontSize.
+  // ============ RODAPÉ FIXO (igual ao PDF de Plano Alimentar) ============
+  // No PDF de Plano Alimentar (pdf-lib, coord bottom-up):
+  //   footerY = 56
+  //   texto "Nutricionista: {nome}" em y = footerY + 12 = 68  (baseline)
+  //   linha em y = footerY + 10 = 66  (2pt abaixo do baseline)
+  //   CRN em y = footerY - 8 = 48    (baseline)
+  //
+  // Em @react-pdf (top-down) o `top` corresponde ao TOPO do texto, não à
+  // baseline.  Como a fonte GreatVibes tem cap-height ≈ 0.68 do fontSize e um
+  // ascender ≈ 0.82 do fontSize, para que o texto ENCOSTE na linha (como no
+  // PDF de Plano Alimentar) usamos:
+  //   top_do_texto = PAGE_HEIGHT - baseline_bottomUp - fontSize * 0.82
+  //
+  // Assim o texto desce e a base das letras fica praticamente encostada na
+  // linha, replicando exatamente o visual do PDF de Plano Alimentar.
   footerFixed: {
     position: "absolute",
     left: 0,
@@ -529,7 +541,9 @@ const styles = StyleSheet.create({
   },
   signName: {
     position: "absolute",
-    top: PAGE_HEIGHT - (56 + 12) - 18,
+    // baseline bottomUp = 68 (footerY+12). Ascender GreatVibes ≈ 18*0.82 = 14.76
+    // → top = PAGE_HEIGHT - 68 - 14.76
+    top: PAGE_HEIGHT - (56 + 12) - 18 * 0.82,
     left: PAGE_MARGIN_X,
     fontSize: 18,
     fontFamily: "GreatVibes",
@@ -537,6 +551,7 @@ const styles = StyleSheet.create({
   },
   signLine: {
     position: "absolute",
+    // linha em y bottomUp = 66  → top = PAGE_HEIGHT - 66
     top: PAGE_HEIGHT - (56 + 10),
     left: PAGE_MARGIN_X,
     height: 0.8,
@@ -545,7 +560,9 @@ const styles = StyleSheet.create({
   },
   signCrn: {
     position: "absolute",
-    top: PAGE_HEIGHT - (56 - 8) - 16,
+    // baseline bottomUp = 48 (footerY-8). Ascender GreatVibes ≈ 16*0.82 = 13.12
+    // → top = PAGE_HEIGHT - 48 - 13.12
+    top: PAGE_HEIGHT - (56 - 8) - 16 * 0.82,
     left: PAGE_MARGIN_X,
     fontSize: 16,
     fontFamily: "GreatVibes",
