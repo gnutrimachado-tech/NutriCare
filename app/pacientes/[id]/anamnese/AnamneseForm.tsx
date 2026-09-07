@@ -161,6 +161,8 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
   const [camposSelecionados, setCamposSelecionados] = useState<string[]>([]);
   const [envioStatus, setEnvioStatus]       = useState<"idle" | "loading" | "ok" | "erro">("idle");
   const [envioMsg, setEnvioMsg]             = useState("");
+  const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false);
+  const [avaliacaoMsg, setAvaliacaoMsg]     = useState("");
 
   // ── Carrega campos globais e seleção salva ao montar / trocar paciente ──
   useEffect(() => {
@@ -383,6 +385,52 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
     setCamposSelecionados([]);
   }
 
+  // ── Salvar avaliação: quando o paciente já traz a avaliação física pronta,
+  //    o nutri sobe os valores (peso, % gordura, massa muscular etc.) + a data
+  //    e grava no histórico rotativo 1ª / 2ª / 3ª. Não gera PDF nem envia e-mail. ──
+  async function handleSalvarAvaliacao() {
+    if (salvandoAvaliacao) return;
+    const ler = (nome: string) =>
+      Number(String((formRef.current?.elements.namedItem(nome) as HTMLInputElement | null)?.value || "").replace(",", ".")) || null;
+    const dataInput = formRef.current?.elements.namedItem("data_avaliacao") as HTMLInputElement | null;
+    const peso = ler("peso");
+    const gordura = ler("percentual_gordura");
+    const muscular = ler("massa_muscular");
+    if (!(peso && peso > 0) && !(gordura && gordura > 0) && !(muscular && muscular > 0)) {
+      setAvaliacaoMsg("Informe ao menos peso, % de gordura ou massa muscular para salvar a avaliação.");
+      return;
+    }
+    setSalvandoAvaliacao(true);
+    setAvaliacaoMsg("Salvando avaliação...");
+    try {
+      const resp = await fetch("/api/avaliacao-fisica/salvar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pacienteId,
+          dataAvaliacao: dataInput?.value || null,
+          resumo: {
+            pesoKg: peso,
+            bodyFatPct: gordura,
+            massaMuscularKg: muscular,
+            massaAdiposaKg: ler("massa_adiposa"),
+            aguaPct: ler("agua_corporal"),
+          },
+        }),
+      });
+      const json = await resp.json().catch(() => ({}));
+      if (!resp.ok || json?.ok === false) {
+        setAvaliacaoMsg(json?.erro || "Não foi possível salvar a avaliação.");
+      } else {
+        setAvaliacaoMsg(`Avaliação nº ${json?.numeroAvaliacao ?? "?"} salva no histórico (comparação no PDF da Antropometria).`);
+      }
+    } catch (e: any) {
+      setAvaliacaoMsg(e?.message || "Erro ao salvar avaliação.");
+    } finally {
+      setSalvandoAvaliacao(false);
+    }
+  }
+
   async function handleEnviarFormulario() {
     if (camposSelecionados.length === 0) {
       alert("Selecione pelo menos um campo para enviar.");
@@ -461,10 +509,35 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
               defaultValue={valorData(dados?.data_avaliacao)}
             />
           </div>
+          <button
+            type="button"
+            onClick={handleSalvarAvaliacao}
+            disabled={salvandoAvaliacao}
+            style={{
+              padding: "10px 16px",
+              background: "#2f5d31",
+              color: "#fff",
+              border: "none",
+              borderRadius: "10px",
+              fontWeight: 700,
+              cursor: salvandoAvaliacao ? "not-allowed" : "pointer",
+              fontSize: "13px",
+              opacity: salvandoAvaliacao ? 0.55 : 1,
+            }}
+          >
+            {salvandoAvaliacao ? "Salvando..." : "💾 Salvar avaliação"}
+          </button>
           <span style={dataAvaliacaoHintStyle}>
             Use a data em que esta avaliação foi realizada para separar medidas antigas das atuais no PDF.
+            "Salvar avaliação" grava o histórico (1ª, 2ª, 3ª — a mais recente) para a comparação no PDF da Antropometria.
           </span>
         </div>
+
+        {avaliacaoMsg && (
+          <div style={{ marginBottom: "16px", padding: "10px 12px", background: "#f6f7f4", border: "1px solid #e6ebde", borderRadius: "8px", fontSize: "13px", color: "#334" }}>
+            {avaliacaoMsg}
+          </div>
+        )}
 
         {/* Campos de medição numérica */}
         <div style={rowStyle}>
