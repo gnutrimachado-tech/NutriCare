@@ -839,11 +839,27 @@ export default function AntropometriaLayout({
   const [avaliacaoAnterior, setAvaliacaoAnterior] =
     useState<AvaliacaoHistoricoSnapshot | null>(avaliacaoAnteriorInicial);
 
+  // Histórico exibido no seletor 1ª/2ª/3ª — atualizado na hora após "Salvar avaliação".
+  const [historicoLocal, setHistoricoLocal] = useState<HistoricoItem[]>(historicoAvaliacoes);
+  const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false);
+
   const dataAvaliacaoAtual = useMemo(() => {
     if (!dataAvaliacao) return null;
     const texto = String(dataAvaliacao);
     return /^\d{4}-\d{2}-\d{2}/.test(texto) ? texto.slice(0, 10) : null;
   }, [dataAvaliacao]);
+
+  // Data da avaliação editável aqui na Antropometria.
+  // Padrão: a data informada na Anamnese (se houver).
+  const [dataAvaliacaoForm, setDataAvaliacaoForm] = useState<string>(dataAvaliacaoAtual || "");
+  useEffect(() => {
+    setDataAvaliacaoForm(dataAvaliacaoAtual || "");
+  }, [dataAvaliacaoAtual]);
+  const dataAvaliacaoEfetiva = dataAvaliacaoForm || dataAvaliacaoAtual || null;
+
+  useEffect(() => {
+    setHistoricoLocal(historicoAvaliacoes || []);
+  }, [historicoAvaliacoes]);
 
   useEffect(() => {
     if (!pacienteId) {
@@ -1074,14 +1090,14 @@ export default function AntropometriaLayout({
 
   // Seletor 1ª / 2ª / 3ª avaliação (para comparar)
   const historicoOrdenado = useMemo(() => {
-    const arr = [...(historicoAvaliacoes || [])].filter((h) => h?.snapshot);
+    const arr = [...(historicoLocal || [])].filter((h) => h?.snapshot);
     arr.sort((a, b) => {
       const aDate = a.snapshot?.dataAvaliacao || a.createdAt || 0;
       const bDate = b.snapshot?.dataAvaliacao || b.createdAt || 0;
       return new Date(aDate).getTime() - new Date(bDate).getTime();
     });
     return arr;
-  }, [historicoAvaliacoes]);
+  }, [historicoLocal]);
   const [avaliacaoBaseId, setAvaliacaoBaseId] = useState<string>("");
   // Caixas de seleção: quais avaliações (1ª/2ª/3ª) entram na comparação.
   // Nenhuma marcada = somente a primeira (a atual); 1 ou 2 marcadas = compara
@@ -1235,7 +1251,7 @@ export default function AntropometriaLayout({
   function buildCurrentSnapshot(): AvaliacaoHistoricoSnapshot {
     return {
       createdAt: new Date().toISOString(),
-      dataAvaliacao: dataAvaliacaoAtual,
+      dataAvaliacao: dataAvaliacaoEfetiva,
       protocolLabel: protocoloAtual?.label ?? "",
       dobras: currentDobras,
       circunferencias: currentCircunferencias,
@@ -1267,7 +1283,7 @@ export default function AntropometriaLayout({
     const snapshot = buildCurrentSnapshot();
     return {
       pacienteId,
-      dataAvaliacao: dataAvaliacaoAtual,
+      dataAvaliacao: dataAvaliacaoEfetiva,
       sex: sexoCodigo,
       idade,
       alturaCm,
@@ -1371,6 +1387,92 @@ export default function AntropometriaLayout({
       setBaixandoAvaliacao(false);
     }
   }
+
+  // Recarrega o histórico (1ª/2ª/3ª) do servidor após salvar, sem dar refresh na página.
+  async function recarregarHistorico() {
+    try {
+      const resp = await fetch(`/api/avaliacao-fisica/historico?pacienteId=${encodeURIComponent(pacienteId)}`, { cache: "no-store" });
+      const json = await resp.json().catch(() => ({}));
+      if (json?.ok && Array.isArray(json.avaliacoes)) {
+        setHistoricoLocal(
+          json.avaliacoes.map((a: any) => ({
+            id: String(a.id),
+            createdAt: a.createdAt || null,
+            snapshot: {
+              createdAt: a.createdAt || new Date().toISOString(),
+              dataAvaliacao: a.createdAt || null,
+              protocolLabel: a.resumo?.protocolLabel || "",
+              dobras: a.dobras || {},
+              circunferencias: a.circunferencias || {},
+              resumo: a.resumo || {},
+            },
+          }))
+        );
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // Botão "Salvar avaliação": grava no histórico rotativo (1ª/2ª/3ª) e
+  // limpa dobras e circunferências para a próxima avaliação. Não gera PDF.
+  async function handleSalvarAvaliacao() {
+    if (!pacienteId || salvandoAvaliacao) return;
+    const snapshot = buildCurrentSnapshot();
+    const temMedidas =
+      Object.keys(snapshot.dobras).length > 0 ||
+      Object.keys(snapshot.circunferencias).length > 0;
+    const temResumo = [snapshot.resumo.pesoKg, snapshot.resumo.bodyFatPct, snapshot.resumo.massaMuscularKg]
+      .some((v) => typeof v === "number" && Number.isFinite(v) && (v as number) > 0);
+    if (!temMedidas && !temResumo) {
+      setAvaliacaoMsg("Preencha ao menos uma medida antes de salvar a avaliação.");
+      return;
+    }
+    try {
+      setSalvandoAvaliacao(true);
+      setAvaliacaoMsg("Salvando avaliação...");
+      const resp = await fetch("/api/avaliacao-fisica/salvar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pacienteId,
+          dataAvaliacao: dataAvaliacaoEfetiva,
+          protocolLabel: protocoloAtual?.label ?? "",
+          currentDobras: Object.fromEntries(
+            Object.entries(snapshot.dobras).map(([key, value]) => [key, parsePtNumber(String(value ?? ""))])
+          ),
+          currentCircunferencias: Object.fromEntries(
+            Object.entries(snapshot.circunferencias).map(([key, value]) => [key, parsePtNumber(String(value ?? ""))])
+          ),
+          resumo: snapshot.resumo,
+        }),
+      });
+      const json = await resp.json().catch(() => ({}));
+      if (!resp.ok || json?.ok === false) {
+        setAvaliacaoMsg(json?.erro || "Não foi possível salvar a avaliação.");
+        return;
+      }
+      // Limpa os campos de dobras e circunferências (inclusive o rascunho local).
+      setDobras(allDobrasInitial);
+      setCircunferencias(allCircsInitial);
+      try {
+        window.localStorage.removeItem(`nutricare:antro:${pacienteId}`);
+      } catch {
+        // ignore
+      }
+      setAvaliacaoMsg(`Avaliação nº ${json?.numeroAvaliacao ?? "?"} salva com sucesso. Campos limpos para a próxima avaliação.`);
+      await recarregarHistorico();
+    } catch (e: any) {
+      setAvaliacaoMsg(e?.message || "Erro ao salvar avaliação.");
+    } finally {
+      setSalvandoAvaliacao(false);
+    }
+  }
+
+  const podeSalvarAvaliacao =
+    result.bodyFatPct !== null ||
+    Object.keys(currentDobras).length > 0 ||
+    Object.keys(currentCircunferencias).length > 0;
 
     const protocolosSexo = DOBRAS_POR_SEXO[sexoPaciente];
 
@@ -1669,7 +1771,34 @@ export default function AntropometriaLayout({
 
         {/* ============ AVALIAÇÃO FÍSICA — Botões + Comparação ============ */}
         <div style={avaliacaoActionsCardStyle}>
+          <div style={avaliacaoCompareRowStyle}>
+            <label style={avaliacaoCompareToggleStyle}>
+              <span>Data da avaliação:</span>
+              <input
+                type="date"
+                value={dataAvaliacaoForm}
+                onChange={(e) => setDataAvaliacaoForm(e.target.value)}
+                style={avaliacaoCompareSelectStyle}
+              />
+            </label>
+            <span style={compareHintStyle}>
+              Padrão: data da Anamnese. Vazio = hoje. Cada clique em "Salvar avaliação" grava uma nova avaliação (1ª, 2ª, 3ª — a mais recente).
+            </span>
+          </div>
+
           <div style={avaliacaoActionsRowStyle}>
+            <button
+              type="button"
+              onClick={handleSalvarAvaliacao}
+              disabled={salvandoAvaliacao || !podeSalvarAvaliacao}
+              style={{
+                ...avaliacaoActionBtnPrimary,
+                ...(salvandoAvaliacao || !podeSalvarAvaliacao ? avaliacaoActionBtnDisabled : {}),
+              }}
+            >
+              {salvandoAvaliacao ? "Salvando..." : "💾 Salvar avaliação"}
+            </button>
+
             <button
               type="button"
               onClick={handleEnviarAvaliacao}
