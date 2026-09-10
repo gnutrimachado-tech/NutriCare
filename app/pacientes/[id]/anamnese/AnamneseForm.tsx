@@ -527,10 +527,6 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
           >
             {salvandoAvaliacao ? "Salvando..." : "💾 Salvar avaliação"}
           </button>
-          <span style={dataAvaliacaoHintStyle}>
-            Use a data em que esta avaliação foi realizada para separar medidas antigas das atuais no PDF.
-            "Salvar avaliação" grava o histórico (1ª, 2ª, 3ª — a mais recente) para a comparação no PDF da Antropometria.
-          </span>
         </div>
 
         {avaliacaoMsg && (
