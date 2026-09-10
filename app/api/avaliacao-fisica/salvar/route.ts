@@ -32,6 +32,10 @@ type BodyShape = {
     imme?: number | null;
     img?: number | null;
     ffmi?: number | null;
+    massaMuscularEsqueleticaKg?: number | null;
+    circunferenciaAbdominalCm?: number | null;
+    vo2maxMlKgMin?: number | null;
+    imc?: number | null;
     protocolLabel?: string | null;
   };
 };
@@ -90,6 +94,10 @@ export async function POST(req: NextRequest) {
         imme: body.resumo?.imme ?? null,
         img: body.resumo?.img ?? null,
         ffmi: body.resumo?.ffmi ?? null,
+        massaMuscularEsqueleticaKg: body.resumo?.massaMuscularEsqueleticaKg ?? null,
+        circunferenciaAbdominalCm: body.resumo?.circunferenciaAbdominalCm ?? null,
+        vo2maxMlKgMin: body.resumo?.vo2maxMlKgMin ?? null,
+        imc: body.resumo?.imc ?? null,
         protocolLabel: body.resumo?.protocolLabel || body.protocolLabel || "",
       },
     });
