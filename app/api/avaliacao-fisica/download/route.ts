@@ -64,26 +64,6 @@ function dataAvaliacaoDoRegistro(
   return snapshot?.dataAvaliacao || registro.data_avaliacao?.toISOString?.() || registro.created_at?.toISOString?.() || null;
 }
 
-function escolherAnteriorPorData(
-  registros: Array<Parameters<typeof extrairSnapshotDeEvolucao>[0]>,
-  dataAtual: string | null | undefined
-) {
-  const dataAtualMs = dataAtual ? new Date(`${dataAtual.slice(0, 10)}T12:00:00.000Z`).getTime() : Date.now();
-  return (
-    [...registros]
-      .filter((registro) => {
-        const snapshot = extrairSnapshotDeEvolucao(registro);
-        const data = dataAvaliacaoDoRegistro(registro, snapshot);
-        return data ? new Date(data).getTime() < dataAtualMs : false;
-      })
-      .sort((a, b) => {
-        const dataA = dataAvaliacaoDoRegistro(a, extrairSnapshotDeEvolucao(a)) || "";
-        const dataB = dataAvaliacaoDoRegistro(b, extrairSnapshotDeEvolucao(b)) || "";
-        return new Date(dataB).getTime() - new Date(dataA).getTime();
-      })[0] || null
-  );
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as BodyShape;
@@ -181,12 +161,14 @@ export async function POST(req: NextRequest) {
         peso: snap?.resumo.pesoKg ?? (Number(r.peso ?? 0) || null),
         massaMuscular: snap?.resumo.massaMuscularKg ?? (Number(r.massa_muscular ?? 0) || null),
         bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
+        // Medidas salvas NAQUELA avaliação: alimentam a coluna "Antes" das
+        // tabelas de Circunferências e Dobras Cutâneas do PDF.
+        dobras: snap?.dobras || {},
+        circunferencias: snap?.circunferencias || {},
       };
     });
 
     const primeira = await primeiraAvaliacao(pacienteId);
-    const anterior = escolherAnteriorPorData(historicoAnterior, body.dataAvaliacao);
-    const anteriorSnap = anterior ? extrairSnapshotDeEvolucao(anterior) : null;
     const primeiraSnapshot = primeira ? extrairSnapshotDeEvolucao(primeira) : null;
     const dataAvaliacaoInicial = primeira
       ? dataAvaliacaoDoRegistro(primeira, primeiraSnapshot)
@@ -243,20 +225,10 @@ export async function POST(req: NextRequest) {
         currentCircunferencias: body.currentCircunferencias || {},
         previousDobras: body.previousDobras || {},
         previousCircunferencias: body.previousCircunferencias || {},
-        previousSummary: anteriorSnap
-          ? {
-              pesoKg: anteriorSnap.resumo.pesoKg,
-              bodyFatPct: anteriorSnap.resumo.bodyFatPct,
-              massaMuscularKg: anteriorSnap.resumo.massaMuscularKg,
-              massaAdiposaKg: anteriorSnap.resumo.massaAdiposaKg,
-              aguaPct: anteriorSnap.resumo.aguaPct,
-              imme: anteriorSnap.resumo.imme,
-              img: anteriorSnap.resumo.img,
-              ffmi: anteriorSnap.resumo.ffmi,
-              createdAt: anterior ? dataAvaliacaoDoRegistro(anterior, anteriorSnap) : null,
-              protocolLabel: anteriorSnap.resumo.protocolLabel || "",
-            }
-          : null,
+        // A base de comparação (Antes / variações / gráficos) é resolvida
+        // DENTRO do PDF, a partir das avaliações marcadas pelo nutri
+        // (evolucaoSelecionadaIds) — nunca mais por data de digitação.
+        previousSummary: null,
         evolucao,
         evolucaoHistorico,
         evolucaoSelecionadaIds: Array.isArray(body.evolucaoSelecionadaIds)
