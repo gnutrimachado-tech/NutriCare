@@ -1414,6 +1414,35 @@ export default function AntropometriaLayout({
     }
   }
 
+  // Botão ✕ ao lado da caixa "Comparar com": exclui do banco (tabela
+  // evolucao_corporal) a avaliação atualmente selecionada na caixa.
+  async function handleExcluirAvaliacao() {
+    if (!avaliacaoBaseId) {
+      setAvaliacaoMsg("Selecione uma avaliação na caixa \"Comparar com\" para excluir.");
+      return;
+    }
+    if (!window.confirm("Excluir esta avaliação salva? O registro será apagado do banco de dados.")) {
+      return;
+    }
+    try {
+      setAvaliacaoMsg("Excluindo avaliação...");
+      const resp = await fetch(
+        `/api/avaliacao-fisica/historico?id=${encodeURIComponent(avaliacaoBaseId)}&pacienteId=${encodeURIComponent(pacienteId)}`,
+        { method: "DELETE" }
+      );
+      const json = await resp.json().catch(() => ({} as any));
+      if (!resp.ok || !json?.ok) {
+        setAvaliacaoMsg(json?.erro || "Não foi possível excluir a avaliação.");
+        return;
+      }
+      setAvaliacaoBaseId("");
+      setAvaliacaoMsg("Avaliação excluída com sucesso.");
+      await recarregarHistorico();
+    } catch (e: any) {
+      setAvaliacaoMsg(e?.message || "Erro ao excluir avaliação.");
+    }
+  }
+
   // Botão "Salvar avaliação": grava no histórico rotativo (1ª/2ª/3ª) e
   // limpa dobras e circunferências para a próxima avaliação. Não gera PDF.
   async function handleSalvarAvaliacao() {
@@ -1781,9 +1810,6 @@ export default function AntropometriaLayout({
                 style={avaliacaoCompareSelectStyle}
               />
             </label>
-            <span style={compareHintStyle}>
-              Padrão: data da Anamnese. Vazio = hoje. Cada clique em "Salvar avaliação" grava uma nova avaliação (1ª, 2ª, 3ª — a mais recente).
-            </span>
           </div>
 
           <div style={avaliacaoActionsRowStyle}>
@@ -1862,26 +1888,28 @@ export default function AntropometriaLayout({
                   )}
                 </select>
 
-                {/* Caixas de seleção: o gráfico de evolução do PDF responde a elas.
-                    Nenhuma marcada = somente a primeira (avaliação atual);
-                    1 marcada = compara com 2 meses; 2 marcadas = com 3 meses. */}
-                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                  {historicoOrdenado.map((h, idx) => {
-                    const label =
-                      idx === 0 ? "1ª avaliação" : idx === 1 ? "2ª avaliação" : "3ª avaliação";
-                    const d = getSnapshotDateLabel(h.snapshot?.dataAvaliacao || h.createdAt || undefined);
-                    return (
-                      <label key={h.id} style={avaliacaoCompareToggleStyle}>
-                        <input
-                          type="checkbox"
-                          checked={evolucaoSelecionadaIds.includes(h.id)}
-                          onChange={() => toggleEvolucaoSelecionada(h.id)}
-                        />
-                        <span>{label} — {d}</span>
-                      </label>
-                    );
-                  })}
-                </div>
+                {/* ✕ pequeno ao lado da data: apaga do banco a avaliação selecionada na caixa */}
+                <button
+                  type="button"
+                  onClick={handleExcluirAvaliacao}
+                  disabled={!avaliacaoBaseId}
+                  title="Excluir a avaliação selecionada"
+                  style={{
+                    marginLeft: 8,
+                    padding: "2px 9px",
+                    background: "#fef2f2",
+                    color: "#dc2626",
+                    border: "1px solid #fecaca",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    lineHeight: 1.4,
+                    cursor: avaliacaoBaseId ? "pointer" : "not-allowed",
+                    opacity: avaliacaoBaseId ? 1 : 0.5,
+                  }}
+                >
+                  ✕
+                </button>
               </div>
             ) : null}
           </div>
