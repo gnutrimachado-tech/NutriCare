@@ -38,7 +38,9 @@ export async function GET(req: NextRequest) {
       return {
         id: r.id,
         createdAt: r.created_at?.toISOString?.() || null,
-        dataLabel: fmtData(r.created_at),
+        // Data REAL da avaliação (a que o nutri informou), não a de digitação.
+        dataAvaliacao: snap?.dataAvaliacao || r.data_avaliacao?.toISOString?.() || null,
+        dataLabel: fmtData(r.data_avaliacao || r.created_at),
         resumo: snap?.resumo || {
           pesoKg: Number(r.peso ?? 0) || null,
           bodyFatPct: Number(r.percentual_gordura ?? 0) || null,
