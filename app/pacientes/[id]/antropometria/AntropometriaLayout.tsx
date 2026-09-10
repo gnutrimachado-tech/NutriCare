@@ -1087,6 +1087,10 @@ export default function AntropometriaLayout({
   const [avaliacaoMsg, setAvaliacaoMsg] = useState<string | null>(null);
   const [enviandoAvaliacao, setEnviandoAvaliacao] = useState(false);
   const [baixandoAvaliacao, setBaixandoAvaliacao] = useState(false);
+  // Última avaliação SALVA nesta sessão. Depois que "Salvar avaliação" limpa
+  // os campos, Enviar / Download / Comparação continuam usando ESTE snapshot
+  // (mesma data e medidas salvas), até que uma nova medida seja digitada.
+  const [ultimaAvaliacaoSalva, setUltimaAvaliacaoSalva] = useState<AvaliacaoHistoricoSnapshot | null>(null);
 
   // Seletor 1ª / 2ª / 3ª avaliação (para comparar)
   const historicoOrdenado = useMemo(() => {
@@ -1275,6 +1279,20 @@ export default function AntropometriaLayout({
     };
   }
 
+  // Snapshot efetivo para Enviar/Download: se os campos foram limpos após
+  // salvar, usa a última avaliação salva (data + medidas dela). Assim que
+  // uma nova medida for digitada, volta a usar os valores da tela.
+  function buildSnapshotEfetivo(): AvaliacaoHistoricoSnapshot {
+    const atual = buildCurrentSnapshot();
+    const temMedidasTela =
+      Object.keys(currentDobras).length > 0 || Object.keys(currentCircunferencias).length > 0;
+    const temResumoTela = result.bodyFatPct !== null;
+    if (!temMedidasTela && !temResumoTela && ultimaAvaliacaoSalva) {
+      return ultimaAvaliacaoSalva;
+    }
+    return atual;
+  }
+
   function persistAvaliacaoSnapshot() {
     if (!pacienteId || typeof window === "undefined") return;
     try {
@@ -1287,19 +1305,19 @@ export default function AntropometriaLayout({
   }
 
   function createAvaliacaoPayload() {
-    const snapshot = buildCurrentSnapshot();
+    const snapshot = buildSnapshotEfetivo();
     return {
       pacienteId,
-      dataAvaliacao: dataAvaliacaoEfetiva,
+      dataAvaliacao: snapshot.dataAvaliacao ?? dataAvaliacaoEfetiva,
       sex: sexoCodigo,
       idade,
       alturaCm,
-      pesoKg,
-      bodyFatPct: result.bodyFatPct,
-      massaMuscularKg: result.massaMuscular,
-      massaAdiposaKg: result.massaAdiposa,
-      aguaPct: aguaCorporalPct,
-      protocolLabel: protocoloAtual?.label ?? "",
+      pesoKg: snapshot.resumo.pesoKg ?? pesoKg,
+      bodyFatPct: snapshot.resumo.bodyFatPct,
+      massaMuscularKg: snapshot.resumo.massaMuscularKg,
+      massaAdiposaKg: snapshot.resumo.massaAdiposaKg,
+      aguaPct: snapshot.resumo.aguaPct,
+      protocolLabel: snapshot.protocolLabel || protocoloAtual?.label || "",
       vo2max: vo2maxAtual,
       compareResults: compararResultados,
       currentDobras: Object.fromEntries(
@@ -1331,8 +1349,9 @@ export default function AntropometriaLayout({
   // Ações da Avaliação Física
   async function handleEnviarAvaliacao() {
     if (!pacienteId || enviandoAvaliacao) return;
-    if (result.bodyFatPct === null) {
-      setAvaliacaoMsg("Preencha e calcule antes de enviar.");
+    // Permite enviar também a última avaliação SALVA (campos já limpos).
+    if (result.bodyFatPct === null && !ultimaAvaliacaoSalva) {
+      setAvaliacaoMsg("Preencha e calcule ou salve uma avaliação antes de enviar.");
       return;
     }
     try {
@@ -1358,8 +1377,9 @@ export default function AntropometriaLayout({
 
   async function handleDownloadAvaliacao() {
     if (!pacienteId || baixandoAvaliacao) return;
-    if (result.bodyFatPct === null) {
-      setAvaliacaoMsg("Preencha e calcule antes de baixar.");
+    // Permite baixar também a última avaliação SALVA (campos já limpos).
+    if (result.bodyFatPct === null && !ultimaAvaliacaoSalva) {
+      setAvaliacaoMsg("Preencha e calcule ou salve uma avaliação antes de baixar.");
       return;
     }
     try {
@@ -1407,7 +1427,7 @@ export default function AntropometriaLayout({
             createdAt: a.createdAt || null,
             snapshot: {
               createdAt: a.createdAt || new Date().toISOString(),
-              dataAvaliacao: a.createdAt || null,
+              dataAvaliacao: a.dataAvaliacao || a.createdAt || null,
               protocolLabel: a.resumo?.protocolLabel || "",
               dobras: a.dobras || {},
               circunferencias: a.circunferencias || {},
@@ -1465,6 +1485,20 @@ export default function AntropometriaLayout({
       setAvaliacaoMsg("Preencha ao menos uma medida antes de salvar a avaliação.");
       return;
     }
+    // Resumo completo salvo no histórico (inclui os indicadores derivados:
+    // músculo esquelético, cintura/abdominal, VO2máx e IMC).
+    const resumoCompletoParaSalvar = {
+      ...snapshot.resumo,
+      massaMuscularEsqueleticaKg: massaMuscularEsqueleticaKg,
+      circunferenciaAbdominalCm:
+        circNum.abdomen > 0 ? circNum.abdomen : circNum.cintura > 0 ? circNum.cintura : null,
+      vo2maxMlKgMin: vo2maxAtual,
+      imc: pesoKg > 0 && alturaCm > 0 ? round1(pesoKg / Math.pow(alturaCm / 100, 2)) : null,
+    };
+    const snapshotSalva: AvaliacaoHistoricoSnapshot = {
+      ...snapshot,
+      resumo: resumoCompletoParaSalvar,
+    };
     try {
       setSalvandoAvaliacao(true);
       setAvaliacaoMsg("Salvando avaliação...");
@@ -1481,7 +1515,7 @@ export default function AntropometriaLayout({
           currentCircunferencias: Object.fromEntries(
             Object.entries(snapshot.circunferencias).map(([key, value]) => [key, parsePtNumber(String(value ?? ""))])
           ),
-          resumo: snapshot.resumo,
+          resumo: resumoCompletoParaSalvar,
         }),
       });
       const json = await resp.json().catch(() => ({}));
@@ -1497,7 +1531,10 @@ export default function AntropometriaLayout({
       } catch {
         // ignore
       }
-      setAvaliacaoMsg(`Avaliação nº ${json?.numeroAvaliacao ?? "?"} salva com sucesso. Campos limpos para a próxima avaliação.`);
+      // Guarda o snapshot salvo: Enviar / Download / Comparação passam a usar
+      // ESTA avaliação (mesma data e medidas) mesmo com os campos limpos.
+      setUltimaAvaliacaoSalva(snapshotSalva);
+      setAvaliacaoMsg(`Avaliação nº ${json?.numeroAvaliacao ?? "?"} salva com sucesso. Campos limpos — você já pode enviar, baixar o PDF ou comparar esta avaliação.`);
       await recarregarHistorico();
     } catch (e: any) {
       setAvaliacaoMsg(e?.message || "Erro ao salvar avaliação.");
@@ -1836,10 +1873,10 @@ export default function AntropometriaLayout({
             <button
               type="button"
               onClick={handleEnviarAvaliacao}
-              disabled={enviandoAvaliacao || result.bodyFatPct === null}
+              disabled={enviandoAvaliacao || (result.bodyFatPct === null && !ultimaAvaliacaoSalva)}
               style={{
                 ...avaliacaoActionBtnPrimary,
-                ...(enviandoAvaliacao || result.bodyFatPct === null ? avaliacaoActionBtnDisabled : {}),
+                ...(enviandoAvaliacao || (result.bodyFatPct === null && !ultimaAvaliacaoSalva) ? avaliacaoActionBtnDisabled : {}),
               }}
             >
               {enviandoAvaliacao ? "Enviando..." : "Enviar avaliação física"}
@@ -1848,10 +1885,10 @@ export default function AntropometriaLayout({
             <button
               type="button"
               onClick={handleDownloadAvaliacao}
-              disabled={baixandoAvaliacao || result.bodyFatPct === null}
+              disabled={baixandoAvaliacao || (result.bodyFatPct === null && !ultimaAvaliacaoSalva)}
               style={{
                 ...avaliacaoActionBtnSecondary,
-                ...(baixandoAvaliacao || result.bodyFatPct === null ? avaliacaoActionBtnDisabled : {}),
+                ...(baixandoAvaliacao || (result.bodyFatPct === null && !ultimaAvaliacaoSalva) ? avaliacaoActionBtnDisabled : {}),
               }}
             >
               {baixandoAvaliacao ? "Gerando..." : "Download do PDF"}
