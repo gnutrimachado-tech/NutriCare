@@ -1110,6 +1110,13 @@ export default function AntropometriaLayout({
   }
   useEffect(() => {
     // Padrão: comparar contra a 1ª avaliação (mais antiga), se existir.
+    // IMPORTANTE: só preenche se o id ainda existir no histórico — evita
+    // re-selecionar uma avaliação que acabou de ser excluída (o que fazia a
+    // data "voltar" mesmo após a exclusão).
+    if (avaliacaoBaseId && !historicoOrdenado.some((h) => h.id === avaliacaoBaseId)) {
+      setAvaliacaoBaseId("");
+      return;
+    }
     if (!avaliacaoBaseId && historicoOrdenado[0]?.id) {
       setAvaliacaoBaseId(historicoOrdenado[0].id);
     }
@@ -1414,20 +1421,17 @@ export default function AntropometriaLayout({
     }
   }
 
-  // Botão ✕ ao lado da caixa "Comparar com": exclui do banco (tabela
-  // evolucao_corporal) a avaliação atualmente selecionada na caixa.
-  async function handleExcluirAvaliacao() {
-    if (!avaliacaoBaseId) {
-      setAvaliacaoMsg("Selecione uma avaliação na caixa \"Comparar com\" para excluir.");
-      return;
-    }
+  // Botão ✕ ao lado de cada caixa de seleção: exclui do banco (tabela
+  // evolucao_corporal) aquela avaliação específica e remove da tela na hora.
+  async function handleExcluirAvaliacaoPorId(id: string) {
+    if (!id) return;
     if (!window.confirm("Excluir esta avaliação salva? O registro será apagado do banco de dados.")) {
       return;
     }
     try {
       setAvaliacaoMsg("Excluindo avaliação...");
       const resp = await fetch(
-        `/api/avaliacao-fisica/historico?id=${encodeURIComponent(avaliacaoBaseId)}&pacienteId=${encodeURIComponent(pacienteId)}`,
+        `/api/avaliacao-fisica/historico?id=${encodeURIComponent(id)}&pacienteId=${encodeURIComponent(pacienteId)}`,
         { method: "DELETE" }
       );
       const json = await resp.json().catch(() => ({} as any));
@@ -1435,7 +1439,11 @@ export default function AntropometriaLayout({
         setAvaliacaoMsg(json?.erro || "Não foi possível excluir a avaliação.");
         return;
       }
-      setAvaliacaoBaseId("");
+      // Remove IMEDIATAMENTE da tela: histórico local, caixas marcadas e base.
+      // Isso impede que a data "volte" a aparecer após a exclusão.
+      setHistoricoLocal((prev) => (prev || []).filter((h) => h.id !== id));
+      setEvolucaoSelecionadaIds((prev) => prev.filter((x) => x !== id));
+      setAvaliacaoBaseId((prev) => (prev === id ? "" : prev));
       setAvaliacaoMsg("Avaliação excluída com sucesso.");
       await recarregarHistorico();
     } catch (e: any) {
@@ -1861,55 +1869,43 @@ export default function AntropometriaLayout({
             </label>
 
             {compararResultados ? (
-              <div style={avaliacaoCompareSelectWrapStyle}>
-                <span style={compareHintStyle}>Comparar com:</span>
-                <select
-                  value={avaliacaoBaseId}
-                  onChange={(e) => setAvaliacaoBaseId(e.target.value)}
-                  style={avaliacaoCompareSelectStyle}
-                >
-                  {historicoOrdenado.length === 0 ? (
-                    <option value="">Sem avaliações anteriores</option>
-                  ) : (
-                    historicoOrdenado.map((h, idx) => {
-                      const label =
-                        idx === 0
-                          ? "1ª avaliação"
-                          : idx === 1
-                          ? "2ª avaliação"
-                          : "3ª avaliação";
-                      const d = getSnapshotDateLabel(h.snapshot?.dataAvaliacao || h.createdAt || undefined);
-                      return (
-                        <option key={h.id} value={h.id}>
-                          {label} — {d}
-                        </option>
-                      );
-                    })
-                  )}
-                </select>
-
-                {/* ✕ pequeno ao lado da data: apaga do banco a avaliação selecionada na caixa */}
-                <button
-                  type="button"
-                  onClick={handleExcluirAvaliacao}
-                  disabled={!avaliacaoBaseId}
-                  title="Excluir a avaliação selecionada"
-                  style={{
-                    marginLeft: 8,
-                    padding: "2px 9px",
-                    background: "#fef2f2",
-                    color: "#dc2626",
-                    border: "1px solid #fecaca",
-                    borderRadius: 8,
-                    fontSize: 13,
-                    fontWeight: 700,
-                    lineHeight: 1.4,
-                    cursor: avaliacaoBaseId ? "pointer" : "not-allowed",
-                    opacity: avaliacaoBaseId ? 1 : 0.5,
-                  }}
-                >
-                  ✕
-                </button>
+              <div style={avaliacaoCheckboxesWrapStyle}>
+                <span style={compareHintStyle}>Comparar com (marque as avaliações):</span>
+                {historicoOrdenado.length === 0 ? (
+                  <span style={compareHintStyle}>Sem avaliações anteriores</span>
+                ) : (
+                  historicoOrdenado.map((h, idx) => {
+                    const label =
+                      idx === 0
+                        ? "1ª avaliação"
+                        : idx === 1
+                        ? "2ª avaliação"
+                        : "3ª avaliação";
+                    const d = getSnapshotDateLabel(h.snapshot?.dataAvaliacao || h.createdAt || undefined);
+                    const marcado = evolucaoSelecionadaIds.includes(h.id);
+                    return (
+                      <div key={h.id} style={avaliacaoCheckboxItemStyle}>
+                        <label style={avaliacaoCheckboxLabelStyle}>
+                          <input
+                            type="checkbox"
+                            checked={marcado}
+                            onChange={() => toggleEvolucaoSelecionada(h.id)}
+                          />
+                          <span>{label} — {d}</span>
+                        </label>
+                        {/* ✕ pequeno ao lado de cada data: exclui esta avaliação do banco */}
+                        <button
+                          type="button"
+                          onClick={() => handleExcluirAvaliacaoPorId(h.id)}
+                          title="Excluir esta avaliação"
+                          style={avaliacaoDeleteBtnStyle}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             ) : null}
           </div>
@@ -2111,8 +2107,31 @@ const avaliacaoCompareToggleStyle: React.CSSProperties = {
   display: "inline-flex", alignItems: "center", gap: 8,
   fontSize: 13, fontWeight: 600, color: "#334",
 };
-const avaliacaoCompareSelectWrapStyle: React.CSSProperties = {
-  display: "inline-flex", alignItems: "center", gap: 8,
+// Caixas de seleção das avaliações (1ª/2ª/3ª) com botão de excluir ao lado.
+const avaliacaoCheckboxesWrapStyle: React.CSSProperties = {
+  display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center",
+};
+const avaliacaoCheckboxItemStyle: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", gap: 6,
+  padding: "6px 10px",
+  background: "#fff",
+  border: "1px solid #d1d5db",
+  borderRadius: 8,
+};
+const avaliacaoCheckboxLabelStyle: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", gap: 6,
+  fontSize: 13, fontWeight: 600, color: "#334", cursor: "pointer",
+};
+const avaliacaoDeleteBtnStyle: React.CSSProperties = {
+  padding: "2px 9px",
+  background: "#fef2f2",
+  color: "#dc2626",
+  border: "1px solid #fecaca",
+  borderRadius: 8,
+  fontSize: 13,
+  fontWeight: 700,
+  lineHeight: 1.4,
+  cursor: "pointer",
 };
 const avaliacaoCompareSelectStyle: React.CSSProperties = {
   padding: "6px 10px",
