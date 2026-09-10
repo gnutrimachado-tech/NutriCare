@@ -839,11 +839,27 @@ export default function AntropometriaLayout({
   const [avaliacaoAnterior, setAvaliacaoAnterior] =
     useState<AvaliacaoHistoricoSnapshot | null>(avaliacaoAnteriorInicial);
 
+  // Histórico exibido no seletor 1ª/2ª/3ª — atualizado na hora após "Salvar avaliação".
+  const [historicoLocal, setHistoricoLocal] = useState<HistoricoItem[]>(historicoAvaliacoes);
+  const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false);
+
   const dataAvaliacaoAtual = useMemo(() => {
     if (!dataAvaliacao) return null;
     const texto = String(dataAvaliacao);
     return /^\d{4}-\d{2}-\d{2}/.test(texto) ? texto.slice(0, 10) : null;
   }, [dataAvaliacao]);
+
+  // Data da avaliação editável aqui na Antropometria.
+  // Padrão: a data informada na Anamnese (se houver).
+  const [dataAvaliacaoForm, setDataAvaliacaoForm] = useState<string>(dataAvaliacaoAtual || "");
+  useEffect(() => {
+    setDataAvaliacaoForm(dataAvaliacaoAtual || "");
+  }, [dataAvaliacaoAtual]);
+  const dataAvaliacaoEfetiva = dataAvaliacaoForm || dataAvaliacaoAtual || null;
+
+  useEffect(() => {
+    setHistoricoLocal(historicoAvaliacoes || []);
+  }, [historicoAvaliacoes]);
 
   useEffect(() => {
     if (!pacienteId) {
@@ -1071,17 +1087,21 @@ export default function AntropometriaLayout({
   const [avaliacaoMsg, setAvaliacaoMsg] = useState<string | null>(null);
   const [enviandoAvaliacao, setEnviandoAvaliacao] = useState(false);
   const [baixandoAvaliacao, setBaixandoAvaliacao] = useState(false);
+  // Última avaliação SALVA nesta sessão. Depois que "Salvar avaliação" limpa
+  // os campos, Enviar / Download / Comparação continuam usando ESTE snapshot
+  // (mesma data e medidas salvas), até que uma nova medida seja digitada.
+  const [ultimaAvaliacaoSalva, setUltimaAvaliacaoSalva] = useState<AvaliacaoHistoricoSnapshot | null>(null);
 
   // Seletor 1ª / 2ª / 3ª avaliação (para comparar)
   const historicoOrdenado = useMemo(() => {
-    const arr = [...(historicoAvaliacoes || [])].filter((h) => h?.snapshot);
+    const arr = [...(historicoLocal || [])].filter((h) => h?.snapshot);
     arr.sort((a, b) => {
       const aDate = a.snapshot?.dataAvaliacao || a.createdAt || 0;
       const bDate = b.snapshot?.dataAvaliacao || b.createdAt || 0;
       return new Date(aDate).getTime() - new Date(bDate).getTime();
     });
     return arr;
-  }, [historicoAvaliacoes]);
+  }, [historicoLocal]);
   const [avaliacaoBaseId, setAvaliacaoBaseId] = useState<string>("");
   // Caixas de seleção: quais avaliações (1ª/2ª/3ª) entram na comparação.
   // Nenhuma marcada = somente a primeira (a atual); 1 ou 2 marcadas = compara
@@ -1094,6 +1114,13 @@ export default function AntropometriaLayout({
   }
   useEffect(() => {
     // Padrão: comparar contra a 1ª avaliação (mais antiga), se existir.
+    // IMPORTANTE: só preenche se o id ainda existir no histórico — evita
+    // re-selecionar uma avaliação que acabou de ser excluída (o que fazia a
+    // data "voltar" mesmo após a exclusão).
+    if (avaliacaoBaseId && !historicoOrdenado.some((h) => h.id === avaliacaoBaseId)) {
+      setAvaliacaoBaseId("");
+      return;
+    }
     if (!avaliacaoBaseId && historicoOrdenado[0]?.id) {
       setAvaliacaoBaseId(historicoOrdenado[0].id);
     }
@@ -1235,7 +1262,7 @@ export default function AntropometriaLayout({
   function buildCurrentSnapshot(): AvaliacaoHistoricoSnapshot {
     return {
       createdAt: new Date().toISOString(),
-      dataAvaliacao: dataAvaliacaoAtual,
+      dataAvaliacao: dataAvaliacaoEfetiva,
       protocolLabel: protocoloAtual?.label ?? "",
       dobras: currentDobras,
       circunferencias: currentCircunferencias,
@@ -1252,6 +1279,20 @@ export default function AntropometriaLayout({
     };
   }
 
+  // Snapshot efetivo para Enviar/Download: se os campos foram limpos após
+  // salvar, usa a última avaliação salva (data + medidas dela). Assim que
+  // uma nova medida for digitada, volta a usar os valores da tela.
+  function buildSnapshotEfetivo(): AvaliacaoHistoricoSnapshot {
+    const atual = buildCurrentSnapshot();
+    const temMedidasTela =
+      Object.keys(currentDobras).length > 0 || Object.keys(currentCircunferencias).length > 0;
+    const temResumoTela = result.bodyFatPct !== null;
+    if (!temMedidasTela && !temResumoTela && ultimaAvaliacaoSalva) {
+      return ultimaAvaliacaoSalva;
+    }
+    return atual;
+  }
+
   function persistAvaliacaoSnapshot() {
     if (!pacienteId || typeof window === "undefined") return;
     try {
@@ -1264,19 +1305,19 @@ export default function AntropometriaLayout({
   }
 
   function createAvaliacaoPayload() {
-    const snapshot = buildCurrentSnapshot();
+    const snapshot = buildSnapshotEfetivo();
     return {
       pacienteId,
-      dataAvaliacao: dataAvaliacaoAtual,
+      dataAvaliacao: snapshot.dataAvaliacao ?? dataAvaliacaoEfetiva,
       sex: sexoCodigo,
       idade,
       alturaCm,
-      pesoKg,
-      bodyFatPct: result.bodyFatPct,
-      massaMuscularKg: result.massaMuscular,
-      massaAdiposaKg: result.massaAdiposa,
-      aguaPct: aguaCorporalPct,
-      protocolLabel: protocoloAtual?.label ?? "",
+      pesoKg: snapshot.resumo.pesoKg ?? pesoKg,
+      bodyFatPct: snapshot.resumo.bodyFatPct,
+      massaMuscularKg: snapshot.resumo.massaMuscularKg,
+      massaAdiposaKg: snapshot.resumo.massaAdiposaKg,
+      aguaPct: snapshot.resumo.aguaPct,
+      protocolLabel: snapshot.protocolLabel || protocoloAtual?.label || "",
       vo2max: vo2maxAtual,
       compareResults: compararResultados,
       currentDobras: Object.fromEntries(
@@ -1308,8 +1349,9 @@ export default function AntropometriaLayout({
   // Ações da Avaliação Física
   async function handleEnviarAvaliacao() {
     if (!pacienteId || enviandoAvaliacao) return;
-    if (result.bodyFatPct === null) {
-      setAvaliacaoMsg("Preencha e calcule antes de enviar.");
+    // Permite enviar também a última avaliação SALVA (campos já limpos).
+    if (result.bodyFatPct === null && !ultimaAvaliacaoSalva) {
+      setAvaliacaoMsg("Preencha e calcule ou salve uma avaliação antes de enviar.");
       return;
     }
     try {
@@ -1335,8 +1377,9 @@ export default function AntropometriaLayout({
 
   async function handleDownloadAvaliacao() {
     if (!pacienteId || baixandoAvaliacao) return;
-    if (result.bodyFatPct === null) {
-      setAvaliacaoMsg("Preencha e calcule antes de baixar.");
+    // Permite baixar também a última avaliação SALVA (campos já limpos).
+    if (result.bodyFatPct === null && !ultimaAvaliacaoSalva) {
+      setAvaliacaoMsg("Preencha e calcule ou salve uma avaliação antes de baixar.");
       return;
     }
     try {
@@ -1371,6 +1414,139 @@ export default function AntropometriaLayout({
       setBaixandoAvaliacao(false);
     }
   }
+
+  // Recarrega o histórico (1ª/2ª/3ª) do servidor após salvar, sem dar refresh na página.
+  async function recarregarHistorico() {
+    try {
+      const resp = await fetch(`/api/avaliacao-fisica/historico?pacienteId=${encodeURIComponent(pacienteId)}`, { cache: "no-store" });
+      const json = await resp.json().catch(() => ({}));
+      if (json?.ok && Array.isArray(json.avaliacoes)) {
+        setHistoricoLocal(
+          json.avaliacoes.map((a: any) => ({
+            id: String(a.id),
+            createdAt: a.createdAt || null,
+            snapshot: {
+              createdAt: a.createdAt || new Date().toISOString(),
+              dataAvaliacao: a.dataAvaliacao || a.createdAt || null,
+              protocolLabel: a.resumo?.protocolLabel || "",
+              dobras: a.dobras || {},
+              circunferencias: a.circunferencias || {},
+              resumo: a.resumo || {},
+            },
+          }))
+        );
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // Botão ✕ ao lado de cada caixa de seleção: exclui do banco (tabela
+  // evolucao_corporal) aquela avaliação específica e remove da tela na hora.
+  async function handleExcluirAvaliacaoPorId(id: string) {
+    if (!id) return;
+    if (!window.confirm("Excluir esta avaliação salva? O registro será apagado do banco de dados.")) {
+      return;
+    }
+    try {
+      setAvaliacaoMsg("Excluindo avaliação...");
+      const resp = await fetch(
+        `/api/avaliacao-fisica/historico?id=${encodeURIComponent(id)}&pacienteId=${encodeURIComponent(pacienteId)}`,
+        { method: "DELETE" }
+      );
+      const json = await resp.json().catch(() => ({} as any));
+      if (!resp.ok || !json?.ok) {
+        setAvaliacaoMsg(json?.erro || "Não foi possível excluir a avaliação.");
+        return;
+      }
+      // Remove IMEDIATAMENTE da tela: histórico local, caixas marcadas e base.
+      // Isso impede que a data "volte" a aparecer após a exclusão.
+      setHistoricoLocal((prev) => (prev || []).filter((h) => h.id !== id));
+      setEvolucaoSelecionadaIds((prev) => prev.filter((x) => x !== id));
+      setAvaliacaoBaseId((prev) => (prev === id ? "" : prev));
+      setAvaliacaoMsg("Avaliação excluída com sucesso.");
+      await recarregarHistorico();
+    } catch (e: any) {
+      setAvaliacaoMsg(e?.message || "Erro ao excluir avaliação.");
+    }
+  }
+
+  // Botão "Salvar avaliação": grava no histórico rotativo (1ª/2ª/3ª) e
+  // limpa dobras e circunferências para a próxima avaliação. Não gera PDF.
+  async function handleSalvarAvaliacao() {
+    if (!pacienteId || salvandoAvaliacao) return;
+    const snapshot = buildCurrentSnapshot();
+    const temMedidas =
+      Object.keys(snapshot.dobras).length > 0 ||
+      Object.keys(snapshot.circunferencias).length > 0;
+    const temResumo = [snapshot.resumo.pesoKg, snapshot.resumo.bodyFatPct, snapshot.resumo.massaMuscularKg]
+      .some((v) => typeof v === "number" && Number.isFinite(v) && (v as number) > 0);
+    if (!temMedidas && !temResumo) {
+      setAvaliacaoMsg("Preencha ao menos uma medida antes de salvar a avaliação.");
+      return;
+    }
+    // Resumo completo salvo no histórico (inclui os indicadores derivados:
+    // músculo esquelético, cintura/abdominal, VO2máx e IMC).
+    const resumoCompletoParaSalvar = {
+      ...snapshot.resumo,
+      massaMuscularEsqueleticaKg: massaMuscularEsqueleticaKg,
+      circunferenciaAbdominalCm:
+        circNum.abdomen > 0 ? circNum.abdomen : circNum.cintura > 0 ? circNum.cintura : null,
+      vo2maxMlKgMin: vo2maxAtual,
+      imc: pesoKg > 0 && alturaCm > 0 ? round1(pesoKg / Math.pow(alturaCm / 100, 2)) : null,
+    };
+    const snapshotSalva: AvaliacaoHistoricoSnapshot = {
+      ...snapshot,
+      resumo: resumoCompletoParaSalvar,
+    };
+    try {
+      setSalvandoAvaliacao(true);
+      setAvaliacaoMsg("Salvando avaliação...");
+      const resp = await fetch("/api/avaliacao-fisica/salvar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pacienteId,
+          dataAvaliacao: dataAvaliacaoEfetiva,
+          protocolLabel: protocoloAtual?.label ?? "",
+          currentDobras: Object.fromEntries(
+            Object.entries(snapshot.dobras).map(([key, value]) => [key, parsePtNumber(String(value ?? ""))])
+          ),
+          currentCircunferencias: Object.fromEntries(
+            Object.entries(snapshot.circunferencias).map(([key, value]) => [key, parsePtNumber(String(value ?? ""))])
+          ),
+          resumo: resumoCompletoParaSalvar,
+        }),
+      });
+      const json = await resp.json().catch(() => ({}));
+      if (!resp.ok || json?.ok === false) {
+        setAvaliacaoMsg(json?.erro || "Não foi possível salvar a avaliação.");
+        return;
+      }
+      // Limpa os campos de dobras e circunferências (inclusive o rascunho local).
+      setDobras(allDobrasInitial);
+      setCircunferencias(allCircsInitial);
+      try {
+        window.localStorage.removeItem(`nutricare:antro:${pacienteId}`);
+      } catch {
+        // ignore
+      }
+      // Guarda o snapshot salvo: Enviar / Download / Comparação passam a usar
+      // ESTA avaliação (mesma data e medidas) mesmo com os campos limpos.
+      setUltimaAvaliacaoSalva(snapshotSalva);
+      setAvaliacaoMsg(`Avaliação nº ${json?.numeroAvaliacao ?? "?"} salva com sucesso. Campos limpos — você já pode enviar, baixar o PDF ou comparar esta avaliação.`);
+      await recarregarHistorico();
+    } catch (e: any) {
+      setAvaliacaoMsg(e?.message || "Erro ao salvar avaliação.");
+    } finally {
+      setSalvandoAvaliacao(false);
+    }
+  }
+
+  const podeSalvarAvaliacao =
+    result.bodyFatPct !== null ||
+    Object.keys(currentDobras).length > 0 ||
+    Object.keys(currentCircunferencias).length > 0;
 
     const protocolosSexo = DOBRAS_POR_SEXO[sexoPaciente];
 
@@ -1669,14 +1845,38 @@ export default function AntropometriaLayout({
 
         {/* ============ AVALIAÇÃO FÍSICA — Botões + Comparação ============ */}
         <div style={avaliacaoActionsCardStyle}>
+          <div style={avaliacaoCompareRowStyle}>
+            <label style={avaliacaoCompareToggleStyle}>
+              <span>Data da avaliação:</span>
+              <input
+                type="date"
+                value={dataAvaliacaoForm}
+                onChange={(e) => setDataAvaliacaoForm(e.target.value)}
+                style={avaliacaoCompareSelectStyle}
+              />
+            </label>
+          </div>
+
           <div style={avaliacaoActionsRowStyle}>
             <button
               type="button"
-              onClick={handleEnviarAvaliacao}
-              disabled={enviandoAvaliacao || result.bodyFatPct === null}
+              onClick={handleSalvarAvaliacao}
+              disabled={salvandoAvaliacao || !podeSalvarAvaliacao}
               style={{
                 ...avaliacaoActionBtnPrimary,
-                ...(enviandoAvaliacao || result.bodyFatPct === null ? avaliacaoActionBtnDisabled : {}),
+                ...(salvandoAvaliacao || !podeSalvarAvaliacao ? avaliacaoActionBtnDisabled : {}),
+              }}
+            >
+              {salvandoAvaliacao ? "Salvando..." : "💾 Salvar avaliação"}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleEnviarAvaliacao}
+              disabled={enviandoAvaliacao || (result.bodyFatPct === null && !ultimaAvaliacaoSalva)}
+              style={{
+                ...avaliacaoActionBtnPrimary,
+                ...(enviandoAvaliacao || (result.bodyFatPct === null && !ultimaAvaliacaoSalva) ? avaliacaoActionBtnDisabled : {}),
               }}
             >
               {enviandoAvaliacao ? "Enviando..." : "Enviar avaliação física"}
@@ -1685,10 +1885,10 @@ export default function AntropometriaLayout({
             <button
               type="button"
               onClick={handleDownloadAvaliacao}
-              disabled={baixandoAvaliacao || result.bodyFatPct === null}
+              disabled={baixandoAvaliacao || (result.bodyFatPct === null && !ultimaAvaliacaoSalva)}
               style={{
                 ...avaliacaoActionBtnSecondary,
-                ...(baixandoAvaliacao || result.bodyFatPct === null ? avaliacaoActionBtnDisabled : {}),
+                ...(baixandoAvaliacao || (result.bodyFatPct === null && !ultimaAvaliacaoSalva) ? avaliacaoActionBtnDisabled : {}),
               }}
             >
               {baixandoAvaliacao ? "Gerando..." : "Download do PDF"}
@@ -1706,53 +1906,43 @@ export default function AntropometriaLayout({
             </label>
 
             {compararResultados ? (
-              <div style={avaliacaoCompareSelectWrapStyle}>
-                <span style={compareHintStyle}>Comparar com:</span>
-                <select
-                  value={avaliacaoBaseId}
-                  onChange={(e) => setAvaliacaoBaseId(e.target.value)}
-                  style={avaliacaoCompareSelectStyle}
-                >
-                  {historicoOrdenado.length === 0 ? (
-                    <option value="">Sem avaliações anteriores</option>
-                  ) : (
-                    historicoOrdenado.map((h, idx) => {
-                      const label =
-                        idx === 0
-                          ? "1ª avaliação"
-                          : idx === 1
-                          ? "2ª avaliação"
-                          : "3ª avaliação";
-                      const d = getSnapshotDateLabel(h.snapshot?.dataAvaliacao || h.createdAt || undefined);
-                      return (
-                        <option key={h.id} value={h.id}>
-                          {label} — {d}
-                        </option>
-                      );
-                    })
-                  )}
-                </select>
-
-                {/* Caixas de seleção: o gráfico de evolução do PDF responde a elas.
-                    Nenhuma marcada = somente a primeira (avaliação atual);
-                    1 marcada = compara com 2 meses; 2 marcadas = com 3 meses. */}
-                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                  {historicoOrdenado.map((h, idx) => {
+              <div style={avaliacaoCheckboxesWrapStyle}>
+                <span style={compareHintStyle}>Comparar com (marque as avaliações):</span>
+                {historicoOrdenado.length === 0 ? (
+                  <span style={compareHintStyle}>Sem avaliações anteriores</span>
+                ) : (
+                  historicoOrdenado.map((h, idx) => {
                     const label =
-                      idx === 0 ? "1ª avaliação" : idx === 1 ? "2ª avaliação" : "3ª avaliação";
+                      idx === 0
+                        ? "1ª avaliação"
+                        : idx === 1
+                        ? "2ª avaliação"
+                        : "3ª avaliação";
                     const d = getSnapshotDateLabel(h.snapshot?.dataAvaliacao || h.createdAt || undefined);
+                    const marcado = evolucaoSelecionadaIds.includes(h.id);
                     return (
-                      <label key={h.id} style={avaliacaoCompareToggleStyle}>
-                        <input
-                          type="checkbox"
-                          checked={evolucaoSelecionadaIds.includes(h.id)}
-                          onChange={() => toggleEvolucaoSelecionada(h.id)}
-                        />
-                        <span>{label} — {d}</span>
-                      </label>
+                      <div key={h.id} style={avaliacaoCheckboxItemStyle}>
+                        <label style={avaliacaoCheckboxLabelStyle}>
+                          <input
+                            type="checkbox"
+                            checked={marcado}
+                            onChange={() => toggleEvolucaoSelecionada(h.id)}
+                          />
+                          <span>{label} — {d}</span>
+                        </label>
+                        {/* ✕ pequeno ao lado de cada data: exclui esta avaliação do banco */}
+                        <button
+                          type="button"
+                          onClick={() => handleExcluirAvaliacaoPorId(h.id)}
+                          title="Excluir esta avaliação"
+                          style={avaliacaoDeleteBtnStyle}
+                        >
+                          ✕
+                        </button>
+                      </div>
                     );
-                  })}
-                </div>
+                  })
+                )}
               </div>
             ) : null}
           </div>
@@ -1954,8 +2144,31 @@ const avaliacaoCompareToggleStyle: React.CSSProperties = {
   display: "inline-flex", alignItems: "center", gap: 8,
   fontSize: 13, fontWeight: 600, color: "#334",
 };
-const avaliacaoCompareSelectWrapStyle: React.CSSProperties = {
-  display: "inline-flex", alignItems: "center", gap: 8,
+// Caixas de seleção das avaliações (1ª/2ª/3ª) com botão de excluir ao lado.
+const avaliacaoCheckboxesWrapStyle: React.CSSProperties = {
+  display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center",
+};
+const avaliacaoCheckboxItemStyle: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", gap: 6,
+  padding: "6px 10px",
+  background: "#fff",
+  border: "1px solid #d1d5db",
+  borderRadius: 8,
+};
+const avaliacaoCheckboxLabelStyle: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", gap: 6,
+  fontSize: 13, fontWeight: 600, color: "#334", cursor: "pointer",
+};
+const avaliacaoDeleteBtnStyle: React.CSSProperties = {
+  padding: "2px 9px",
+  background: "#fef2f2",
+  color: "#dc2626",
+  border: "1px solid #fecaca",
+  borderRadius: 8,
+  fontSize: 13,
+  fontWeight: 700,
+  lineHeight: 1.4,
+  cursor: "pointer",
 };
 const avaliacaoCompareSelectStyle: React.CSSProperties = {
   padding: "6px 10px",

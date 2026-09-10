@@ -38,7 +38,9 @@ export async function GET(req: NextRequest) {
       return {
         id: r.id,
         createdAt: r.created_at?.toISOString?.() || null,
-        dataLabel: fmtData(r.created_at),
+        // Data REAL da avaliação (a que o nutri informou), não a de digitação.
+        dataAvaliacao: snap?.dataAvaliacao || r.data_avaliacao?.toISOString?.() || null,
+        dataLabel: fmtData(r.data_avaliacao || r.created_at),
         resumo: snap?.resumo || {
           pesoKg: Number(r.peso ?? 0) || null,
           bodyFatPct: Number(r.percentual_gordura ?? 0) || null,
@@ -114,6 +116,34 @@ export async function POST(req: NextRequest) {
   } catch (e: any) {
     return NextResponse.json(
       { ok: false, erro: e?.message ?? "Erro ao montar snapshot" },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/avaliacao-fisica/historico?id=<evolucaoId>&pacienteId=<pacienteId>
+// Apaga do banco (tabela evolucao_corporal) a avaliação salva, chamada pelo
+// botão ✕ ao lado da caixa "Comparar com" na aba Antropometria.
+export async function DELETE(req: NextRequest) {
+  try {
+    const url = new URL(req.url);
+    const id = url.searchParams.get("id");
+    const pacienteId = url.searchParams.get("pacienteId");
+    if (!id) {
+      return NextResponse.json({ ok: false, erro: "id ausente" }, { status: 400 });
+    }
+
+    // Segurança: só apaga se o registro pertencer ao paciente informado.
+    const registro = await prisma.evolucao_corporal.findUnique({ where: { id } });
+    if (!registro || (pacienteId && registro.paciente_id !== pacienteId)) {
+      return NextResponse.json({ ok: false, erro: "Avaliação não encontrada" }, { status: 404 });
+    }
+
+    await prisma.evolucao_corporal.delete({ where: { id } });
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return NextResponse.json(
+      { ok: false, erro: e?.message ?? "Erro ao excluir avaliação" },
       { status: 500 }
     );
   }
