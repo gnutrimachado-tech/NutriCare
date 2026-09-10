@@ -70,6 +70,9 @@ export type EvolucaoHistoricoPonto = {
   peso?: number | null;
   massaMuscular?: number | null;
   bfPct?: number | null;
+  // Medidas salvas NAQUELA avaliação (coluna "Antes" das tabelas):
+  dobras?: Record<string, string | number> | null;
+  circunferencias?: Record<string, string | number> | null;
 };
 
 type PdfProps = {
@@ -230,6 +233,12 @@ function fileToDataUri(rel?: string) {
 }
 function hasPositive(v: any) {
   return v !== null && v !== undefined && Number(v) > 0;
+}
+// Converte medida do histórico (pode vir como texto "45,5") para número.
+function toNumeroMedida(v: any): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(String(v).replace(",", "."));
+  return Number.isFinite(n) ? n : null;
 }
 
 // ---------- Constantes de página (idênticas ao PDF de Orientações) ----------
@@ -899,19 +908,27 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   const logo = fileToDataUri("/logo-nutricare.png");
   const fundo = fileToDataUri("/layouts/fundo-layout.jpg") || fileToDataUri("/fundo-layout.jpg");
   const imagemFrente = fileToDataUri(dados.imagemFrenteUrl);
-  const previous = dados.previousSummary || null;
 
-  // A lista vem do banco em ordem cronológica. O ID é usado para localizar
-  // com precisão o registro recém-criado quando ele já foi persistido.
+  // A lista é SEMPRE reordenada pela data da avaliação (mais antiga -> mais
+  // recente), nunca pela ordem de digitação: 02/06 vem antes de 10/09 mesmo
+  // que tenha sido lançada depois.
   const historico = [...(dados.evolucaoHistorico || [])].sort((a, b) => {
     const aTime = new Date(a.dataAvaliacao || a.createdAt || 0).getTime();
     const bTime = new Date(b.dataAvaliacao || b.createdAt || 0).getTime();
-    const byCreatedAt = aTime - bTime;
-    return byCreatedAt !== 0 ? byCreatedAt : a.id.localeCompare(b.id);
+    const byData = aTime - bTime;
+    if (byData !== 0) return byData;
+    // Desempate final por (mês, dia) do rótulo e depois pelo id.
+    const aMd = Number(a.data?.split("/")[1] || 0) * 100 + Number(a.data?.split("/")[0] || 0);
+    const bMd = Number(b.data?.split("/")[1] || 0) * 100 + Number(b.data?.split("/")[0] || 0);
+    if (aMd !== bMd) return aMd - bMd;
+    return a.id.localeCompare(b.id);
   });
   const idsSelecionados = new Set(dados.evolucaoSelecionadaIds || []);
   const historicoSel = historico.filter((h) => idsSelecionados.has(h.id));
-  const primeiraHistorica = historico[0] || null;
+  // A comparação SÓ é válida quando "Comparação de resultados" está marcada
+  // E existe ao menos uma avaliação marcada na lista (1ª/2ª/3ª).
+  // Sem seleção -> nenhuma comparação aparece no PDF.
+  const temComparacaoSelecionada = Boolean(dados.compareResults) && historicoSel.length > 0;
   const atual: EvolucaoPonto | null =
     dados.evolucaoAtual ||
     dados.evolucao?.[dados.evolucao.length - 1] ||
@@ -921,14 +938,10 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
       massaMuscular: dados.massaMagraKg,
       bfPct: dados.bfPct,
     };
-  const temComparacaoSelecionada = Boolean(dados.compareResults);
-
-  // O gráfico mantém a 1ª avaliação como referência, inclui as avaliações
-  // marcadas e sempre termina no resultado atual de Composição Corporal.
-  const historicoParaGrafico = [
-    ...(primeiraHistorica ? [primeiraHistorica] : []),
-    ...historicoSel.filter((h) => h.id !== primeiraHistorica?.id),
-  ];
+  // Série histórica dos gráficos: APENAS as avaliações marcadas, já na ordem
+  // cronológica real (mais antiga -> mais recente). O resultado atual entra
+  // como último ponto. Sem marcação, nenhum ponto histórico é exibido.
+  const historicoParaGrafico = temComparacaoSelecionada ? historicoSel : [];
   const evolucao: EvolucaoPonto[] = [
     ...historicoParaGrafico.map(({ data, peso, massaMuscular, bfPct }) => ({
       data,
@@ -946,8 +959,11 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   const pesoPontos = evolucao.map((p) => ({ data: p.data, value: p.peso }));
   const musculoPontos = evolucao.map((p) => ({ data: p.data, value: p.massaMuscular }));
   const bfPontos = evolucao.map((p) => ({ data: p.data, value: p.bfPct }));
+  // EVOLUÇÃO COMPARATIVA: mesma regra do card EVOLUÇÃO — somente as
+  // avaliações marcadas + o resultado atual. Sem marcação, exibe apenas o
+  // ponto atual (sem gráfico de comparação e sem variação).
   const pontosComparacao = [
-    ...(temComparacaoSelecionada ? historicoParaGrafico : primeiraHistorica ? [primeiraHistorica] : []),
+    ...historicoParaGrafico,
     ...(atual ? [atual] : []),
   ].map(({ data, peso, massaMuscular, bfPct }) => ({
     data,
@@ -962,36 +978,38 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   }));
   const bfComparacaoPontos = pontosComparacao.map((p) => ({ data: p.data, value: p.bfPct }));
 
+  // Base de comparação = avaliação SELECIONADA mais recente (a mais próxima
+  // da atual). A coluna "Antes" das tabelas usa as circunferências e dobras
+  // salvas NAQUELA avaliação, na data dela. Sem seleção -> "—".
+  const avaliacaoBaseComparacao = temComparacaoSelecionada
+    ? historicoParaGrafico[historicoParaGrafico.length - 1] || null
+    : null;
+  const antesDobras = (avaliacaoBaseComparacao?.dobras || {}) as Record<string, string | number>;
+  const antesCircunferencias = (avaliacaoBaseComparacao?.circunferencias || {}) as Record<string, string | number>;
+
   const circRows = CIRC_ORDER.map((k) => ({
     key: k,
     label: CIRC_LABELS[k],
     atual: dados.currentCircunferencias?.[k],
-    antes: dados.previousCircunferencias?.[k],
+    antes: toNumeroMedida(antesCircunferencias[k]),
   }));
   const dobraRows = DOBRAS_ORDER.map((k) => ({
     key: k,
     label: DOBRAS_LABELS[k],
     atual: dados.currentDobras?.[k],
-    antes: dados.previousDobras?.[k],
+    antes: toNumeroMedida(antesDobras[k]),
   }));
   const valorOu = (v: any) => (hasPositive(v) ? toFixedPt(v) : "—");
 
-  // Os resultados mostrados são sempre os atuais de Composição Corporal.
-  // A variação compara N com N-1 na ordem real do banco, inclusive no mesmo dia.
-  const indiceAtual = dados.evolucaoAtualId
-    ? historico.findIndex((h) => h.id === dados.evolucaoAtualId)
-    : -1;
-  const avaliacaoAnteriorImediata =
-    indiceAtual > 0
-      ? historico[indiceAtual - 1]
-      : historico[historico.length - 1] || null;
-  const base = previous || (avaliacaoAnteriorImediata
+  // Os resultados mostrados são sempre os atuais de COMPOSIÇÃO CORPORAL.
+  // A variação compara o atual com a avaliação selecionada mais recente.
+  const base = avaliacaoBaseComparacao
     ? {
-        pesoKg: avaliacaoAnteriorImediata.peso,
-        massaMuscularKg: avaliacaoAnteriorImediata.massaMuscular,
-        bodyFatPct: avaliacaoAnteriorImediata.bfPct,
+        pesoKg: avaliacaoBaseComparacao.peso,
+        massaMuscularKg: avaliacaoBaseComparacao.massaMuscular,
+        bodyFatPct: avaliacaoBaseComparacao.bfPct,
       }
-    : null);
+    : null;
   const pesoComparado = atual?.peso ?? dados.pesoKg;
   const massaMuscularComparada = atual?.massaMuscular ?? dados.massaMagraKg;
   const gorduraComparada = atual?.bfPct ?? dados.bfPct;
