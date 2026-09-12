@@ -21,12 +21,17 @@ export type AvaliacaoHistoricoResumo = {
   imme: number | null;
   img: number | null;
   ffmi: number | null;
+  massaMuscularEsqueleticaKg?: number | null;
+  circunferenciaAbdominalCm?: number | null;
+  vo2maxMlKgMin?: number | null;
+  imc?: number | null;
   createdAt?: string | null;
   protocolLabel?: string | null;
 };
 
 export type AvaliacaoHistoricoSnapshot = {
   createdAt: string;
+  dataAvaliacao?: string | null;
   protocolLabel: string;
   dobras: Record<string, string | number>;
   circunferencias: Record<string, string | number>;
@@ -46,6 +51,7 @@ export function mapaSnapshotParaNumeros(
 
 type PersistArgs = {
   pacienteId: string;
+  dataAvaliacao?: string | null;
   protocolLabel?: string;
   currentDobras?: Record<string, number>;
   currentCircunferencias?: Record<string, number>;
@@ -60,6 +66,7 @@ function toNullableNumber(value: unknown) {
 export function buildAvaliacaoSnapshot(args: PersistArgs): AvaliacaoHistoricoSnapshot {
   return {
     createdAt: new Date().toISOString(),
+    dataAvaliacao: args.dataAvaliacao || null,
     protocolLabel: args.protocolLabel || "",
     dobras: Object.fromEntries(
       Object.entries(args.currentDobras || {}).map(([k, v]) => [k, String(v).replace(".", ",")])
@@ -76,6 +83,10 @@ export function buildAvaliacaoSnapshot(args: PersistArgs): AvaliacaoHistoricoSna
       imme: toNullableNumber(args.resumo.imme),
       img: toNullableNumber(args.resumo.img),
       ffmi: toNullableNumber(args.resumo.ffmi),
+      massaMuscularEsqueleticaKg: toNullableNumber(args.resumo.massaMuscularEsqueleticaKg),
+      circunferenciaAbdominalCm: toNullableNumber(args.resumo.circunferenciaAbdominalCm),
+      vo2maxMlKgMin: toNullableNumber(args.resumo.vo2maxMlKgMin),
+      imc: toNullableNumber(args.resumo.imc),
       createdAt: args.resumo.createdAt || null,
       protocolLabel: args.resumo.protocolLabel || args.protocolLabel || "",
     },
@@ -85,6 +96,7 @@ export function buildAvaliacaoSnapshot(args: PersistArgs): AvaliacaoHistoricoSna
 export function extrairSnapshotDeEvolucao(item: {
   observacoes?: string | null;
   created_at?: Date | null;
+  data_avaliacao?: Date | null;
   peso?: unknown;
   percentual_gordura?: unknown;
   massa_muscular?: unknown;
@@ -112,6 +124,7 @@ export function extrairSnapshotDeEvolucao(item: {
 
   return {
     createdAt: item?.created_at?.toISOString?.() || new Date().toISOString(),
+    dataAvaliacao: item?.data_avaliacao?.toISOString?.() || null,
     protocolLabel: "",
     dobras: {},
     circunferencias: item?.circunferencia_abdominal
@@ -126,6 +139,10 @@ export function extrairSnapshotDeEvolucao(item: {
       imme: null,
       img: null,
       ffmi: null,
+      massaMuscularEsqueleticaKg: null,
+      circunferenciaAbdominalCm: null,
+      vo2maxMlKgMin: null,
+      imc: null,
       createdAt: item?.created_at?.toISOString?.() || null,
       protocolLabel: "",
     },
@@ -205,6 +222,9 @@ export async function salvarAvaliacaoHistorico(args: PersistArgs) {
   const criado = await prisma.evolucao_corporal.create({
     data: {
       paciente_id: args.pacienteId,
+      data_avaliacao: args.dataAvaliacao
+        ? new Date(`${args.dataAvaliacao}T12:00:00`)
+        : null,
       peso: snapshot.resumo.pesoKg,
       percentual_gordura: snapshot.resumo.bodyFatPct,
       massa_muscular: snapshot.resumo.massaMuscularKg,
