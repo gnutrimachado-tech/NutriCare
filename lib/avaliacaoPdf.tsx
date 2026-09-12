@@ -66,13 +66,9 @@ export type EvolucaoHistoricoPonto = {
   id: string;
   data: string;
   createdAt?: string | null;
-  dataAvaliacao?: string | null;
   peso?: number | null;
   massaMuscular?: number | null;
   bfPct?: number | null;
-  // Medidas salvas NAQUELA avaliação (coluna "Antes" das tabelas):
-  dobras?: Record<string, string | number> | null;
-  circunferencias?: Record<string, string | number> | null;
 };
 
 type PdfProps = {
@@ -85,7 +81,6 @@ type PdfProps = {
   };
   dados: {
     data: string;
-    dataAvaliacao?: string | null;
     pesoKg: number;
     pctAgua: number;
     massaMagraKg: number;
@@ -207,14 +202,6 @@ function formatBirth(v?: string | null) {
   if (Number.isNaN(d.getTime())) return v;
   return d.toLocaleDateString("pt-BR");
 }
-function formatAssessmentDate(v?: string | null) {
-  if (!v) return "—";
-  if (/^\d{4}-\d{2}-\d{2}/.test(v)) {
-    const [yyyy, mm, dd] = v.slice(0, 10).split("-");
-    return `${dd}/${mm}/${yyyy}`;
-  }
-  return formatBirth(v);
-}
 function labelSexo(s: "M" | "F") {
   return s === "F" ? "feminino" : "masculino";
 }
@@ -233,12 +220,6 @@ function fileToDataUri(rel?: string) {
 }
 function hasPositive(v: any) {
   return v !== null && v !== undefined && Number(v) > 0;
-}
-// Converte medida do histórico (pode vir como texto "45,5") para número.
-function toNumeroMedida(v: any): number | null {
-  if (v === null || v === undefined || v === "") return null;
-  const n = Number(String(v).replace(",", "."));
-  return Number.isFinite(n) ? n : null;
 }
 
 // ---------- Constantes de página (idênticas ao PDF de Orientações) ----------
@@ -403,7 +384,7 @@ const styles = StyleSheet.create({
   },
 
   // Tabela composição corporal
-  ccTable: { width: "100%", alignSelf: "stretch", marginTop: 2.83 },
+  ccTable: { width: "100%", alignSelf: "stretch" },
   ccHead: { flexDirection: "row", paddingBottom: 3, marginBottom: 2 },
   ccHeadTxt: { fontSize: 7, color: MUTED, fontWeight: 700 },
   ccRow: { flexDirection: "row", alignItems: "center", paddingVertical: 2.4 },
@@ -435,7 +416,7 @@ const styles = StyleSheet.create({
   // Distâncias topo/base espelham o card COMPOSIÇÃO CORPORAL ("Peso" no topo
   // e "% de gordura" na base).
   evoInfoCard: { flexGrow: 1, justifyContent: "space-between" },
-  evoInfoCol: { flexDirection: "column", alignItems: "center", marginTop: 14.17 },
+  evoInfoCol: { flexDirection: "column", alignItems: "center", marginTop: 0 },
   evoFigure: { width: 72, height: 56, objectFit: "contain", marginBottom: 5 },
   evoFigureSvg: { width: 72, height: 56, marginBottom: 5 },
   evoInfoTextWrap: { width: "100%" },
@@ -526,21 +507,9 @@ const styles = StyleSheet.create({
   footSince: { fontSize: 7, color: MUTED, marginTop: 2 },
   footChart: { width: 116, height: 38, marginTop: 4, alignSelf: "center" },
 
-  // ============ RODAPÉ FIXO (igual ao PDF de Plano Alimentar) ============
-  // No PDF de Plano Alimentar (pdf-lib, coord bottom-up):
-  //   footerY = 56
-  //   texto "Nutricionista: {nome}" em y = footerY + 12 = 68  (baseline)
-  //   linha em y = footerY + 10 = 66  (2pt abaixo do baseline)
-  //   CRN em y = footerY - 8 = 48    (baseline)
-  //
-  // Em @react-pdf (top-down) o `top` corresponde ao TOPO do texto, não à
-  // baseline.  Como a fonte GreatVibes tem cap-height ≈ 0.68 do fontSize e um
-  // ascender ≈ 0.82 do fontSize, para que o texto ENCOSTE na linha (como no
-  // PDF de Plano Alimentar) usamos:
-  //   top_do_texto = PAGE_HEIGHT - baseline_bottomUp - fontSize * 0.82
-  //
-  // Assim o texto desce e a base das letras fica praticamente encostada na
-  // linha, replicando exatamente o visual do PDF de Plano Alimentar.
+  // ============ RODAPÉ FIXO (igual ao PDF de Orientações) ============
+  // footerY (Orientações) = 56.  Nome fica em y=footerY+12 (baseline).
+  // Convertendo para top: PAGE_HEIGHT - (footerY + 12) - fontSize.
   footerFixed: {
     position: "absolute",
     left: 0,
@@ -550,9 +519,7 @@ const styles = StyleSheet.create({
   },
   signName: {
     position: "absolute",
-    // baseline bottomUp = 68 (footerY+12). Ascender GreatVibes ≈ 18*0.82 = 14.76
-    // → top = PAGE_HEIGHT - 68 - 14.76
-    top: PAGE_HEIGHT - (56 + 12) - 18 * 0.82,
+    top: PAGE_HEIGHT - (56 + 12) - 18,
     left: PAGE_MARGIN_X,
     fontSize: 18,
     fontFamily: "GreatVibes",
@@ -560,7 +527,6 @@ const styles = StyleSheet.create({
   },
   signLine: {
     position: "absolute",
-    // linha em y bottomUp = 66  → top = PAGE_HEIGHT - 66
     top: PAGE_HEIGHT - (56 + 10),
     left: PAGE_MARGIN_X,
     height: 0.8,
@@ -569,9 +535,7 @@ const styles = StyleSheet.create({
   },
   signCrn: {
     position: "absolute",
-    // baseline bottomUp = 48 (footerY-8). Ascender GreatVibes ≈ 16*0.82 = 13.12
-    // → top = PAGE_HEIGHT - 48 - 13.12
-    top: PAGE_HEIGHT - (56 - 8) - 16 * 0.82,
+    top: PAGE_HEIGHT - (56 - 8) - 16,
     left: PAGE_MARGIN_X,
     fontSize: 16,
     fontFamily: "GreatVibes",
@@ -608,27 +572,20 @@ type ReferenciaParametro =
 
 type ReferenciaFaixa = Record<Exclude<ReferenciaParametro, "peso">, string>;
 
-// Faixas de Massa Adiposa (kg absolutos) derivadas do IMG de referência
-// aplicado à estatura de referência do sistema (173 cm masc, 163 cm fem):
-//   massa_adiposa_kg = IMG_ref (kg/m²) × altura_ref (m)²
-// Ex.: IMG 2,3–2,9 kg/m² × 1,73² ≈ 6,9–8,7 kg (masc 18–45)
-//      IMG 4,4–5,3 kg/m² × 1,63² ≈ 11,7–14,1 kg (fem 18–45)
-// O IMG (kg/m²) segue exatamente igual, apenas a linha "Massa adiposa"
-// deixa de duplicar a mesma faixa.
 const REFERENCIAS_COMPOSICAO: Record<"M" | "F", ReferenciaFaixa[]> = {
   M: [
-    { agua: "58,0%", massaMuscular: "58,0 kg", imme: "12,6 kg/m²", massaMagra: "58,0 kg", massaAdiposa: "6,9–8,7 kg", img: "2,3–2,9 kg/m²", gordura: "6,1–10,0%" },
-    { agua: "58,0%", massaMuscular: "58,0 kg", imme: "12,6 kg/m²", massaMagra: "58,0 kg", massaAdiposa: "6,9–8,7 kg", img: "2,3–2,9 kg/m²", gordura: "11,1–15,0%" },
-    { agua: "58,0%", massaMuscular: "58,0 kg", imme: "12,6 kg/m²", massaMagra: "58,0 kg", massaAdiposa: "6,9–8,7 kg", img: "2,3–2,9 kg/m²", gordura: "14,1–18,0%" },
-    { agua: "58,0%", massaMuscular: "56,0 kg", imme: "12,4 kg/m²", massaMagra: "56,0 kg", massaAdiposa: "9,6–11,7 kg", img: "3,2–3,9 kg/m²", gordura: "16,1–20,0%" },
-    { agua: "58,0%", massaMuscular: "53,0 kg", imme: "11,5 kg/m²", massaMagra: "53,0 kg", massaAdiposa: "10,8–13,5 kg", img: "3,6–4,5 kg/m²", gordura: "18,1–21,0%" },
+    { agua: "≥ 58,0%", massaMuscular: "≥ 58,0 kg", imme: "≥ 12,6 kg/m²", massaMagra: "≥ 58,0 kg", massaAdiposa: "2,3–2,9 kg/m²", img: "2,3–2,9 kg/m²", gordura: "6,1–10,0%" },
+    { agua: "≥ 58,0%", massaMuscular: "≥ 58,0 kg", imme: "≥ 12,6 kg/m²", massaMagra: "≥ 58,0 kg", massaAdiposa: "2,3–2,9 kg/m²", img: "2,3–2,9 kg/m²", gordura: "11,1–15,0%" },
+    { agua: "≥ 58,0%", massaMuscular: "≥ 58,0 kg", imme: "≥ 12,6 kg/m²", massaMagra: "≥ 58,0 kg", massaAdiposa: "2,3–2,9 kg/m²", img: "2,3–2,9 kg/m²", gordura: "14,1–18,0%" },
+    { agua: "≥ 58,0%", massaMuscular: "≥ 56,0 kg", imme: "≥ 12,4 kg/m²", massaMagra: "≥ 56,0 kg", massaAdiposa: "3,2–3,9 kg/m²", img: "3,2–3,9 kg/m²", gordura: "16,1–20,0%" },
+    { agua: "≥ 58,0%", massaMuscular: "≥ 53,0 kg", imme: "≥ 11,5 kg/m²", massaMagra: "≥ 53,0 kg", massaAdiposa: "3,6–4,5 kg/m²", img: "3,6–4,5 kg/m²", gordura: "18,1–21,0%" },
   ],
   F: [
-    { agua: "50,0%", massaMuscular: "42,0 kg", imme: "9,7 kg/m²", massaMagra: "42,0 kg", massaAdiposa: "11,7–14,1 kg", img: "4,4–5,3 kg/m²", gordura: "16,1–19,0%" },
-    { agua: "50,0%", massaMuscular: "42,0 kg", imme: "9,7 kg/m²", massaMagra: "42,0 kg", massaAdiposa: "11,7–14,1 kg", img: "4,4–5,3 kg/m²", gordura: "16,1–20,0%" },
-    { agua: "50,0%", massaMuscular: "42,0 kg", imme: "9,7 kg/m²", massaMagra: "42,0 kg", massaAdiposa: "11,7–14,1 kg", img: "4,4–5,3 kg/m²", gordura: "19,1–23,0%" },
-    { agua: "50,0%", massaMuscular: "40,5 kg", imme: "9,5 kg/m²", massaMagra: "40,5 kg", massaAdiposa: "14,3–17,0 kg", img: "5,4–6,4 kg/m²", gordura: "21,1–25,0%" },
-    { agua: "50,0%", massaMuscular: "38,0 kg", imme: "8,9 kg/m²", massaMagra: "38,0 kg", massaAdiposa: "16,2–19,1 kg", img: "6,1–7,2 kg/m²", gordura: "22,1–26,0%" },
+    { agua: "≥ 50,0%", massaMuscular: "≥ 42,0 kg", imme: "≥ 9,7 kg/m²", massaMagra: "≥ 42,0 kg", massaAdiposa: "4,4–5,3 kg/m²", img: "4,4–5,3 kg/m²", gordura: "16,1–19,0%" },
+    { agua: "≥ 50,0%", massaMuscular: "≥ 42,0 kg", imme: "≥ 9,7 kg/m²", massaMagra: "≥ 42,0 kg", massaAdiposa: "4,4–5,3 kg/m²", img: "4,4–5,3 kg/m²", gordura: "16,1–20,0%" },
+    { agua: "≥ 50,0%", massaMuscular: "≥ 42,0 kg", imme: "≥ 9,7 kg/m²", massaMagra: "≥ 42,0 kg", massaAdiposa: "4,4–5,3 kg/m²", img: "4,4–5,3 kg/m²", gordura: "19,1–23,0%" },
+    { agua: "≥ 50,0%", massaMuscular: "≥ 40,5 kg", imme: "≥ 9,5 kg/m²", massaMagra: "≥ 40,5 kg", massaAdiposa: "5,4–6,4 kg/m²", img: "5,4–6,4 kg/m²", gordura: "21,1–25,0%" },
+    { agua: "≥ 50,0%", massaMuscular: "≥ 38,0 kg", imme: "≥ 8,9 kg/m²", massaMagra: "≥ 38,0 kg", massaAdiposa: "6,1–7,2 kg/m²", img: "6,1–7,2 kg/m²", gordura: "22,1–26,0%" },
   ],
 };
 
@@ -908,27 +865,19 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   const logo = fileToDataUri("/logo-nutricare.png");
   const fundo = fileToDataUri("/layouts/fundo-layout.jpg") || fileToDataUri("/fundo-layout.jpg");
   const imagemFrente = fileToDataUri(dados.imagemFrenteUrl);
+  const previous = dados.previousSummary || null;
 
-  // A lista é SEMPRE reordenada pela data da avaliação (mais antiga -> mais
-  // recente), nunca pela ordem de digitação: 02/06 vem antes de 10/09 mesmo
-  // que tenha sido lançada depois.
+  // A lista vem do banco em ordem cronológica. O ID é usado para localizar
+  // com precisão o registro recém-criado quando ele já foi persistido.
   const historico = [...(dados.evolucaoHistorico || [])].sort((a, b) => {
-    const aTime = new Date(a.dataAvaliacao || a.createdAt || 0).getTime();
-    const bTime = new Date(b.dataAvaliacao || b.createdAt || 0).getTime();
-    const byData = aTime - bTime;
-    if (byData !== 0) return byData;
-    // Desempate final por (mês, dia) do rótulo e depois pelo id.
-    const aMd = Number(a.data?.split("/")[1] || 0) * 100 + Number(a.data?.split("/")[0] || 0);
-    const bMd = Number(b.data?.split("/")[1] || 0) * 100 + Number(b.data?.split("/")[0] || 0);
-    if (aMd !== bMd) return aMd - bMd;
-    return a.id.localeCompare(b.id);
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    const byCreatedAt = aTime - bTime;
+    return byCreatedAt !== 0 ? byCreatedAt : a.id.localeCompare(b.id);
   });
   const idsSelecionados = new Set(dados.evolucaoSelecionadaIds || []);
   const historicoSel = historico.filter((h) => idsSelecionados.has(h.id));
-  // A comparação SÓ é válida quando "Comparação de resultados" está marcada
-  // E existe ao menos uma avaliação marcada na lista (1ª/2ª/3ª).
-  // Sem seleção -> nenhuma comparação aparece no PDF.
-  const temComparacaoSelecionada = Boolean(dados.compareResults) && historicoSel.length > 0;
+  const primeiraHistorica = historico[0] || null;
   const atual: EvolucaoPonto | null =
     dados.evolucaoAtual ||
     dados.evolucao?.[dados.evolucao.length - 1] ||
@@ -938,10 +887,14 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
       massaMuscular: dados.massaMagraKg,
       bfPct: dados.bfPct,
     };
-  // Série histórica dos gráficos: APENAS as avaliações marcadas, já na ordem
-  // cronológica real (mais antiga -> mais recente). O resultado atual entra
-  // como último ponto. Sem marcação, nenhum ponto histórico é exibido.
-  const historicoParaGrafico = temComparacaoSelecionada ? historicoSel : [];
+  const temComparacaoSelecionada = Boolean(dados.compareResults);
+
+  // O gráfico mantém a 1ª avaliação como referência, inclui as avaliações
+  // marcadas e sempre termina no resultado atual de Composição Corporal.
+  const historicoParaGrafico = [
+    ...(primeiraHistorica ? [primeiraHistorica] : []),
+    ...historicoSel.filter((h) => h.id !== primeiraHistorica?.id),
+  ];
   const evolucao: EvolucaoPonto[] = [
     ...historicoParaGrafico.map(({ data, peso, massaMuscular, bfPct }) => ({
       data,
@@ -959,11 +912,8 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   const pesoPontos = evolucao.map((p) => ({ data: p.data, value: p.peso }));
   const musculoPontos = evolucao.map((p) => ({ data: p.data, value: p.massaMuscular }));
   const bfPontos = evolucao.map((p) => ({ data: p.data, value: p.bfPct }));
-  // EVOLUÇÃO COMPARATIVA: mesma regra do card EVOLUÇÃO — somente as
-  // avaliações marcadas + o resultado atual. Sem marcação, exibe apenas o
-  // ponto atual (sem gráfico de comparação e sem variação).
   const pontosComparacao = [
-    ...historicoParaGrafico,
+    ...(temComparacaoSelecionada ? historicoParaGrafico : primeiraHistorica ? [primeiraHistorica] : []),
     ...(atual ? [atual] : []),
   ].map(({ data, peso, massaMuscular, bfPct }) => ({
     data,
@@ -978,38 +928,36 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   }));
   const bfComparacaoPontos = pontosComparacao.map((p) => ({ data: p.data, value: p.bfPct }));
 
-  // Base de comparação = avaliação SELECIONADA mais recente (a mais próxima
-  // da atual). A coluna "Antes" das tabelas usa as circunferências e dobras
-  // salvas NAQUELA avaliação, na data dela. Sem seleção -> "—".
-  const avaliacaoBaseComparacao = temComparacaoSelecionada
-    ? historicoParaGrafico[historicoParaGrafico.length - 1] || null
-    : null;
-  const antesDobras = (avaliacaoBaseComparacao?.dobras || {}) as Record<string, string | number>;
-  const antesCircunferencias = (avaliacaoBaseComparacao?.circunferencias || {}) as Record<string, string | number>;
-
   const circRows = CIRC_ORDER.map((k) => ({
     key: k,
     label: CIRC_LABELS[k],
     atual: dados.currentCircunferencias?.[k],
-    antes: toNumeroMedida(antesCircunferencias[k]),
+    antes: dados.previousCircunferencias?.[k],
   }));
   const dobraRows = DOBRAS_ORDER.map((k) => ({
     key: k,
     label: DOBRAS_LABELS[k],
     atual: dados.currentDobras?.[k],
-    antes: toNumeroMedida(antesDobras[k]),
+    antes: dados.previousDobras?.[k],
   }));
   const valorOu = (v: any) => (hasPositive(v) ? toFixedPt(v) : "—");
 
-  // Os resultados mostrados são sempre os atuais de COMPOSIÇÃO CORPORAL.
-  // A variação compara o atual com a avaliação selecionada mais recente.
-  const base = avaliacaoBaseComparacao
+  // Os resultados mostrados são sempre os atuais de Composição Corporal.
+  // A variação compara N com N-1 na ordem real do banco, inclusive no mesmo dia.
+  const indiceAtual = dados.evolucaoAtualId
+    ? historico.findIndex((h) => h.id === dados.evolucaoAtualId)
+    : -1;
+  const avaliacaoAnteriorImediata =
+    indiceAtual > 0
+      ? historico[indiceAtual - 1]
+      : historico[historico.length - 1] || null;
+  const base = avaliacaoAnteriorImediata
     ? {
-        pesoKg: avaliacaoBaseComparacao.peso,
-        massaMuscularKg: avaliacaoBaseComparacao.massaMuscular,
-        bodyFatPct: avaliacaoBaseComparacao.bfPct,
+        pesoKg: avaliacaoAnteriorImediata.peso,
+        massaMuscularKg: avaliacaoAnteriorImediata.massaMuscular,
+        bodyFatPct: avaliacaoAnteriorImediata.bfPct,
       }
-    : null;
+    : previous;
   const pesoComparado = atual?.peso ?? dados.pesoKg;
   const massaMuscularComparada = atual?.massaMuscular ?? dados.massaMagraKg;
   const gorduraComparada = atual?.bfPct ?? dados.bfPct;
@@ -1047,7 +995,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             {`nascimento: ${formatBirth(paciente.nascimento)} | peso: ${toFixedPt(dados.pesoKg)}kg`}
           </Text>
           <Text style={styles.headerInfoLine2}>
-            {`altura: ${toFixedPt(paciente.altura_cm, 0)}cm | sexo: ${labelSexo(paciente.sexo)} | avaliação: ${formatAssessmentDate(dados.dataAvaliacao)}`}
+            {`altura: ${toFixedPt(paciente.altura_cm, 0)}cm | sexo: ${labelSexo(paciente.sexo)}`}
           </Text>
           <View style={styles.headerRule} />
           <Text style={styles.headerTitle}>AVALIAÇÃO FÍSICA</Text>
@@ -1131,7 +1079,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                   <Text style={styles.ccColParamText}>Massa adiposa</Text>
                 </View>
                 <ReferenciaCelula parametro="massaAdiposa" sexo={paciente.sexo} idade={paciente.idade} />
-                <Text style={styles.ccColRes}>{toFixedPt(dados.massaGordaKg)} kg</Text>
+                <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
                 <View style={styles.ccColEval}>
                   <EvalPill
                     cor={(dados.classificacaoMassaAdiposa || dados.classificacaoImg)?.cor}
