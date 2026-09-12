@@ -60,42 +60,6 @@ const IMG_TABLE = {
   ],
 } as const;
 
-const PERCENTUAL_GORDURA_TABLE = {
-  F: [
-    { idadeMin: 18, idadeMax: 25, otimoMin: 13.0, otimoMax: 16.0, bomMin: 17.0, bomMax: 19.0 },
-    { idadeMin: 26, idadeMax: 35, otimoMin: 14.0, otimoMax: 16.0, bomMin: 18.0, bomMax: 20.0 },
-    { idadeMin: 36, idadeMax: 45, otimoMin: 16.0, otimoMax: 19.0, bomMin: 20.0, bomMax: 23.0 },
-    { idadeMin: 46, idadeMax: 55, otimoMin: 17.0, otimoMax: 21.0, bomMin: 23.0, bomMax: 25.0 },
-    { idadeMin: 56, idadeMax: 999, otimoMin: 18.0, otimoMax: 22.0, bomMin: 24.0, bomMax: 26.0 },
-  ],
-  M: [
-    { idadeMin: 18, idadeMax: 25, otimoMin: 4.0, otimoMax: 6.0, bomMin: 8.0, bomMax: 10.0 },
-    { idadeMin: 26, idadeMax: 35, otimoMin: 8.0, otimoMax: 11.0, bomMin: 12.0, bomMax: 15.0 },
-    { idadeMin: 36, idadeMax: 45, otimoMin: 10.0, otimoMax: 14.0, bomMin: 16.0, bomMax: 18.0 },
-    { idadeMin: 46, idadeMax: 55, otimoMin: 12.0, otimoMax: 16.0, bomMin: 18.0, bomMax: 20.0 },
-    { idadeMin: 56, idadeMax: 999, otimoMin: 13.0, otimoMax: 18.0, bomMin: 20.0, bomMax: 21.0 },
-  ],
-} as const;
-
-// Estas são as faixas do TXT enviado pelo usuário. Elas aparecem somente na
-// coluna "Referência" do card, como valor adequado por sexo e idade.
-const REFERENCIA_ADEQUADA_TABLE = {
-  F: [
-    { idadeMin: 18, idadeMax: 25, agua: 50.0, massaMuscular: 42.0, imme: 9.7, imgMin: 4.4, imgMax: 5.3, gorduraMin: 16.1, gorduraMax: 19.0 },
-    { idadeMin: 26, idadeMax: 35, agua: 50.0, massaMuscular: 42.0, imme: 9.7, imgMin: 4.4, imgMax: 5.3, gorduraMin: 16.1, gorduraMax: 20.0 },
-    { idadeMin: 36, idadeMax: 45, agua: 50.0, massaMuscular: 42.0, imme: 9.7, imgMin: 4.4, imgMax: 5.3, gorduraMin: 19.1, gorduraMax: 23.0 },
-    { idadeMin: 46, idadeMax: 55, agua: 50.0, massaMuscular: 40.5, imme: 9.5, imgMin: 5.4, imgMax: 6.4, gorduraMin: 21.1, gorduraMax: 25.0 },
-    { idadeMin: 56, idadeMax: 999, agua: 50.0, massaMuscular: 38.0, imme: 8.9, imgMin: 6.1, imgMax: 7.2, gorduraMin: 22.1, gorduraMax: 26.0 },
-  ],
-  M: [
-    { idadeMin: 18, idadeMax: 25, agua: 58.0, massaMuscular: 58.0, imme: 12.6, imgMin: 2.3, imgMax: 2.9, gorduraMin: 6.1, gorduraMax: 10.0 },
-    { idadeMin: 26, idadeMax: 35, agua: 58.0, massaMuscular: 58.0, imme: 12.6, imgMin: 2.3, imgMax: 2.9, gorduraMin: 11.1, gorduraMax: 15.0 },
-    { idadeMin: 36, idadeMax: 45, agua: 58.0, massaMuscular: 58.0, imme: 12.6, imgMin: 2.3, imgMax: 2.9, gorduraMin: 14.1, gorduraMax: 18.0 },
-    { idadeMin: 46, idadeMax: 55, agua: 58.0, massaMuscular: 56.0, imme: 12.4, imgMin: 3.2, imgMax: 3.9, gorduraMin: 16.1, gorduraMax: 20.0 },
-    { idadeMin: 56, idadeMax: 999, agua: 58.0, massaMuscular: 53.0, imme: 11.5, imgMin: 3.6, imgMax: 4.5, gorduraMin: 18.1, gorduraMax: 21.0 },
-  ],
-} as const;
-
 const round = (v: number, d = 2) => {
   const m = 10 ** d;
   return Math.round(v * m) / m;
@@ -108,12 +72,12 @@ function pegarFaixa<S extends "M" | "F">(sexo: S, idade: number, tabela: any) {
 
 function classificarTrinca(kind: "baixo-bom-alto" | "baixo-bom-excesso", value: number, limite: number, bom: number): Classificacao {
   if (kind === "baixo-bom-alto") {
-    if (value >= bom) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
+    if (value > bom) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
     if (value >= limite) return { status: "BOM", cor: "verde", label: "Bom" };
     return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
   }
 
-  if (value >= bom) return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
+  if (value > bom) return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
   if (value >= limite) return { status: "BOM", cor: "verde", label: "Bom" };
   return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
 }
@@ -188,50 +152,27 @@ export function classificarFFMI(ffmi: number, sexo: Sexo): Classificacao {
   return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
 }
 
-export function classificarPercentualGordura(
-  bfPct: number,
-  sexo: Sexo,
-  idade: number,
-): Classificacao {
-  const faixa = pegarFaixa(sexo, idade, PERCENTUAL_GORDURA_TABLE);
-  if (bfPct >= faixa.otimoMin && bfPct <= faixa.otimoMax) {
-    return { status: "OTIMO", cor: "verde", label: "Ótimo" };
+export function classificarPercentualGordura(bfPct: number, sexo: Sexo): Classificacao {
+  if (sexo === "M") {
+    if (bfPct <= 12) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
+    if (bfPct <= 16) return { status: "BOM", cor: "verde", label: "Bom" };
+    return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
   }
-  if (bfPct >= faixa.bomMin && bfPct <= faixa.bomMax) {
-    return { status: "BOM", cor: "verde", label: "Bom" };
-  }
+
+  if (bfPct <= 20) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
+  if (bfPct <= 26) return { status: "BOM", cor: "verde", label: "Bom" };
   return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
-}
-
-function formatarReferencia(value: number) {
-  return value.toLocaleString("pt-BR", {
-    minimumFractionDigits: Number.isInteger(value) ? 0 : 1,
-    maximumFractionDigits: 1,
-  });
-}
-
-export function obterReferenciasComposicao(sexo: Sexo, idade: number) {
-  const adequado = pegarFaixa(sexo, idade, REFERENCIA_ADEQUADA_TABLE);
-
-  return {
-    agua: `Adequado: ${formatarReferencia(adequado.agua)}% ou mais`,
-    massaMuscular: `Adequado: ${formatarReferencia(adequado.massaMuscular)} kg ou mais`,
-    imme: `Adequado: ${formatarReferencia(adequado.imme)} kg/m² ou mais`,
-    massaLivreGordura: `Adequado: ${formatarReferencia(adequado.massaMuscular)} kg ou mais`,
-    img: `Adequado: ${formatarReferencia(adequado.imgMin)}–${formatarReferencia(adequado.imgMax)} kg/m²`,
-    gordura: `Adequado: ${formatarReferencia(adequado.gorduraMin)}–${formatarReferencia(adequado.gorduraMax)}%`,
-  };
 }
 
 export function escolherImagemFrontal(sexo: Sexo, ffmi: number, bfPct: number): CodigoImagem {
   if (sexo === "M") {
     if (ffmi >= 21.5) return bfPct <= 12 ? 3 : 4;
-    if (ffmi >= 17.5 && ffmi < 21.5) return bfPct <= 16 ? 1 : 5;
+    if (ffmi >= 17.5) return bfPct <= 16 ? 1 : 5;
     return bfPct <= 16 ? 6 : 2;
   }
 
   if (ffmi >= 19) return bfPct <= 20 ? 3 : 4;
-  if (ffmi >= 14.5 && ffmi < 19) return bfPct <= 26 ? 1 : 5;
+  if (ffmi >= 14.5) return bfPct <= 26 ? 1 : 5;
   return bfPct <= 26 ? 6 : 2;
 }
 
@@ -240,9 +181,8 @@ function imagemPrefixo(sexo: Sexo) {
 }
 
 export function imagemFrontalUrl(sexo: Sexo, code: CodigoImagem): string {
-  // Os arquivos 1–3 foram enviados ao repositório como .png.jpg e os
-  // arquivos 4–6 como .png.png. Mantemos os nomes reais para não quebrar
-  // os assets que já estão publicados.
+  // Os arquivos atuais da pasta public/images/avaliacao foram salvos com
+  // .png.jpg para as imagens 1–3 e .png.png para as imagens 4–6.
   const extensao = code <= 3 ? "png.jpg" : "png.png";
   return `/images/avaliacao/${imagemPrefixo(sexo)}-frente-${code}.${extensao}`;
 }
@@ -277,7 +217,7 @@ export function resumoCompleto(input: AvaliacaoInput) {
       imme: classificarIMME(imme, input.sexo, input.idade),
       img: classificarIMG(img, input.sexo, input.idade),
       ffmi: classificarFFMI(ffmi, input.sexo),
-      gordura: classificarPercentualGordura(input.bfPct, input.sexo, input.idade),
+      gordura: classificarPercentualGordura(input.bfPct, input.sexo),
     },
     imagem: {
       codigo: code,
