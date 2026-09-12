@@ -1,8 +1,6 @@
 // lib/avaliacaoHistorico.ts
 // Persistência da avaliação física com REGRA ROTATIVA 1ª / 2ª / 3ª:
-// - A 1ª avaliação (mais antiga PELA DATA DA AVALIAÇÃO) NUNCA muda.
-// - TODA a ordenação (1ª/2ª/3ª, rotação e comparações) usa a DATA DA AVALIAÇÃO
-//   (data_avaliacao), NUNCA a ordem de digitação (created_at).
+// - A 1ª avaliação (mais antiga) NUNCA muda.
 // - Quando chega uma nova, ela vira a "3ª" e a antiga 3ª desce para "2ª".
 // - Ou seja: mantemos exatamente 3 registros → [1ª fixa, 2ª, 3ª].
 //   Ex.: [20/06], [20/07], [20/08] → nova em 20/09 → [20/06], [20/08], [20/09].
@@ -23,27 +21,31 @@ export type AvaliacaoHistoricoResumo = {
   imme: number | null;
   img: number | null;
   ffmi: number | null;
-  // Indicadores derivados, salvos junto para o histórico ficar completo:
-  massaMuscularEsqueleticaKg?: number | null;
-  circunferenciaAbdominalCm?: number | null;
-  vo2maxMlKgMin?: number | null;
-  imc?: number | null;
   createdAt?: string | null;
   protocolLabel?: string | null;
 };
 
 export type AvaliacaoHistoricoSnapshot = {
   createdAt: string;
-  dataAvaliacao?: string | null;
   protocolLabel: string;
   dobras: Record<string, string | number>;
   circunferencias: Record<string, string | number>;
   resumo: AvaliacaoHistoricoResumo;
 };
 
+export function mapaSnapshotParaNumeros(
+  values: Record<string, string | number> | null | undefined
+): Record<string, number> {
+  const entries: Array<[string, number]> = [];
+  for (const [key, value] of Object.entries(values || {})) {
+    const numberValue = Number(String(value).replace(",", "."));
+    if (Number.isFinite(numberValue)) entries.push([key, numberValue]);
+  }
+  return Object.fromEntries(entries);
+}
+
 type PersistArgs = {
   pacienteId: string;
-  dataAvaliacao?: string | null;
   protocolLabel?: string;
   currentDobras?: Record<string, number>;
   currentCircunferencias?: Record<string, number>;
@@ -55,55 +57,9 @@ function toNullableNumber(value: unknown) {
   return Number.isFinite(n) ? n : null;
 }
 
-// Normaliza uma data (Date ou string) para "yyyy-mm-dd" usando UTC — evita
-// que o fuso horário desloque o dia da avaliação.
-function normalizarDataAvaliacao(value: unknown): string | null {
-  if (!value) return null;
-  const date = value instanceof Date ? value : new Date(String(value));
-  if (Number.isNaN(date.getTime())) return null;
-  const yyyy = date.getUTCFullYear();
-  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(date.getUTCDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-// Timestamp de referência da avaliação: prioriza a DATA DA AVALIAÇÃO e só usa
-// created_at quando ela não existir. Meio-dia UTC evita problemas de fuso.
-function timestampAvaliacao(dataAvaliacao: unknown, createdAt: unknown): number {
-  const data = normalizarDataAvaliacao(dataAvaliacao) || normalizarDataAvaliacao(createdAt);
-  return data ? new Date(`${data}T12:00:00.000Z`).getTime() : 0;
-}
-
-// Garante que snapshots antigos (sem os campos derivados) voltem completos.
-function normalizeSnapshot(snapshot: AvaliacaoHistoricoSnapshot): AvaliacaoHistoricoSnapshot {
-  const resumo = snapshot.resumo || ({} as AvaliacaoHistoricoResumo);
-  return {
-    ...snapshot,
-    dobras: snapshot.dobras || {},
-    circunferencias: snapshot.circunferencias || {},
-    resumo: {
-      pesoKg: toNullableNumber(resumo.pesoKg),
-      bodyFatPct: toNullableNumber(resumo.bodyFatPct),
-      massaMuscularKg: toNullableNumber(resumo.massaMuscularKg),
-      massaAdiposaKg: toNullableNumber(resumo.massaAdiposaKg),
-      aguaPct: toNullableNumber(resumo.aguaPct),
-      imme: toNullableNumber(resumo.imme),
-      img: toNullableNumber(resumo.img),
-      ffmi: toNullableNumber(resumo.ffmi),
-      massaMuscularEsqueleticaKg: toNullableNumber(resumo.massaMuscularEsqueleticaKg),
-      circunferenciaAbdominalCm: toNullableNumber(resumo.circunferenciaAbdominalCm),
-      vo2maxMlKgMin: toNullableNumber(resumo.vo2maxMlKgMin),
-      imc: toNullableNumber(resumo.imc),
-      createdAt: resumo.createdAt || snapshot.createdAt || null,
-      protocolLabel: resumo.protocolLabel || snapshot.protocolLabel || "",
-    },
-  };
-}
-
 export function buildAvaliacaoSnapshot(args: PersistArgs): AvaliacaoHistoricoSnapshot {
   return {
     createdAt: new Date().toISOString(),
-    dataAvaliacao: normalizeDataAvaliacao(args.dataAvaliacao) || new Date().toISOString(),
     protocolLabel: args.protocolLabel || "",
     dobras: Object.fromEntries(
       Object.entries(args.currentDobras || {}).map(([k, v]) => [k, String(v).replace(".", ",")])
@@ -120,10 +76,6 @@ export function buildAvaliacaoSnapshot(args: PersistArgs): AvaliacaoHistoricoSna
       imme: toNullableNumber(args.resumo.imme),
       img: toNullableNumber(args.resumo.img),
       ffmi: toNullableNumber(args.resumo.ffmi),
-      massaMuscularEsqueleticaKg: toNullableNumber(args.resumo.massaMuscularEsqueleticaKg),
-      circunferenciaAbdominalCm: toNullableNumber(args.resumo.circunferenciaAbdominalCm),
-      vo2maxMlKgMin: toNullableNumber(args.resumo.vo2maxMlKgMin),
-      imc: toNullableNumber(args.resumo.imc),
       createdAt: args.resumo.createdAt || null,
       protocolLabel: args.resumo.protocolLabel || args.protocolLabel || "",
     },
@@ -133,7 +85,6 @@ export function buildAvaliacaoSnapshot(args: PersistArgs): AvaliacaoHistoricoSna
 export function extrairSnapshotDeEvolucao(item: {
   observacoes?: string | null;
   created_at?: Date | null;
-  data_avaliacao?: Date | null;
   peso?: unknown;
   percentual_gordura?: unknown;
   massa_muscular?: unknown;
@@ -144,7 +95,7 @@ export function extrairSnapshotDeEvolucao(item: {
     try {
       const parsed = JSON.parse(raw);
       if (parsed?.snapshot && typeof parsed.snapshot === "object") {
-        return normalizeSnapshot(parsed.snapshot as AvaliacaoHistoricoSnapshot);
+        return parsed.snapshot as AvaliacaoHistoricoSnapshot;
       }
     } catch {
       // fallback abaixo
@@ -161,10 +112,6 @@ export function extrairSnapshotDeEvolucao(item: {
 
   return {
     createdAt: item?.created_at?.toISOString?.() || new Date().toISOString(),
-    dataAvaliacao:
-      item?.data_avaliacao?.toISOString?.() ||
-      item?.created_at?.toISOString?.() ||
-      null,
     protocolLabel: "",
     dobras: {},
     circunferencias: item?.circunferencia_abdominal
@@ -179,10 +126,6 @@ export function extrairSnapshotDeEvolucao(item: {
       imme: null,
       img: null,
       ffmi: null,
-      massaMuscularEsqueleticaKg: null,
-      circunferenciaAbdominalCm: toNullableNumber(item?.circunferencia_abdominal),
-      vo2maxMlKgMin: null,
-      imc: null,
       createdAt: item?.created_at?.toISOString?.() || null,
       protocolLabel: "",
     },
@@ -191,26 +134,13 @@ export function extrairSnapshotDeEvolucao(item: {
 
 // -------------------- LEITURA (usada pelo page.tsx e pelas rotas) --------------------
 
-async function listarTodasOrdenadasPorData(pacienteId: string) {
-  // Ordena pela DATA DA AVALIAÇÃO (data_avaliacao; se ausente, created_at),
-  // nunca pela ordem de digitação: 02/06 é anterior a 10/09 mesmo que tenha
-  // sido lançada depois no sistema.
+export async function listarUltimasTresAvaliacoes(pacienteId: string) {
   const rows = await prisma.evolucao_corporal.findMany({
     where: { paciente_id: pacienteId },
+    orderBy: [{ created_at: "asc" }, { id: "asc" }],
   });
-  rows.sort((a, b) => {
-    const aTime = timestampAvaliacao(a.data_avaliacao, a.created_at);
-    const bTime = timestampAvaliacao(b.data_avaliacao, b.created_at);
-    if (aTime !== bTime) return aTime - bTime;
-    return String(a.id).localeCompare(String(b.id));
-  });
-  return rows;
-}
 
-export async function listarUltimasTresAvaliacoes(pacienteId: string) {
-  const rows = await listarTodasOrdenadasPorData(pacienteId);
-
-  // Regra: mantém 1ª (mais antiga por data) + últimas 2 (rotativas).
+  // Regra: mantém 1ª (mais antiga) + últimas 2 (rotativas).
   if (rows.length <= 3) return rows;
   const first = rows[0];
   const lastTwo = rows.slice(-2);
@@ -218,9 +148,10 @@ export async function listarUltimasTresAvaliacoes(pacienteId: string) {
 }
 
 export async function primeiraAvaliacao(pacienteId: string) {
-  // A "primeira" é a de DATA mais antiga, não a primeira digitada.
-  const ordenadas = await listarTodasOrdenadasPorData(pacienteId);
-  return ordenadas[0] || null;
+  return prisma.evolucao_corporal.findFirst({
+    where: { paciente_id: pacienteId },
+    orderBy: [{ created_at: "asc" }, { id: "asc" }],
+  });
 }
 
 export async function ultimaAvaliacao(pacienteId: string) {
@@ -237,18 +168,13 @@ export async function salvarAvaliacaoHistorico(args: PersistArgs) {
   const abdomen = toNullableNumber(args.currentCircunferencias?.abdomen);
   const cintura = toNullableNumber(args.currentCircunferencias?.cintura);
 
-  // Aplica a rotação ANTES de inserir, pela DATA DA AVALIAÇÃO (não pela ordem
-  // de digitação): se já existirem >= 3, apaga o(s) registro(s) "do meio",
-  // mantendo sempre a MAIS ANTIGA (1ª fixa) e a MAIS RECENTE por data.
+  // Aplica a rotação ANTES de inserir:
+  // Se já existirem >= 3, apaga o "do meio" (2º mais antigo) — os últimos 2 são
+  // os que continuam vivos (o mais antigo é a 1ª e não sai).
   const existentes = await prisma.evolucao_corporal.findMany({
     where: { paciente_id: args.pacienteId },
-    select: { id: true, created_at: true, data_avaliacao: true },
-  });
-  existentes.sort((a, b) => {
-    const aTime = timestampAvaliacao(a.data_avaliacao, a.created_at);
-    const bTime = timestampAvaliacao(b.data_avaliacao, b.created_at);
-    if (aTime !== bTime) return aTime - bTime;
-    return String(a.id).localeCompare(String(b.id));
+    orderBy: [{ created_at: "asc" }, { id: "asc" }],
+    select: { id: true, created_at: true },
   });
 
   if (existentes.length >= 3) {
@@ -260,16 +186,15 @@ export async function salvarAvaliacaoHistorico(args: PersistArgs) {
         where: { id: { in: meio.map((r) => r.id) } },
       });
     }
+    // Após a limpeza, a antiga "3ª" vira "2ª" naturalmente pois o novo insert
+    // passa a ocupar a posição de "3ª" (created_at mais recente).
   }
 
-  // created_at guarda apenas o instante real do lançamento (auditoria) — a
-  // ordenação das avaliações é sempre por data_avaliacao. O ajuste de 1 ms
-  // evita empate quando duas avaliações são registradas no mesmo instante.
+  // `created_at` é a ordem real da avaliação. O ajuste de 1 ms evita empate
+  // quando duas avaliações são registradas no mesmo instante, inclusive no
+  // mesmo dia, sem exibir hora/minuto/segundo na interface.
   const agora = new Date();
-  const ultimoCriado = existentes.reduce<Date | null>(
-    (acc, r) => (r.created_at && (!acc || r.created_at > acc) ? r.created_at : acc),
-    null
-  );
+  const ultimoCriado = existentes[existentes.length - 1]?.created_at;
   const createdAt =
     ultimoCriado && ultimoCriado.getTime() >= agora.getTime()
       ? new Date(ultimoCriado.getTime() + 1)
@@ -277,40 +202,13 @@ export async function salvarAvaliacaoHistorico(args: PersistArgs) {
   snapshot.createdAt = createdAt.toISOString();
   snapshot.resumo.createdAt = createdAt.toISOString();
 
-  // Indicadores derivados — mantêm o resumo do histórico completo, como o
-  // card COMPOSIÇÃO CORPORAL do PDF: músculo esquelético = 50% da massa
-  // livre de gordura; IMC = IMG + FFMI; cintura/abdominal também no resumo.
-  const mmEsqueleticaDerivada =
-    snapshot.resumo.massaMuscularEsqueleticaKg ??
-    toNullableNumber(
-      snapshot.resumo.massaMuscularKg !== null
-        ? snapshot.resumo.massaMuscularKg * 0.5
-        : null
-    );
-  const imcDerivado =
-    snapshot.resumo.imc ??
-    toNullableNumber(
-      snapshot.resumo.img !== null && snapshot.resumo.ffmi !== null
-        ? snapshot.resumo.img + snapshot.resumo.ffmi
-        : null
-    );
-  const circAbdominalDerivada =
-    snapshot.resumo.circunferenciaAbdominalCm ?? abdomen ?? cintura;
-  snapshot.resumo = {
-    ...snapshot.resumo,
-    massaMuscularEsqueleticaKg: mmEsqueleticaDerivada,
-    circunferenciaAbdominalCm: circAbdominalDerivada,
-    imc: imcDerivado,
-  };
-
   const criado = await prisma.evolucao_corporal.create({
     data: {
       paciente_id: args.pacienteId,
       peso: snapshot.resumo.pesoKg,
       percentual_gordura: snapshot.resumo.bodyFatPct,
       massa_muscular: snapshot.resumo.massaMuscularKg,
-      circunferencia_abdominal: circAbdominalDerivada,
-      data_avaliacao: toDateOnly(snapshot.dataAvaliacao),
+      circunferencia_abdominal: abdomen ?? cintura,
       observacoes: JSON.stringify({ tipo: "avaliacao_fisica", snapshot }),
       created_at: createdAt,
     },
@@ -321,25 +219,4 @@ export async function salvarAvaliacaoHistorico(args: PersistArgs) {
     id: criado.id,
     createdAt: criado.created_at?.toISOString?.() || createdAt.toISOString(),
   };
-}
-
-function normalizeDataAvaliacao(value?: string | null) {
-  if (!value) return null;
-  const texto = String(value).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
-    const date = new Date(`${texto}T12:00:00.000Z`);
-    return Number.isNaN(date.getTime()) ? null : texto;
-  }
-  const date = new Date(texto);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString();
-}
-
-function toDateOnly(value?: string | null) {
-  const normalized = normalizeDataAvaliacao(value);
-  if (!normalized) return new Date();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
-    return new Date(`${normalized}T12:00:00.000Z`);
-  }
-  return new Date(normalized);
 }

@@ -7,13 +7,6 @@ import { redirect } from "next/navigation";
 const CUSTOM_SECTION_TITLE = "--- Perguntas personalizadas ---";
 
 function parseFormData(formData: FormData) {
-  const dataAvaliacaoRaw = String(formData.get("data_avaliacao") || "").trim();
-  const dataAvaliacao =
-    /^\d{4}-\d{2}-\d{2}$/.test(dataAvaliacaoRaw) &&
-    !Number.isNaN(new Date(`${dataAvaliacaoRaw}T12:00:00.000Z`).getTime())
-      ? new Date(`${dataAvaliacaoRaw}T12:00:00.000Z`)
-      : null;
-
   const toDecimal = (valor: FormDataEntryValue | null) => {
     const texto = String(valor || "").replace(",", ".").trim();
     if (!texto) return null;
@@ -42,7 +35,6 @@ function parseFormData(formData: FormData) {
     .join("\n\n");
 
   return {
-    data_avaliacao: dataAvaliacao,
     peso: toDecimal(formData.get("peso")),
     altura: toDecimal(formData.get("altura")),
     percentual_gordura: toDecimal(formData.get("percentual_gordura")),
@@ -121,22 +113,16 @@ export async function sincronizarAntropometria(
     return valor;
   };
 
-  const patch: ResultadoAntropometria = {};
+  const patch: ResultadoAntropometria = {
+    massa_muscular: limpar(resultado.massa_muscular),
+    percentual_gordura: limpar(resultado.percentual_gordura),
+    massa_adiposa: limpar(resultado.massa_adiposa),
+    agua_corporal: limpar(resultado.agua_corporal),
+  };
 
-  if (limpar(resultado.massa_muscular) !== null) {
-    patch.massa_muscular = limpar(resultado.massa_muscular);
-  }
-  if (limpar(resultado.percentual_gordura) !== null) {
-    patch.percentual_gordura = limpar(resultado.percentual_gordura);
-  }
-  if (limpar(resultado.massa_adiposa) !== null) {
-    patch.massa_adiposa = limpar(resultado.massa_adiposa);
-  }
-  if (limpar(resultado.agua_corporal) !== null) {
-    patch.agua_corporal = limpar(resultado.agua_corporal);
-  }
-
-  if (Object.keys(patch).length === 0) return; // nada calculado -> mantem como esta
+  // Se não existe Anamnese, não criamos uma linha vazia apenas porque a
+  // Antropometria está sem campos preenchidos.
+  if (!existente && Object.values(patch).every((value) => value === null)) return;
 
   if (existente) {
     await prisma.anamneses.update({
