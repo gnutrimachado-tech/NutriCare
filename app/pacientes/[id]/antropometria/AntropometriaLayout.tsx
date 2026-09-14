@@ -1,13 +1,28 @@
 "use client";
 
-import React, { useMemo, useState, useEffect, useRef } from "react";
+import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { sincronizarAntropometria } from "../anamnese/actions";
+import type { AvaliacaoHistoricoSnapshot } from "@/lib/avaliacaoHistorico";
 import {
-  salvarAvaliacaoAntropometrica,
-  type AvaliacaoAntropometricaInput,
-} from "./actions";
+  classificarAgua,
+  classificarIMME,
+  classificarIMG,
+  classificarFFMI,
+  classificarPercentualGordura,
+  calcularIMME,
+  calcularIMG,
+  calcularFFMI,
+  FRACAO_MUSCULO_ESQUELETICO,
+  type Sexo as SexoBC,
+} from "@/lib/bodyComposition";
 
 type SexoPaciente = "Masculino" | "Feminino";
+
+type HistoricoItem = {
+  id: string;
+  createdAt: string | null;
+  snapshot: AvaliacaoHistoricoSnapshot | null;
+};
 
 type Props = {
   pacienteId: string;
@@ -15,12 +30,14 @@ type Props = {
   idade: number;
   pesoKg: number;
   alturaCm: number;
+  avaliacaoAnteriorInicial?: AvaliacaoHistoricoSnapshot | null;
+  historicoAvaliacoes?: HistoricoItem[];
 };
 
 type DobraKey =
   | "peitoral"
   | "axilar_media"
-  | "triceps"
+  | "tricipital"
   | "subescapular"
   | "abdomen"
   | "supra_iliaca"
@@ -36,7 +53,18 @@ type CircKey =
   | "quadril"
   | "braco"
   | "coxa"
-  | "abdomen";
+  | "abdomen"
+  | "peitoral"
+  | "axilar_media"
+  | "supra_espinhal"
+  | "panturrilha"
+  | "biceps"
+  | "biceps_direito"
+  | "biceps_esquerdo"
+  | "coxa_direita"
+  | "coxa_esquerda"
+  | "panturrilha_direita"
+  | "panturrilha_esquerda";
 
 type CalcResult = {
   bodyFatPct: number | null;
@@ -64,7 +92,7 @@ type ProtocolDef = {
 const DOBRAS_LABELS: Record<DobraKey, string> = {
   peitoral: "Peitoral",
   axilar_media: "Axilar média",
-  triceps: "Tríceps",
+  tricipital: "Tricipital",
   subescapular: "Subescapular",
   abdomen: "Abdômen",
   supra_iliaca: "Supra ilíaca",
@@ -82,13 +110,38 @@ const CIRC_LABELS: Record<CircKey, string> = {
   braco: "Braço",
   coxa: "Coxa",
   abdomen: "Abdômen",
+  peitoral: "Peitoral",
+  axilar_media: "Axilar média",
+  supra_espinhal: "Supra espinhal",
+  panturrilha: "Panturrilha",
+  biceps: "Bíceps",
+  biceps_direito: "Bíceps direito",
+  biceps_esquerdo: "Bíceps esquerdo",
+  coxa_direita: "Coxa direita",
+  coxa_esquerda: "Coxa esquerda",
+  panturrilha_direita: "Panturrilha direita",
+  panturrilha_esquerda: "Panturrilha esquerda",
 };
+
+const VISIBLE_CIRC_FIELDS: CircKey[] = [
+  "pescoco",
+  "cintura",
+  "quadril",
+  "abdomen",
+  "peitoral",
+  "biceps_direito",
+  "biceps_esquerdo",
+  "coxa_direita",
+  "coxa_esquerda",
+  "panturrilha_direita",
+  "panturrilha_esquerda",
+];
 
 const DOBRAS_POR_SEXO: Record<SexoPaciente, DobraKey[]> = {
   Masculino: [
     "peitoral",
     "axilar_media",
-    "triceps",
+    "tricipital",
     "subescapular",
     "abdomen",
     "supra_iliaca",
@@ -100,7 +153,7 @@ const DOBRAS_POR_SEXO: Record<SexoPaciente, DobraKey[]> = {
   Feminino: [
     "peitoral",
     "axilar_media",
-    "triceps",
+    "tricipital",
     "subescapular",
     "abdomen",
     "supra_iliaca",
@@ -115,7 +168,7 @@ const DOBRAS_POR_SEXO: Record<SexoPaciente, DobraKey[]> = {
 const allDobrasInitial: Record<DobraKey, string> = {
   peitoral: "",
   axilar_media: "",
-  triceps: "",
+  tricipital: "",
   subescapular: "",
   abdomen: "",
   supra_iliaca: "",
@@ -133,7 +186,198 @@ const allCircsInitial: Record<CircKey, string> = {
   braco: "",
   coxa: "",
   abdomen: "",
+  peitoral: "",
+  axilar_media: "",
+  supra_espinhal: "",
+  panturrilha: "",
+  biceps: "",
+  biceps_direito: "",
+  biceps_esquerdo: "",
+  coxa_direita: "",
+  coxa_esquerda: "",
+  panturrilha_direita: "",
+  panturrilha_esquerda: "",
 };
+
+const SHARED_ANTHRO_KEYS = new Set<string>([
+  "coxa",
+  "abdomen",
+  "peitoral",
+  "axilar_media",
+  "supra_espinhal",
+  "panturrilha",
+  "biceps",
+]);
+const DOBRA_ONLY_KEYS = new Set<string>(["subescapular", "supra_iliaca", "coxa_proximal", "tricipital"]);
+const CIRC_ONLY_KEYS = new Set<string>([
+  "pescoco",
+  "cintura",
+  "quadril",
+  "braco",
+  "biceps_direito",
+  "biceps_esquerdo",
+  "coxa_direita",
+  "coxa_esquerda",
+  "panturrilha_direita",
+  "panturrilha_esquerda",
+]);
+
+const VOICE_FIELD_ALIASES: Array<{ key: DobraKey | CircKey; aliases: string[] }> = [
+  { key: "tricipital", aliases: ["tricipital", "triceps", "tríceps", "dobra tricipital"] },
+  { key: "peitoral", aliases: ["peitoral", "torax", "tórax"] },
+  { key: "axilar_media", aliases: ["axilar media", "axilar média", "axilar", "axila media"] },
+  { key: "subescapular", aliases: ["subescapular"] },
+  { key: "abdomen", aliases: ["abdomen", "abdominal"] },
+  { key: "supra_iliaca", aliases: ["supra iliaca", "supra-iliaca", "supra ilíaca"] },
+  { key: "supra_espinhal", aliases: ["supra espinhal", "supraespinhal", "supra espinal"] },
+  { key: "coxa", aliases: ["coxa"] },
+  { key: "coxa_proximal", aliases: ["coxa proximal"] },
+  { key: "panturrilha", aliases: ["panturrilha"] },
+  { key: "biceps", aliases: ["biceps", "bíceps"] },
+  { key: "pescoco", aliases: ["pescoco", "pescoço", "cervical"] },
+  { key: "cintura", aliases: ["cintura"] },
+  { key: "quadril", aliases: ["quadril", "gluteo", "glúteo"] },
+  { key: "braco", aliases: ["braco", "braço"] },
+  { key: "biceps_direito", aliases: ["biceps direito", "bíceps direito"] },
+  { key: "biceps_esquerdo", aliases: ["biceps esquerdo", "bíceps esquerdo"] },
+  { key: "coxa_direita", aliases: ["coxa direita"] },
+  { key: "coxa_esquerda", aliases: ["coxa esquerda"] },
+  { key: "panturrilha_direita", aliases: ["panturrilha direita"] },
+  { key: "panturrilha_esquerda", aliases: ["panturrilha esquerda"] },
+];
+
+function normalizeSpeechText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\bvirgula\b/g, ",")
+    .replace(/\bponto\b/g, ".")
+    .replace(/[–—-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function detectVoiceFieldKey(transcript: string): DobraKey | CircKey | null {
+  for (const field of VOICE_FIELD_ALIASES) {
+    if (field.aliases.some((alias) => transcript.includes(alias))) return field.key;
+  }
+  return null;
+}
+
+function extractVoiceValue(transcript: string) {
+  const match = transcript.match(/(\d+(?:[.,]\d+)?)/);
+  return match ? normalizeDecimalInput(match[1]) : null;
+}
+
+function resolveVoiceDestination(args: {
+  transcript: string;
+  key: DobraKey | CircKey;
+  value: string;
+  requiredDobras: DobraKey[];
+  requiredCircs: CircKey[];
+}) {
+  const { transcript, key, value, requiredDobras, requiredCircs } = args;
+  if (/(circunferencia|circunferencias|perimetro|perimetros|cm|centimetro|centimetros)/.test(transcript)) return "circ" as const;
+  if (/(dobra|dobras|prega|prega cutanea|mm|milimetro|milimetros)/.test(transcript)) return "dobra" as const;
+  if (DOBRA_ONLY_KEYS.has(key)) return "dobra" as const;
+  if (CIRC_ONLY_KEYS.has(key)) return "circ" as const;
+  if (requiredDobras.includes(key as DobraKey) && !requiredCircs.includes(key as CircKey)) return "dobra" as const;
+  if (requiredCircs.includes(key as CircKey) && !requiredDobras.includes(key as DobraKey)) return "circ" as const;
+  if (!SHARED_ANTHRO_KEYS.has(key)) return "circ" as const;
+
+  const numericValue = Number(value.replace(",", "."));
+  return numericValue > 25 ? "circ" as const : "dobra" as const;
+}
+
+function filterNumericEntries<T extends string>(values: Record<T, string>) {
+  const out: Partial<Record<T, string>> = {};
+  (Object.keys(values) as T[]).forEach((key) => {
+    if (parsePtNumber(values[key]) > 0) out[key] = normalizeDecimalInput(values[key]);
+  });
+  return out;
+}
+
+function parseSnapshotValues(values?: Record<string, string>) {
+  const out: Record<string, number> = {};
+  Object.entries(values ?? {}).forEach(([key, value]) => {
+    const n = parsePtNumber(String(value ?? ""));
+    if (n > 0) out[key] = n;
+  });
+  return out;
+}
+
+function formatMetric(value: number | null, suffix = "") {
+  if (value === null || !Number.isFinite(value)) return "—";
+  return `${value.toFixed(1).replace(".", ",")}${suffix}`;
+}
+
+function metricClassColor(kind: "musculo" | "gordura") {
+  return kind === "musculo"
+    ? { iconBg: "#ecfdf5", icon: "#16a34a", border: "#dcfce7", text: "#16a34a" }
+    : { iconBg: "#fff7ed", icon: "#d97706", border: "#fed7aa", text: "#d97706" };
+}
+
+function parseSnapshot(raw: string | null): AvaliacaoHistoricoSnapshot | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed as AvaliacaoHistoricoSnapshot;
+  } catch {
+    return null;
+  }
+}
+
+function parseStorageFloat(value: unknown) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function speakVoiceConfirmation(text: string) {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  try {
+    const synth = window.speechSynthesis;
+    synth.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "pt-BR";
+    utterance.rate = 1;
+    utterance.pitch = 1.05;
+    const voices = synth.getVoices?.() ?? [];
+    const preferred = voices.find((voice) => /pt[-_]BR/i.test(voice.lang) && /(female|luciana|francisca|helena|microsoft maria|google português do brasil)/i.test(`${voice.name}`))
+      || voices.find((voice) => /pt[-_]BR/i.test(voice.lang))
+      || voices[0];
+    if (preferred) utterance.voice = preferred;
+    synth.speak(utterance);
+  } catch {
+    // ignore
+  }
+}
+
+function readStoredVO2max(pacienteId: string) {
+  if (typeof window === "undefined" || !pacienteId) return null;
+  try {
+    const raw = window.localStorage.getItem(`nutricare:antro-vo2:${pacienteId}`);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    const distancia = Number(String(data?.distancia ?? "").replace(",", "."));
+    const tempo = Number(String(data?.tempo ?? "").replace(",", "."));
+    if (!(distancia > 0) || !(tempo > 0)) return null;
+    const v = distancia / tempo;
+    const valor = -4.6 + 0.182258 * v + 0.000104 * v * v;
+    if (!Number.isFinite(valor) || valor <= 0) return null;
+    return Math.round(valor * 10) / 10;
+  } catch {
+    return null;
+  }
+}
+
+function getSnapshotDateLabel(value?: string) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("pt-BR");
+}
 
 function parsePtNumber(value: string) {
   if (!value) return 0;
@@ -176,10 +420,10 @@ const PROTOCOLS: ProtocolDef[] = [
     id: "f-durnin-womersley-1974",
     label: "Durnin e Womersley 1974",
     sexo: "Feminino",
-    requiredDobras: ["triceps", "biceps", "subescapular", "supra_iliaca"],
+    requiredDobras: ["tricipital", "biceps", "subescapular", "supra_iliaca"],
     calculate: ({ dobras }) => {
       const s = sumKeys(
-        ["triceps", "biceps", "subescapular", "supra_iliaca"],
+        ["tricipital", "biceps", "subescapular", "supra_iliaca"],
         dobras
       );
       const density = 1.1549 - 0.0678 * log10Safe(s);
@@ -220,7 +464,7 @@ const PROTOCOLS: ProtocolDef[] = [
     label: "Withers et al. 1987",
     sexo: "Feminino",
     requiredDobras: [
-      "triceps",
+      "tricipital",
       "subescapular",
       "biceps",
       "supra_espinhal",
@@ -231,7 +475,7 @@ const PROTOCOLS: ProtocolDef[] = [
     calculate: ({ dobras }) => {
       const s = sumKeys(
         [
-          "triceps",
+          "tricipital",
           "subescapular",
           "biceps",
           "supra_espinhal",
@@ -274,7 +518,7 @@ const PROTOCOLS: ProtocolDef[] = [
     requiredDobras: [
       "peitoral",
       "axilar_media",
-      "triceps",
+      "tricipital",
       "subescapular",
       "abdomen",
       "supra_iliaca",
@@ -286,7 +530,7 @@ const PROTOCOLS: ProtocolDef[] = [
         [
           "peitoral",
           "axilar_media",
-          "triceps",
+          "tricipital",
           "subescapular",
           "abdomen",
           "supra_iliaca",
@@ -311,10 +555,10 @@ const PROTOCOLS: ProtocolDef[] = [
     id: "f-jackson-pollock-1985-4d",
     label: "Jackson e Pollock 1985 (4 dobras)",
     sexo: "Feminino",
-    requiredDobras: ["abdomen", "triceps", "coxa", "supra_iliaca"],
+    requiredDobras: ["abdomen", "tricipital", "coxa", "supra_iliaca"],
     needsAge: true,
     calculate: ({ dobras, idade }) => {
-      const s = sumKeys(["abdomen", "triceps", "coxa", "supra_iliaca"], dobras);
+      const s = sumKeys(["abdomen", "tricipital", "coxa", "supra_iliaca"], dobras);
       const bodyFatPct =
         0.29669 * s - 0.00043 * (s * s) + 0.02963 * idade + 1.4072;
       const density = bodyFatToDensitySiri(bodyFatPct);
@@ -354,7 +598,7 @@ const PROTOCOLS: ProtocolDef[] = [
     requiredDobras: [
       "peitoral",
       "axilar_media",
-      "triceps",
+      "tricipital",
       "subescapular",
       "abdomen",
       "supra_iliaca",
@@ -366,7 +610,7 @@ const PROTOCOLS: ProtocolDef[] = [
         [
           "peitoral",
           "axilar_media",
-          "triceps",
+          "tricipital",
           "subescapular",
           "abdomen",
           "supra_iliaca",
@@ -392,14 +636,14 @@ const PROTOCOLS: ProtocolDef[] = [
     label: "Withers et al. 1987",
     sexo: "Masculino",
     requiredDobras: [
-      "triceps",
+      "tricipital",
       "subescapular",
       "supra_espinhal",
       "panturrilha",
     ],
     calculate: ({ dobras }) => {
       const s = sumKeys(
-        ["triceps", "subescapular", "supra_espinhal", "panturrilha"],
+        ["tricipital", "subescapular", "supra_espinhal", "panturrilha"],
         dobras
       );
       const density = 1.17484 - 0.07229 * log10Safe(s);
@@ -414,9 +658,9 @@ const PROTOCOLS: ProtocolDef[] = [
     id: "m-guedes-1985",
     label: "Guedes 1985",
     sexo: "Masculino",
-    requiredDobras: ["triceps", "supra_iliaca", "abdomen"],
+    requiredDobras: ["tricipital", "supra_iliaca", "abdomen"],
     calculate: ({ dobras }) => {
-      const s = sumKeys(["triceps", "supra_iliaca", "abdomen"], dobras);
+      const s = sumKeys(["tricipital", "supra_iliaca", "abdomen"], dobras);
       const density = 1.1714 - 0.0671 * log10Safe(s);
       return {
         density,
@@ -429,11 +673,11 @@ const PROTOCOLS: ProtocolDef[] = [
     id: "m-petroski-1995",
     label: "Petroski 1995",
     sexo: "Masculino",
-    requiredDobras: ["subescapular", "triceps", "supra_iliaca", "panturrilha"],
+    requiredDobras: ["subescapular", "tricipital", "supra_iliaca", "panturrilha"],
     needsAge: true,
     calculate: ({ dobras, idade }) => {
       const s = sumKeys(
-        ["subescapular", "triceps", "supra_iliaca", "panturrilha"],
+        ["subescapular", "tricipital", "supra_iliaca", "panturrilha"],
         dobras
       );
 
@@ -454,10 +698,10 @@ const PROTOCOLS: ProtocolDef[] = [
     id: "m-durnin-womersley-1974",
     label: "Durnin e Womersley 1974",
     sexo: "Masculino",
-    requiredDobras: ["triceps", "biceps", "subescapular", "supra_iliaca"],
+    requiredDobras: ["tricipital", "biceps", "subescapular", "supra_iliaca"],
     calculate: ({ dobras }) => {
       const s = sumKeys(
-        ["triceps", "biceps", "subescapular", "supra_iliaca"],
+        ["tricipital", "biceps", "subescapular", "supra_iliaca"],
         dobras
       );
       const density = 1.162 - 0.063 * log10Safe(s);
@@ -473,10 +717,10 @@ const PROTOCOLS: ProtocolDef[] = [
     id: "m-faulkner-1968",
     label: "Faulkner 1968",
     sexo: "Masculino",
-    requiredDobras: ["triceps", "biceps", "subescapular", "supra_iliaca"],
+    requiredDobras: ["tricipital", "biceps", "subescapular", "supra_iliaca"],
     calculate: ({ dobras }) => {
       const s = sumKeys(
-        ["triceps", "biceps", "subescapular", "supra_iliaca"],
+        ["tricipital", "biceps", "subescapular", "supra_iliaca"],
         dobras
       );
       const density = 1.1549 - 0.0678 * log10Safe(s);
@@ -516,16 +760,9 @@ export default function AntropometriaLayout({
   idade,
   pesoKg,
   alturaCm,
+  avaliacaoAnteriorInicial = null,
+  historicoAvaliacoes = [],
 }: Props) {
-  const [dataAvaliacao, setDataAvaliacao] = useState(() => {
-    const hoje = new Date();
-    const mes = String(hoje.getMonth() + 1).padStart(2, "0");
-    const dia = String(hoje.getDate()).padStart(2, "0");
-    return `${hoje.getFullYear()}-${mes}-${dia}`;
-  });
-  const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false);
-  const [mensagemAvaliacao, setMensagemAvaliacao] = useState("");
-
   const protocolosDisponiveis = useMemo(
     () => PROTOCOLS.filter((p) => p.sexo === sexoPaciente),
     [sexoPaciente]
@@ -550,6 +787,16 @@ export default function AntropometriaLayout({
     [effectiveProtocolId, protocolosDisponiveis]
   );
 
+  useEffect(() => {
+    setDobras((prev) => {
+      const legacyValue = (prev as Record<string, string>).triceps;
+      if (prev.tricipital || !legacyValue) return prev;
+      const next = { ...prev, tricipital: legacyValue } as Record<string, string>;
+      delete next.triceps;
+      return next as Record<DobraKey, string>;
+    });
+  }, []);
+
   const dobrasNum = useMemo(() => {
     const out = {} as Record<DobraKey, number>;
     (Object.keys(dobras) as DobraKey[]).forEach((key) => {
@@ -572,6 +819,18 @@ export default function AntropometriaLayout({
   // Só muda quando o nutri edita/apaga; nada é apagado automaticamente.
   // ==============================
   const antroHydratedRef = useRef(false);
+  const recognitionRef = useRef<any>(null);
+  const voiceKeepAliveRef = useRef(false);
+  const voiceFlashTimerRef = useRef<number | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState(
+    "Clique para ativar o registro de voz e diga algo como: dobra tricipital 12 ou circunferência cintura 85."
+  );
+  const [lastVoiceEntry, setLastVoiceEntry] = useState("");
+  const [highlightedVoiceField, setHighlightedVoiceField] = useState<string | null>(null);
+  const [compararResultados, setCompararResultados] = useState(false);
+  const [avaliacaoAnterior, setAvaliacaoAnterior] =
+    useState<AvaliacaoHistoricoSnapshot | null>(avaliacaoAnteriorInicial);
 
   useEffect(() => {
     if (!pacienteId) {
@@ -585,7 +844,12 @@ export default function AntropometriaLayout({
           const s = JSON.parse(raw);
           if (typeof s.protocolId === "string") setProtocolId(s.protocolId);
           if (s.dobras && typeof s.dobras === "object") {
-            setDobras((prev) => ({ ...prev, ...s.dobras }));
+            const dobrasSalvas = { ...(s.dobras as Record<string, string>) };
+            if (!dobrasSalvas.tricipital && dobrasSalvas.triceps) {
+              dobrasSalvas.tricipital = dobrasSalvas.triceps;
+            }
+            delete dobrasSalvas.triceps;
+            setDobras((prev) => ({ ...prev, ...(dobrasSalvas as Partial<Record<DobraKey, string>>) }));
           }
           if (s.circunferencias && typeof s.circunferencias === "object") {
             setCircunferencias((prev) => ({ ...prev, ...s.circunferencias }));
@@ -605,12 +869,22 @@ export default function AntropometriaLayout({
     try {
       window.localStorage.setItem(
         `nutricare:antro:${pacienteId}`,
-        JSON.stringify({ protocolId, dobras, circunferencias })
+        JSON.stringify({ protocolId, dobras: { ...dobras, tricipital: dobras.tricipital }, circunferencias })
       );
     } catch {
       // ignore
     }
   }, [pacienteId, protocolId, dobras, circunferencias]);
+
+  useEffect(() => {
+    if (avaliacaoAnteriorInicial) {
+      setAvaliacaoAnterior(avaliacaoAnteriorInicial);
+      return;
+    }
+    if (!pacienteId) return;
+    const snapshot = parseSnapshot(window.localStorage.getItem(`nutricare:avaliacao-snapshot:${pacienteId}`));
+    setAvaliacaoAnterior(snapshot);
+  }, [pacienteId, avaliacaoAnteriorInicial]);
 
   const requiredDobras = useMemo(() => protocoloAtual?.requiredDobras ?? [], [protocoloAtual]);
   const requiredCircs = useMemo(() => protocoloAtual?.requiredCircs ?? [], [protocoloAtual]);
@@ -701,14 +975,6 @@ export default function AntropometriaLayout({
   const syncRef = useRef<() => void>(() => {});
   useEffect(() => {
     syncRef.current = () => {
-      if (
-        result.massaMuscular === null &&
-        result.bodyFatPct === null &&
-        result.massaAdiposa === null &&
-        aguaCorporalPct === null
-      ) {
-        return;
-      }
       sincronizarAntropometria(pacienteId, {
         massa_muscular: result.massaMuscular,
         percentual_gordura: result.bodyFatPct,
@@ -732,59 +998,348 @@ export default function AntropometriaLayout({
     };
   }, []);
 
-  function onChangeDobra(key: DobraKey, value: string) {
-    setDobras((prev) => ({ ...prev, [key]: normalizeDecimalInput(value) }));
+  function flashVoiceField(fieldKey: string) {
+    setHighlightedVoiceField(fieldKey);
+    if (voiceFlashTimerRef.current) window.clearTimeout(voiceFlashTimerRef.current);
+    voiceFlashTimerRef.current = window.setTimeout(() => setHighlightedVoiceField(null), 5000);
   }
 
-  function onChangeCirc(key: CircKey, value: string) {
+  function onChangeDobra(key: DobraKey, value: string, options?: { flash?: boolean }) {
+    setDobras((prev) => ({ ...prev, [key]: normalizeDecimalInput(value) }));
+    if (options?.flash) flashVoiceField(`dobra:${key}`);
+  }
+
+  function onChangeCirc(key: CircKey, value: string, options?: { flash?: boolean }) {
     setCircunferencias((prev) => ({
       ...prev,
       [key]: normalizeDecimalInput(value),
     }));
+    if (options?.flash) flashVoiceField(`circ:${key}`);
   }
 
-  async function onSalvarAvaliacao() {
-    setMensagemAvaliacao("");
-    if (!dataAvaliacao) {
-      setMensagemAvaliacao("Informe a data da avaliação.");
-      return;
-    }
-    if (!canCalculate || result.bodyFatPct === null || result.massaMuscular === null) {
-      setMensagemAvaliacao("Preencha os campos obrigatórios antes de salvar a avaliação.");
-      return;
-    }
+    // =================== IMME / IMG / FFMI / % de agua ===================
+  const sexoCodigo: SexoBC = sexoPaciente === "Feminino" ? "F" : "M";
+  const massaMuscularEsqueleticaKg =
+    result.massaMuscular !== null
+      ? Math.max(0, result.massaMuscular * FRACAO_MUSCULO_ESQUELETICO)
+      : null;
+  const immeVal: number =
+    massaMuscularEsqueleticaKg !== null && alturaCm > 0
+      ? calcularIMME(massaMuscularEsqueleticaKg, alturaCm) : 0;
+  const imgVal: number =
+    result.massaAdiposa !== null && alturaCm > 0
+      ? calcularIMG(result.massaAdiposa, alturaCm) : 0;
+  const ffmiVal: number =
+    result.massaMuscular !== null && alturaCm > 0
+      ? calcularFFMI(result.massaMuscular, alturaCm) : 0;
+  const immeClass = immeVal > 0 ? classificarIMME(immeVal, sexoCodigo, idade) : null;
+  const imgClass  = imgVal  > 0 ? classificarIMG(imgVal,  sexoCodigo, idade) : null;
+  const ffmiClass = ffmiVal > 0 ? classificarFFMI(ffmiVal, sexoCodigo) : null;
+  const gorduraClass = result.bodyFatPct !== null ? classificarPercentualGordura(result.bodyFatPct, sexoCodigo) : null;
+  const aguaClass =
+    aguaCorporalPct !== null ? classificarAgua(aguaCorporalPct, sexoCodigo) : null;
+  const vo2maxAtual = pacienteId ? readStoredVO2max(pacienteId) : null;
 
-    const input: AvaliacaoAntropometricaInput = {
-      dataAvaliacao,
-      peso: pesoKg,
-      percentualGordura: result.bodyFatPct,
-      massaMuscular: result.massaMuscular,
-      dobras: Object.fromEntries(
-        Object.entries(dobrasNum).map(([key, value]) => [key, value > 0 ? value : null])
-      ),
-      circunferencias: Object.fromEntries(
-        Object.entries(circNum).map(([key, value]) => [key, value > 0 ? value : null])
-      ),
-      protocoloId: effectiveProtocolId,
+  // =================== AVALIAÇÃO FÍSICA ====================
+  const [avaliacaoMsg, setAvaliacaoMsg] = useState<string | null>(null);
+  const [enviandoAvaliacao, setEnviandoAvaliacao] = useState(false);
+  const [baixandoAvaliacao, setBaixandoAvaliacao] = useState(false);
+
+  // Seletor 1ª / 2ª / 3ª avaliação (para comparar)
+  const historicoOrdenado = useMemo(() => {
+    const arr = [...(historicoAvaliacoes || [])].filter((h) => h?.snapshot);
+    arr.sort((a, b) => {
+      const byCreatedAt =
+        new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+      return byCreatedAt !== 0 ? byCreatedAt : a.id.localeCompare(b.id);
+    });
+    return arr;
+  }, [historicoAvaliacoes]);
+  // Caixas de seleção: quais avaliações (1ª/2ª/3ª) entram na comparação.
+  // A 1ª avaliação é a base automática; as demais marcadas definem o ponto
+  // final dos cards inferiores.
+  const [evolucaoSelecionadaIds, setEvolucaoSelecionadaIds] = useState<string[]>([]);
+  function toggleEvolucaoSelecionada(id: string) {
+    setEvolucaoSelecionadaIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+  function classifPill(c: { cor: "verde" | "amarelo" }) {
+    return {
+      ...avaliacaoPillBaseStyle,
+      backgroundColor: c.cor === "verde" ? "#ecfdf5" : "#fff7ed",
+      color: c.cor === "verde" ? "#16a34a" : "#d97706",
+      alignSelf: "flex-start", marginTop: 4,
+    } as React.CSSProperties;
+  }
+
+  function stopVoiceRecognition() {
+    voiceKeepAliveRef.current = false;
+    try {
+      recognitionRef.current?.stop?.();
+    } catch {
+      // ignore
+    }
+    recognitionRef.current = null;
+    setIsListening(false);
+    setVoiceStatus("Registro por voz desativado.");
+  }
+
+  function handleVoiceCapture() {
+    if (typeof window === "undefined") return;
+
+    const speechWindow = window as typeof window & {
+      SpeechRecognition?: new () => any;
+      webkitSpeechRecognition?: new () => any;
     };
 
-    setSalvandoAvaliacao(true);
+    const SpeechRecognitionCtor =
+      speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+
+    if (!SpeechRecognitionCtor) {
+      setVoiceStatus("Seu navegador não suporta captura por voz. Use Chrome ou Edge.");
+      return;
+    }
+
+    if (isListening) {
+      stopVoiceRecognition();
+      return;
+    }
+
+    voiceKeepAliveRef.current = true;
+
+    const startRecognition = () => {
+      if (!voiceKeepAliveRef.current) return;
+      const recognition = new SpeechRecognitionCtor();
+      recognition.lang = "pt-BR";
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognitionRef.current = recognition;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        setVoiceStatus('Registro por voz ativo. Diga algo como “axilar média 45” ou “circunferência cintura 85”.');
+      };
+
+      recognition.onerror = (event: { error?: string }) => {
+        if (event?.error === "aborted") return;
+        const message =
+          event?.error === "not-allowed"
+            ? "Permissão do microfone negada pelo navegador."
+            : "Não consegui entender a fala. Aguardo o próximo registro.";
+        setVoiceStatus(message);
+      };
+
+      recognition.onend = () => {
+        recognitionRef.current = null;
+        if (!voiceKeepAliveRef.current) {
+          setIsListening(false);
+          return;
+        }
+        window.setTimeout(() => startRecognition(), 180);
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = Array.from(event.results ?? [])
+          .flatMap((result: any) => Array.from(result ?? []))
+          .map((item: any) => item?.transcript ?? "")
+          .join(" ")
+          .trim();
+
+        setLastVoiceEntry(transcript);
+
+        if (!transcript) {
+          setVoiceStatus("Não recebi nenhum comando de voz.");
+          return;
+        }
+
+        const normalizedTranscript = normalizeSpeechText(transcript);
+        const key = detectVoiceFieldKey(normalizedTranscript);
+        const value = extractVoiceValue(normalizedTranscript);
+
+        if (!key || !value) {
+          setVoiceStatus(`Não consegui identificar o campo e o valor em: “${transcript}”.`);
+          return;
+        }
+
+        const destination = resolveVoiceDestination({
+          transcript: normalizedTranscript,
+          key,
+          value,
+          requiredDobras,
+          requiredCircs,
+        });
+
+        if (destination === "dobra") {
+          const label = DOBRAS_LABELS[key as DobraKey];
+          onChangeDobra(key as DobraKey, value, { flash: true });
+          setVoiceStatus(`Dobra ${label} ${value} registrada. Aguardando o próximo registro.`);
+          speakVoiceConfirmation(`${label} ${value} registrado. Aguardo o próximo registro.`);
+          return;
+        }
+
+        const label = CIRC_LABELS[key as CircKey];
+        onChangeCirc(key as CircKey, value, { flash: true });
+        setVoiceStatus(`Circunferência ${label} ${value} registrada. Aguardando o próximo registro.`);
+        speakVoiceConfirmation(`${label} ${value} registrado. Aguardo o próximo registro.`);
+      };
+
+      recognition.start();
+    };
+
+    startRecognition();
+  }
+
+  const currentDobras = useMemo(() => filterNumericEntries(dobras), [dobras]);
+  const currentCircunferencias = useMemo(() => filterNumericEntries(circunferencias), [circunferencias]);
+
+  const previousDobras = useMemo(() => parseSnapshotValues(avaliacaoAnterior?.dobras as Record<string, string> | undefined), [avaliacaoAnterior]);
+  const previousCircunferencias = useMemo(() => parseSnapshotValues(avaliacaoAnterior?.circunferencias as Record<string, string> | undefined), [avaliacaoAnterior]);
+
+  function buildCurrentSnapshot(): AvaliacaoHistoricoSnapshot {
+    return {
+      createdAt: new Date().toISOString(),
+      protocolLabel: protocoloAtual?.label ?? "",
+      dobras: currentDobras,
+      circunferencias: currentCircunferencias,
+      resumo: {
+        pesoKg,
+        bodyFatPct: result.bodyFatPct,
+        massaMuscularKg: result.massaMuscular,
+        massaAdiposaKg: result.massaAdiposa,
+        aguaPct: aguaCorporalPct,
+        imme: immeVal,
+        img: imgVal,
+        ffmi: ffmiVal,
+      },
+    };
+  }
+
+  function persistAvaliacaoSnapshot() {
+    if (!pacienteId || typeof window === "undefined") return;
     try {
-      await salvarAvaliacaoAntropometrica(pacienteId, input);
-      setMensagemAvaliacao("Avaliação salva com sucesso.");
-    } catch (error) {
-      setMensagemAvaliacao(
-        error instanceof Error ? error.message : "Não foi possível salvar a avaliação."
-      );
-    } finally {
-      setSalvandoAvaliacao(false);
+      const snapshot = buildCurrentSnapshot();
+      window.localStorage.setItem(`nutricare:avaliacao-snapshot:${pacienteId}`, JSON.stringify(snapshot));
+      setAvaliacaoAnterior(snapshot);
+    } catch {
+      // ignore
     }
   }
 
-  const protocolosSexo = DOBRAS_POR_SEXO[sexoPaciente];
+  function createAvaliacaoPayload() {
+    const snapshot = buildCurrentSnapshot();
+    return {
+      pacienteId,
+      sex: sexoCodigo,
+      idade,
+      alturaCm,
+      pesoKg,
+      bodyFatPct: result.bodyFatPct,
+      massaMuscularKg: result.massaMuscular,
+      massaAdiposaKg: result.massaAdiposa,
+      aguaPct: aguaCorporalPct,
+      protocolLabel: protocoloAtual?.label ?? "",
+      vo2max: vo2maxAtual,
+      compareResults: compararResultados,
+      currentDobras: Object.fromEntries(
+        Object.entries(snapshot.dobras).map(([key, value]) => [key, parsePtNumber(String(value ?? ""))])
+      ),
+      currentCircunferencias: Object.fromEntries(
+        Object.entries(snapshot.circunferencias).map(([key, value]) => [key, parsePtNumber(String(value ?? ""))])
+      ),
+      previousDobras: compararResultados ? previousDobras : {},
+      previousCircunferencias: compararResultados ? previousCircunferencias : {},
+      previousSummary: compararResultados && avaliacaoAnterior
+        ? {
+            pesoKg: parseStorageFloat(avaliacaoAnterior.resumo?.pesoKg),
+            bodyFatPct: parseStorageFloat(avaliacaoAnterior.resumo?.bodyFatPct),
+            massaMuscularKg: parseStorageFloat(avaliacaoAnterior.resumo?.massaMuscularKg),
+            massaAdiposaKg: parseStorageFloat(avaliacaoAnterior.resumo?.massaAdiposaKg),
+            aguaPct: parseStorageFloat(avaliacaoAnterior.resumo?.aguaPct),
+            imme: parseStorageFloat(avaliacaoAnterior.resumo?.imme),
+            img: parseStorageFloat(avaliacaoAnterior.resumo?.img),
+            ffmi: parseStorageFloat(avaliacaoAnterior.resumo?.ffmi),
+            createdAt: avaliacaoAnterior.createdAt,
+            protocolLabel: avaliacaoAnterior.protocolLabel,
+          }
+        : null,
+      evolucaoSelecionadaIds: compararResultados ? evolucaoSelecionadaIds : [],
+    };
+  }
+
+  // Ações da Avaliação Física
+  async function handleEnviarAvaliacao() {
+    if (!pacienteId || enviandoAvaliacao) return;
+    if (result.bodyFatPct === null) {
+      setAvaliacaoMsg("Preencha e calcule antes de enviar.");
+      return;
+    }
+    try {
+      setEnviandoAvaliacao(true);
+      setAvaliacaoMsg("Enviando avaliação...");
+      const resp = await fetch("/api/avaliacao-fisica/enviar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(createAvaliacaoPayload()),
+      });
+      const json = await resp.json().catch(() => ({}));
+      if (!resp.ok || json?.ok === false) {
+        setAvaliacaoMsg(json?.erro || "Não foi possível enviar a avaliação.");
+      } else {
+        setAvaliacaoMsg(`Avaliação enviada para ${json?.destino || "o paciente"}.`);
+      }
+    } catch (e: any) {
+      setAvaliacaoMsg(e?.message || "Erro ao enviar avaliação.");
+    } finally {
+      setEnviandoAvaliacao(false);
+    }
+  }
+
+  async function handleDownloadAvaliacao() {
+    if (!pacienteId || baixandoAvaliacao) return;
+    if (result.bodyFatPct === null) {
+      setAvaliacaoMsg("Preencha e calcule antes de baixar.");
+      return;
+    }
+    try {
+      setBaixandoAvaliacao(true);
+      setAvaliacaoMsg("Gerando PDF...");
+      const resp = await fetch("/api/avaliacao-fisica/download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(createAvaliacaoPayload()),
+      });
+      if (!resp.ok) {
+        const json = await resp.json().catch(() => ({}));
+        setAvaliacaoMsg(json?.erro || "Não foi possível gerar o PDF.");
+        return;
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `avaliacao-fisica.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      // Persiste snapshot local (histórico do lado do front) — o backend também
+      // gravou no banco (rotação 1ª/2ª/3ª).
+      persistAvaliacaoSnapshot();
+      setAvaliacaoMsg("PDF gerado e histórico atualizado.");
+    } catch (e: any) {
+      setAvaliacaoMsg(e?.message || "Erro ao gerar PDF.");
+    } finally {
+      setBaixandoAvaliacao(false);
+    }
+  }
+
+    const protocolosSexo = DOBRAS_POR_SEXO[sexoPaciente];
 
   return (
     <div style={pageStyle}>
+      
       <div style={mainCardStyle}>
         <div style={topCardStyle}>
           <div style={headerBlockStyle}>
@@ -796,6 +1351,24 @@ export default function AntropometriaLayout({
                 Sexo do paciente: <strong>{sexoPaciente}</strong>
               </p>
             </div>
+          </div>
+
+          <div style={voiceActionWrapStyle}>
+            <button
+              type="button"
+              onClick={handleVoiceCapture}
+              style={{
+                ...voiceButtonStyle,
+                ...(isListening ? voiceButtonActiveStyle : {}),
+              }}
+            >
+              <span style={voiceButtonIconStyle}>{isListening ? "◉" : "🎤"}</span>
+              <span>Registro por voz</span>
+            </button>
+            <div style={voiceHelpStyle}>{voiceStatus}</div>
+            {lastVoiceEntry && (
+              <div style={voiceTranscriptStyle}>Último comando: “{lastVoiceEntry}”</div>
+            )}
           </div>
 
           <div style={selectWrapStyle}>
@@ -812,32 +1385,6 @@ export default function AntropometriaLayout({
             </select>
           </div>
         </div>
-
-        <div style={evaluationSaveBarStyle}>
-          <div>
-            <strong style={{ color: "#334155" }}>Data da avaliação</strong>
-            <div style={{ color: "#64748b", fontSize: 13, marginTop: 3 }}>
-              Salve a data junto com os valores desta avaliação.
-            </div>
-          </div>
-          <div style={evaluationSaveControlsStyle}>
-            <input
-              type="date"
-              value={dataAvaliacao}
-              onChange={(event) => setDataAvaliacao(event.target.value)}
-              style={evaluationDateInputStyle}
-            />
-            <button
-              type="button"
-              onClick={onSalvarAvaliacao}
-              disabled={salvandoAvaliacao}
-              style={evaluationSaveButtonStyle}
-            >
-              {salvandoAvaliacao ? "Salvando..." : "Salvar data e avaliação"}
-            </button>
-          </div>
-        </div>
-        {mensagemAvaliacao ? <div style={evaluationMessageStyle}>{mensagemAvaliacao}</div> : null}
 
         <div style={midGridStyle}>
           <div style={sectionCardStyle}>
@@ -873,7 +1420,7 @@ export default function AntropometriaLayout({
                       placeholder="0,0"
                       value={dobras[key]}
                       onChange={(e) => onChangeDobra(key, e.target.value)}
-                      style={smallInputStyle}
+                      style={{ ...smallInputStyle, ...(highlightedVoiceField === `dobra:${key}` ? voiceFieldFlashStyle : {}) }}
                     />
                   </div>
                 ))
@@ -917,7 +1464,7 @@ export default function AntropometriaLayout({
             </div>
 
             <div style={{ marginTop: 10 }}>
-              {(Object.keys(CIRC_LABELS) as CircKey[]).map((key) => {
+              {VISIBLE_CIRC_FIELDS.map((key) => {
                 const required = requiredCircs.includes(key);
 
                 return (
@@ -937,7 +1484,7 @@ export default function AntropometriaLayout({
                       placeholder="0,0"
                       value={circunferencias[key]}
                       onChange={(e) => onChangeCirc(key, e.target.value)}
-                      style={smallInputStyle}
+                      style={{ ...smallInputStyle, ...(highlightedVoiceField === `circ:${key}` ? voiceFieldFlashStyle : {}) }}
                     />
                   </div>
                 );
@@ -975,7 +1522,7 @@ export default function AntropometriaLayout({
           </div>
 
           <div style={resultsGridStyle}>
-            <div style={resultItemStyle}>
+            <div style={{ ...resultItemStyle, border: "1px solid #dcfce7" }}>
               <div style={resultIconGreen}>💪</div>
               <div>
                 <div style={resultTitleGreen}>Massa muscular</div>
@@ -986,8 +1533,8 @@ export default function AntropometriaLayout({
               </div>
             </div>
 
-            <div style={resultItemStyle}>
-              <div style={resultIconOrange}>◉</div>
+            <div style={{ ...resultItemStyle, border: "1px solid #fed7aa" }}>
+              <div style={resultIconOrange}>🟠</div>
               <div>
                 <div style={resultTitleOrange}>Massa adiposa</div>
                 <div style={resultValueStyle}>
@@ -996,32 +1543,14 @@ export default function AntropometriaLayout({
               </div>
             </div>
 
-            <div style={resultItemStyle}>
-              <div style={resultIconRed}>◉</div>
+            <div style={{ ...resultItemStyle, border: "1px solid #fed7aa" }}>
+              <div style={resultIconOrange}>🔥</div>
               <div>
-                <div style={resultTitleRed}>% de gordura</div>
+                <div style={resultTitleRed}>% de Gordura</div>
                 <div style={resultValueRedStyle}>
                   {formatPt(result.bodyFatPct, " %")}
                 </div>
               </div>
-            </div>
-          </div>
-
-          <div style={bottomMetaStyle}>
-            <div style={metaPillStyle}>
-              Densidade corporal: <strong>{formatPt(result.density)}</strong>
-            </div>
-
-            <div style={metaPillStyle}>
-              Peso: <strong>{formatPt(pesoKg, " kg")}</strong>
-            </div>
-
-            <div style={metaPillStyle}>
-              Altura: <strong>{formatPt(alturaCm, " cm")}</strong>
-            </div>
-
-            <div style={metaPillStyle}>
-              Idade: <strong>{idade || 0} anos</strong>
             </div>
           </div>
 
@@ -1032,42 +1561,142 @@ export default function AntropometriaLayout({
             </div>
           )}
         </div>
+        {immeClass && imgClass ? (
+          <div style={avaliacaoExtrasCardStyle}>
+            <div style={headerBlockStyle}>
+              <div style={iconBubblePurple}>🏆</div>
+              <div>
+                <h3 style={avaliacaoExtrasTitleStyle}>Resultados</h3>
+                <p style={avaliacaoExtrasSubtitleStyle}>
+                  Resultados calculados a partir do protocolo selecionado
+                </p>
+              </div>
+            </div>
+
+            <div style={resultsGridStyle}>
+              <div style={{ ...resultItemStyle, border: "1px solid #dcfce7" }}>
+                <div style={{ ...resultIconGreen, background: metricClassColor("musculo").iconBg, color: metricClassColor("musculo").icon }}>🏋️</div>
+                <div>
+                  <div style={{ ...resultTitleGreen, color: metricClassColor("musculo").text }}>Músculo Esquelético</div>
+                  <div style={resultValueStyle}>{formatPt(immeVal, " kg/m²")}</div>
+                </div>
+              </div>
+
+              <div style={{ ...resultItemStyle, border: "1px solid #fed7aa" }}>
+                <div style={{ ...resultIconOrange, background: metricClassColor("gordura").iconBg, color: metricClassColor("gordura").icon }}>📏</div>
+                <div>
+                  <div style={{ ...resultTitleOrange, color: metricClassColor("gordura").text }}>Índice de Massa Gorda</div>
+                  <div style={resultValueStyle}>{formatPt(imgVal, " kg/m²")}</div>
+                </div>
+              </div>
+
+              <div style={{ ...resultItemStyle, border: "1px solid #dcfce7" }}>
+                <div style={{ ...resultIconGreen, background: metricClassColor("musculo").iconBg, color: metricClassColor("musculo").icon }}>🧩</div>
+                <div>
+                  <div style={{ ...resultTitleGreen, color: metricClassColor("musculo").text }}>Massa Livre de Gordura</div>
+                  <div style={resultValueStyle}>{formatPt(ffmiVal, " kg/m²")}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {/* ÁGUA CORPORAL + VO2 MAX — lado a lado */}
         <div style={metricPairGridStyle}>
-          {/* ÁGUA CORPORAL — Fórmula de Watson */}
           <div style={{ ...resultCardStyle, ...metricPairCardStyle, margin: 0 }}>
             <div style={resultHeaderStyle}>
               <div style={headerBlockStyle}>
                 <div style={iconBubbleBlue}>💧</div>
                 <div>
-                  <h3 style={sectionTitleStyle}>% de água corporal</h3>
-                  <p style={subTitleStyle}>
-                    Fórmula de Watson ({sexoPaciente})
-                  </p>
+                  <h3 style={sectionTitleStyle}>% de Água corporal</h3>
+                  <p style={subTitleStyle}>Classificação automática por sexo</p>
                 </div>
               </div>
             </div>
 
             <div style={vo2ResultRowStyle}>
-              <div
-                style={{
-                  ...vo2ResultBoxStyle,
-                  background: '#eff6ff',
-                  border: '1px solid #dbeafe',
-                }}
-              >
-                <div style={vo2ResultLabelStyle}>% de água corporal</div>
-                <div style={{ ...vo2ResultValueStyle, color: '#2563eb', fontSize: 32 }}>
+              <div style={{ ...vo2ResultBoxStyle, background: "#eff6ff", border: "1px solid #dbeafe" }}>
+                <div style={vo2ResultLabelStyle}>% de Água corporal</div>
+                <div style={{ ...vo2ResultValueStyle, color: "#2563eb", fontSize: 32 }}>
                   {aguaCorporalPct !== null ? formatPt(aguaCorporalPct, " %") : "—"}
+                </div>
+                <div style={{ ...compareHintStyle, marginTop: 8 }}>
+                  {aguaClass ? `Resultado: ${aguaClass.label}` : "Resultado indisponível"}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* VO2 MAX — Jack Daniels */}
           <VO2MaxJackDaniels sexoPaciente={sexoPaciente} pacienteId={pacienteId} />
         </div>
+
+        {/* ============ AVALIAÇÃO FÍSICA — Botões + Comparação ============ */}
+        <div style={avaliacaoActionsCardStyle}>
+          <div style={avaliacaoActionsRowStyle}>
+            <button
+              type="button"
+              onClick={handleEnviarAvaliacao}
+              disabled={enviandoAvaliacao || result.bodyFatPct === null}
+              style={{
+                ...avaliacaoActionBtnPrimary,
+                ...(enviandoAvaliacao || result.bodyFatPct === null ? avaliacaoActionBtnDisabled : {}),
+              }}
+            >
+              {enviandoAvaliacao ? "Enviando..." : "Enviar avaliação física"}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDownloadAvaliacao}
+              disabled={baixandoAvaliacao || result.bodyFatPct === null}
+              style={{
+                ...avaliacaoActionBtnSecondary,
+                ...(baixandoAvaliacao || result.bodyFatPct === null ? avaliacaoActionBtnDisabled : {}),
+              }}
+            >
+              {baixandoAvaliacao ? "Gerando..." : "Download do PDF"}
+            </button>
+          </div>
+
+          <div style={avaliacaoCompareRowStyle}>
+            <label style={avaliacaoCompareToggleStyle}>
+              <input
+                type="checkbox"
+                checked={compararResultados}
+                onChange={(e) => setCompararResultados(e.target.checked)}
+              />
+              <span>Comparação de resultados</span>
+            </label>
+
+            {compararResultados ? (
+              <div style={avaliacaoCompareSelectWrapStyle}>
+                <span style={compareHintStyle}>
+                  A comparação começa sempre na 1ª avaliação. Marque as demais para calcular o período até elas:
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  {historicoOrdenado.map((h, idx) => {
+                    const label =
+                      idx === 0 ? "1ª avaliação" : idx === 1 ? "2ª avaliação" : "3ª avaliação";
+                    const d = h.createdAt ? new Date(h.createdAt).toLocaleDateString("pt-BR") : "—";
+                    return (
+                      <label key={h.id} style={avaliacaoCompareToggleStyle}>
+                        <input
+                          type="checkbox"
+                          checked={evolucaoSelecionadaIds.includes(h.id)}
+                          onChange={() => toggleEvolucaoSelecionada(h.id)}
+                        />
+                        <span>{label} — {d}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          {avaliacaoMsg ? <div style={avaliacaoFeedbackBoxStyle}>{avaliacaoMsg}</div> : null}
+        </div>
+
       </div>
     </div>
   );
@@ -1217,6 +1846,100 @@ function normalizeDecimalInput(value: string) {
     .replace(/,(?=.*,)/g, "");
 }
 
+// ==================== AVALIAÇÃO: ESTILOS DOS BOTÕES ====================
+const avaliacaoActionsCardStyle: React.CSSProperties = {
+  marginTop: 20,
+  background: "#fff",
+  border: "1px solid #eee7fb",
+  borderRadius: 20,
+  padding: 20,
+  boxShadow: "0 8px 20px rgba(15, 23, 42, 0.04)",
+  display: "flex",
+  flexDirection: "column",
+  gap: 12,
+};
+const avaliacaoActionsRowStyle: React.CSSProperties = {
+  display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center",
+};
+const avaliacaoActionBtnPrimary: React.CSSProperties = {
+  padding: "10px 16px",
+  background: "#2f5d31",
+  color: "#fff",
+  border: "none",
+  borderRadius: 10,
+  fontWeight: 700,
+  cursor: "pointer",
+  fontSize: 13,
+};
+const avaliacaoActionBtnSecondary: React.CSSProperties = {
+  padding: "10px 16px",
+  background: "#fff",
+  color: "#2f5d31",
+  border: "1px solid #2f5d31",
+  borderRadius: 10,
+  fontWeight: 700,
+  cursor: "pointer",
+  fontSize: 13,
+};
+const avaliacaoActionBtnDisabled: React.CSSProperties = {
+  opacity: 0.55, cursor: "not-allowed",
+};
+const avaliacaoCompareRowStyle: React.CSSProperties = {
+  display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center",
+};
+const avaliacaoCompareToggleStyle: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", gap: 8,
+  fontSize: 13, fontWeight: 600, color: "#334",
+};
+const avaliacaoCompareSelectWrapStyle: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", gap: 8,
+};
+const avaliacaoCompareSelectStyle: React.CSSProperties = {
+  padding: "6px 10px",
+  border: "1px solid #d1d5db",
+  borderRadius: 8,
+  fontSize: 13,
+  background: "#fff",
+};
+const avaliacaoFeedbackBoxStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "#334",
+  background: "#f6f7f4",
+  border: "1px solid #e6ebde",
+  borderRadius: 8,
+  padding: "6px 10px",
+};
+// Aliases mantidos para compat. (referências antigas no arquivo).
+const avaliacaoBotoesWrapStyle: React.CSSProperties = { display: "none" };
+const avaliacaoBtnPrimary: React.CSSProperties = { display: "none" };
+const avaliacaoBtnSecondary: React.CSSProperties = { display: "none" };
+const avaliacaoBtnDisabled: React.CSSProperties = { display: "none" };
+const avaliacaoFeedbackStyle: React.CSSProperties = { display: "none" };
+const compareToggleWrapStyle: React.CSSProperties = { display: "none" };
+const compareHintStyle: React.CSSProperties = {
+  fontSize: 11, color: "#64748b", fontWeight: 500,
+};
+const avaliacaoExtrasCardStyle: React.CSSProperties = {
+  marginTop: 24, background: "#fff", border: "1px solid #eee7fb",
+  borderRadius: 20, padding: 24,
+  boxShadow: "0 8px 20px rgba(15, 23, 42, 0.04)",
+};
+const avaliacaoExtrasTitleStyle: React.CSSProperties = { margin: 0, fontSize: 18, fontWeight: 800, color: "#111827" };
+const avaliacaoExtrasSubtitleStyle: React.CSSProperties = { margin: "4px 0 0 0", fontSize: 14, color: "#6b7280" };
+const avaliacaoExtrasGridStyle: React.CSSProperties = {
+  display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 14, marginTop: 14,
+};
+const avaliacaoExtraItemStyle: React.CSSProperties = {
+  display: "flex", flexDirection: "column", gap: 4,
+  padding: 16, borderRadius: 16, border: "1px solid #ede9fe", background: "#fff",
+};
+const avaliacaoExtraRotuloStyle: React.CSSProperties = { fontSize: 13, color: "#475569", fontWeight: 600 };
+const avaliacaoExtraValorStyle: React.CSSProperties = { fontSize: 24, fontWeight: 800, color: "#111827" };
+const avaliacaoPillBaseStyle: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", gap: 6,
+  fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 999,
+};
 const pageStyle: React.CSSProperties = {
   width: "100%",
   padding: "20px 0",
@@ -1242,51 +1965,6 @@ const topCardStyle: React.CSSProperties = {
   padding: 24,
   marginBottom: 24,
   boxShadow: "0 8px 20px rgba(15, 23, 42, 0.04)",
-};
-
-const evaluationSaveBarStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 16,
-  flexWrap: "wrap",
-  background: "#f8fafc",
-  border: "1px solid #e2e8f0",
-  borderRadius: 16,
-  padding: "14px 16px",
-  marginBottom: 12,
-};
-
-const evaluationSaveControlsStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-  flexWrap: "wrap",
-};
-
-const evaluationDateInputStyle: React.CSSProperties = {
-  border: "1px solid #cbd5e1",
-  borderRadius: 8,
-  padding: "9px 10px",
-  background: "#fff",
-  color: "#334155",
-};
-
-const evaluationSaveButtonStyle: React.CSSProperties = {
-  border: "none",
-  borderRadius: 8,
-  padding: "10px 14px",
-  background: "#2563eb",
-  color: "#fff",
-  fontWeight: 700,
-  cursor: "pointer",
-};
-
-const evaluationMessageStyle: React.CSSProperties = {
-  marginBottom: 16,
-  color: "#166534",
-  fontSize: 14,
-  fontWeight: 600,
 };
 
 const midGridStyle: React.CSSProperties = {
@@ -1361,6 +2039,61 @@ const tinyTextStyle: React.CSSProperties = {
   color: "#8b5cf6",
 };
 
+const voiceActionWrapStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
+  flex: 1,
+  minWidth: 280,
+};
+
+const voiceButtonStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 10,
+  minWidth: 220,
+  padding: "16px 20px",
+  borderRadius: 999,
+  border: "1px solid #e9d5ff",
+  background: "linear-gradient(135deg, #faf5ff, #eef2ff)",
+  color: "#6d28d9",
+  fontSize: 15,
+  fontWeight: 800,
+  cursor: "pointer",
+  boxShadow: "0 10px 24px rgba(109, 40, 217, 0.12)",
+};
+
+const voiceButtonActiveStyle: React.CSSProperties = {
+  background: "linear-gradient(135deg, #16a34a, #15803d)",
+  color: "#fff",
+  border: "1px solid transparent",
+};
+
+const voiceButtonIconStyle: React.CSSProperties = {
+  fontSize: 18,
+  lineHeight: 1,
+};
+
+const voiceHelpStyle: React.CSSProperties = {
+  textAlign: "center",
+  color: "#6b7280",
+  fontSize: 12,
+  maxWidth: 320,
+  lineHeight: 1.5,
+};
+
+const voiceTranscriptStyle: React.CSSProperties = {
+  textAlign: "center",
+  color: "#16a34a",
+  fontSize: 12,
+  fontWeight: 700,
+  maxWidth: 360,
+  lineHeight: 1.5,
+};
+
 const selectWrapStyle: React.CSSProperties = {
   minWidth: 320,
   flex: 1,
@@ -1377,6 +2110,7 @@ const selectStyle: React.CSSProperties = {
   background: "#fff",
   color: "#111827",
 };
+
 
 const badgeStyle: React.CSSProperties = {
   padding: "10px 14px",
@@ -1457,6 +2191,12 @@ const smallInputStyle: React.CSSProperties = {
   fontSize: 15,
   textAlign: "center",
   outline: "none",
+  transition: "all 0.2s ease",
+};
+
+const voiceFieldFlashStyle: React.CSSProperties = {
+  border: "1px solid #86efac",
+  boxShadow: "0 0 0 4px rgba(134, 239, 172, 0.25)",
 };
 
 const resultsGridStyle: React.CSSProperties = {
