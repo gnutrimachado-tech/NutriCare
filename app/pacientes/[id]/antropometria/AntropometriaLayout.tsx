@@ -3,7 +3,6 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import { sincronizarAntropometria } from "../anamnese/actions";
 import {
-  excluirAvaliacaoAntropometrica,
   salvarAvaliacaoAntropometrica,
   type AvaliacaoAntropometricaInput,
 } from "./actions";
@@ -16,19 +15,6 @@ type Props = {
   idade: number;
   pesoKg: number;
   alturaCm: number;
-  avaliacoesIniciais: HistoricoAvaliacao[];
-};
-
-export type HistoricoAvaliacao = {
-  id: string;
-  dataAvaliacao: string;
-  createdAt: string;
-  peso: number | null;
-  percentualGordura: number | null;
-  massaMuscular: number | null;
-  dobras: Record<string, number | null>;
-  circunferencias: Record<string, number | null>;
-  protocoloId: string | null;
 };
 
 type DobraKey =
@@ -530,9 +516,7 @@ export default function AntropometriaLayout({
   idade,
   pesoKg,
   alturaCm,
-  avaliacoesIniciais,
 }: Props) {
-  const [avaliacoes, setAvaliacoes] = useState<HistoricoAvaliacao[]>(avaliacoesIniciais);
   const [dataAvaliacao, setDataAvaliacao] = useState(() => {
     const hoje = new Date();
     const mes = String(hoje.getMonth() + 1).padStart(2, "0");
@@ -540,19 +524,7 @@ export default function AntropometriaLayout({
     return `${hoje.getFullYear()}-${mes}-${dia}`;
   });
   const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false);
-  const [excluindoAvaliacaoId, setExcluindoAvaliacaoId] = useState<string | null>(null);
   const [mensagemAvaliacao, setMensagemAvaliacao] = useState("");
-
-  const avaliacoesOrdenadas = useMemo(
-    () =>
-      [...avaliacoes]
-        .sort((a, b) => {
-          const data = a.dataAvaliacao.localeCompare(b.dataAvaliacao);
-          return data !== 0 ? data : a.createdAt.localeCompare(b.createdAt);
-        })
-        .slice(-3),
-    [avaliacoes]
-  );
 
   const protocolosDisponiveis = useMemo(
     () => PROTOCOLS.filter((p) => p.sexo === sexoPaciente),
@@ -798,15 +770,7 @@ export default function AntropometriaLayout({
 
     setSalvandoAvaliacao(true);
     try {
-      const saved = await salvarAvaliacaoAntropometrica(pacienteId, input);
-      setAvaliacoes((current) =>
-        [...current.filter((item) => item.id !== saved.id), saved]
-          .sort((a, b) => {
-            const data = a.dataAvaliacao.localeCompare(b.dataAvaliacao);
-            return data !== 0 ? data : a.createdAt.localeCompare(b.createdAt);
-          })
-          .slice(-3)
-      );
+      await salvarAvaliacaoAntropometrica(pacienteId, input);
       setMensagemAvaliacao("Avaliação salva com sucesso.");
     } catch (error) {
       setMensagemAvaliacao(
@@ -814,22 +778,6 @@ export default function AntropometriaLayout({
       );
     } finally {
       setSalvandoAvaliacao(false);
-    }
-  }
-
-  async function onExcluirAvaliacao(avaliacaoId: string) {
-    if (!window.confirm("Excluir esta avaliação e todos os seus resultados?")) return;
-
-    setExcluindoAvaliacaoId(avaliacaoId);
-    setMensagemAvaliacao("");
-    try {
-      await excluirAvaliacaoAntropometrica(pacienteId, avaliacaoId);
-      setAvaliacoes((current) => current.filter((item) => item.id !== avaliacaoId));
-      setMensagemAvaliacao("Avaliação excluída.");
-    } catch {
-      setMensagemAvaliacao("Não foi possível excluir a avaliação.");
-    } finally {
-      setExcluindoAvaliacaoId(null);
     }
   }
 
@@ -1006,12 +954,6 @@ export default function AntropometriaLayout({
           </div>
         </div>
 
-        <HistoricoAvaliacaoCard
-          avaliacoes={avaliacoesOrdenadas}
-          onExcluir={onExcluirAvaliacao}
-          excluindoId={excluindoAvaliacaoId}
-        />
-
         <div style={resultCardStyle}>
           <div style={resultHeaderStyle}>
             <div style={headerBlockStyle}>
@@ -1127,116 +1069,6 @@ export default function AntropometriaLayout({
           <VO2MaxJackDaniels sexoPaciente={sexoPaciente} pacienteId={pacienteId} />
         </div>
       </div>
-    </div>
-  );
-}
-
-function HistoricoAvaliacaoCard({
-  avaliacoes,
-  onExcluir,
-  excluindoId,
-}: {
-  avaliacoes: HistoricoAvaliacao[];
-  onExcluir: (id: string) => void;
-  excluindoId: string | null;
-}) {
-  const anterior = avaliacoes.length > 1 ? avaliacoes[0] : null;
-  const atual = avaliacoes.at(-1) ?? null;
-
-  const formatarData = (value?: string) => {
-    if (!value) return "—";
-    const date = new Date(value);
-    return Number.isNaN(date.getTime())
-      ? "—"
-      : date.toLocaleDateString("pt-BR", { timeZone: "UTC" });
-  };
-
-  const formatarValor = (value: number | null | undefined) =>
-    value === null || value === undefined || !Number.isFinite(value)
-      ? "—"
-      : value.toFixed(1).replace(".", ",");
-
-  const valorDoRegistro = (
-    registro: HistoricoAvaliacao | null,
-    grupo: "dobras" | "circunferencias",
-    key: string
-  ) => formatarValor(registro?.[grupo][key]);
-
-  return (
-    <div style={historyCardStyle}>
-      <div style={historyHeaderStyle}>
-        <div>
-          <h3 style={{ ...sectionTitleStyle, margin: 0 }}>Avaliações salvas</h3>
-          <p style={{ ...subTitleStyle, margin: "4px 0 0" }}>
-            As três avaliações mais recentes ficam disponíveis para comparação.
-          </p>
-        </div>
-        <div style={historyDatesStyle}>
-          <span>
-            Anterior: <strong>{formatarData(anterior?.dataAvaliacao)}</strong>
-          </span>
-          <span>
-            Atual: <strong>{formatarData(atual?.dataAvaliacao)}</strong>
-          </span>
-        </div>
-      </div>
-
-      {avaliacoes.length === 0 ? (
-        <div style={historyEmptyStyle}>Nenhuma avaliação salva ainda.</div>
-      ) : (
-        <>
-          <div style={savedEvaluationsListStyle}>
-            {avaliacoes.map((avaliacao, index) => (
-              <div key={avaliacao.id} style={savedEvaluationRowStyle}>
-                <span style={savedEvaluationNumberStyle}>Avaliação {index + 1}</span>
-                <span>{formatarData(avaliacao.dataAvaliacao)}</span>
-                <button
-                  type="button"
-                  title="Excluir avaliação"
-                  aria-label={`Excluir avaliação de ${formatarData(avaliacao.dataAvaliacao)}`}
-                  onClick={() => onExcluir(avaliacao.id)}
-                  disabled={excluindoId === avaliacao.id}
-                  style={deleteEvaluationButtonStyle}
-                >
-                  {excluindoId === avaliacao.id ? "..." : "×"}
-                </button>
-              </div>
-            ))}
-          </div>
-
-          <div style={historyComparisonGridStyle}>
-            <div style={historyComparisonTitleStyle}>Dobras cutâneas (mm)</div>
-            <div style={historyComparisonHeadStyle}>
-              <span>Medida</span>
-              <span>Anterior</span>
-              <span>Atual</span>
-            </div>
-            {(Object.keys(DOBRAS_LABELS) as DobraKey[]).map((key) => (
-              <div key={`history-dobra-${key}`} style={historyComparisonRowStyle}>
-                <span>{DOBRAS_LABELS[key]}</span>
-                <span>{valorDoRegistro(anterior, "dobras", key)}</span>
-                <span>{valorDoRegistro(atual, "dobras", key)}</span>
-              </div>
-            ))}
-
-            <div style={{ ...historyComparisonTitleStyle, marginTop: 16 }}>
-              Circunferências (cm)
-            </div>
-            <div style={historyComparisonHeadStyle}>
-              <span>Medida</span>
-              <span>Anterior</span>
-              <span>Atual</span>
-            </div>
-            {(Object.keys(CIRC_LABELS) as CircKey[]).map((key) => (
-              <div key={`history-circ-${key}`} style={historyComparisonRowStyle}>
-                <span>{CIRC_LABELS[key]}</span>
-                <span>{valorDoRegistro(anterior, "circunferencias", key)}</span>
-                <span>{valorDoRegistro(atual, "circunferencias", key)}</span>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
     </div>
   );
 }
@@ -1455,109 +1287,6 @@ const evaluationMessageStyle: React.CSSProperties = {
   color: "#166534",
   fontSize: 14,
   fontWeight: 600,
-};
-
-const historyCardStyle: React.CSSProperties = {
-  background: "#fff",
-  border: "1px solid #e2e8f0",
-  borderRadius: 20,
-  padding: 20,
-  marginBottom: 24,
-  boxShadow: "0 8px 20px rgba(15, 23, 42, 0.04)",
-};
-
-const historyHeaderStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: 16,
-  flexWrap: "wrap",
-};
-
-const historyDatesStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 4,
-  color: "#64748b",
-  fontSize: 13,
-  textAlign: "right",
-};
-
-const historyEmptyStyle: React.CSSProperties = {
-  marginTop: 14,
-  padding: 14,
-  borderRadius: 12,
-  background: "#f8fafc",
-  color: "#64748b",
-};
-
-const savedEvaluationsListStyle: React.CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: 8,
-  marginTop: 16,
-  paddingBottom: 14,
-  borderBottom: "1px solid #e2e8f0",
-};
-
-const savedEvaluationRowStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 8,
-  border: "1px solid #dbeafe",
-  borderRadius: 999,
-  padding: "6px 8px 6px 10px",
-  background: "#eff6ff",
-  color: "#1e3a8a",
-  fontSize: 13,
-};
-
-const savedEvaluationNumberStyle: React.CSSProperties = {
-  fontWeight: 800,
-};
-
-const deleteEvaluationButtonStyle: React.CSSProperties = {
-  width: 22,
-  height: 22,
-  padding: 0,
-  border: 0,
-  borderRadius: "50%",
-  background: "#fee2e2",
-  color: "#b91c1c",
-  fontSize: 18,
-  lineHeight: 1,
-  cursor: "pointer",
-};
-
-const historyComparisonGridStyle: React.CSSProperties = {
-  marginTop: 16,
-  display: "grid",
-  gridTemplateColumns: "minmax(160px, 1fr) 100px 100px",
-  alignItems: "center",
-  columnGap: 12,
-  rowGap: 6,
-  overflowX: "auto",
-};
-
-const historyComparisonTitleStyle: React.CSSProperties = {
-  gridColumn: "1 / -1",
-  color: "#334155",
-  fontWeight: 800,
-  fontSize: 14,
-  marginTop: 4,
-};
-
-const historyComparisonHeadStyle: React.CSSProperties = {
-  display: "contents",
-  color: "#64748b",
-  fontSize: 12,
-  fontWeight: 700,
-};
-
-const historyComparisonRowStyle: React.CSSProperties = {
-  display: "contents",
-  color: "#475569",
-  fontSize: 13,
 };
 
 const midGridStyle: React.CSSProperties = {
