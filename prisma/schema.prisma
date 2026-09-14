@@ -38,7 +38,6 @@ model alimentos {
 model anamneses {
   id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   paciente_id         String    @db.Uuid
-  data_avaliacao      DateTime? @db.Date
   peso                Decimal?  @db.Decimal(6, 2)
   altura              Decimal?  @db.Decimal(6, 2)
   imc                 Decimal?  @db.Decimal(6, 2)
@@ -65,6 +64,9 @@ model evolucao_corporal {
   percentual_gordura       Decimal?  @db.Decimal(5, 2)
   massa_muscular           Decimal?  @db.Decimal(6, 2)
   circunferencia_abdominal Decimal?  @db.Decimal(6, 2)
+  dobras_json              Json?
+  circunferencias_json     Json?
+  protocolo_id             String?   @db.VarChar(100)
   observacoes              String?
   created_at               DateTime? @default(now()) @db.Timestamp(6)
   pacientes                pacientes @relation(fields: [paciente_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -175,21 +177,4 @@ model User {
   password  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-}
-model hotmart_compradores {
-  id            Int      @id @default(autoincrement())
-  email         String   @unique
-  cpf           String   @default("")
-  nome          String   @default("")
-  evento        String   @default("MANUAL")
-  criado_em     DateTime @default(now())
-  atualizado_em DateTime @default(now())
-}
-
-model password_reset_tokens {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  token     String
-  expira_em DateTime
-  criado_em DateTime @default(now())
 }
