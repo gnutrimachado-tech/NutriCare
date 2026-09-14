@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { sincronizarAntropometria } from "../anamnese/actions";
 import type { AvaliacaoHistoricoSnapshot } from "@/lib/avaliacaoHistorico";
 import {
@@ -21,6 +22,7 @@ type SexoPaciente = "Masculino" | "Feminino";
 type HistoricoItem = {
   id: string;
   createdAt: string | null;
+  dataAvaliacao?: string | null;
   snapshot: AvaliacaoHistoricoSnapshot | null;
 };
 
@@ -1044,11 +1046,26 @@ export default function AntropometriaLayout({
   const [avaliacaoMsg, setAvaliacaoMsg] = useState<string | null>(null);
   const [enviandoAvaliacao, setEnviandoAvaliacao] = useState(false);
   const [baixandoAvaliacao, setBaixandoAvaliacao] = useState(false);
+  const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false);
+  const [excluindoAvaliacaoId, setExcluindoAvaliacaoId] = useState<string | null>(null);
+  const router = useRouter();
 
-  // Seletor 1ª / 2ª / 3ª avaliação (para comparar)
+  // Data da avaliação (informada pelo nutri) — enviada ao salvar/baixar/enviar.
+  // Default: data do dia, editável.
+  const [dataAvaliacao, setDataAvaliacao] = useState<string>(() =>
+    new Date().toISOString().slice(0, 10)
+  );
+
+  // Seletor 1ª / 2ª / 3ª avaliação (para comparar).
+  // Ordena pela DATA DA AVALIAÇÃO (dataAvaliacao) — a 1ª é a mais antiga e a
+  // 3ª a mais recente; createdAt só desempata datas iguais.
   const historicoOrdenado = useMemo(() => {
     const arr = [...(historicoAvaliacoes || [])].filter((h) => h?.snapshot);
     arr.sort((a, b) => {
+      const byData =
+        new Date(a.dataAvaliacao || a.createdAt || 0).getTime() -
+        new Date(b.dataAvaliacao || b.createdAt || 0).getTime();
+      if (byData !== 0) return byData;
       const byCreatedAt =
         new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
       return byCreatedAt !== 0 ? byCreatedAt : a.id.localeCompare(b.id);
@@ -1200,6 +1217,7 @@ export default function AntropometriaLayout({
   function buildCurrentSnapshot(): AvaliacaoHistoricoSnapshot {
     return {
       createdAt: new Date().toISOString(),
+      dataAvaliacao: dataAvaliacao || null,
       protocolLabel: protocoloAtual?.label ?? "",
       dobras: currentDobras,
       circunferencias: currentCircunferencias,
@@ -1231,6 +1249,7 @@ export default function AntropometriaLayout({
     const snapshot = buildCurrentSnapshot();
     return {
       pacienteId,
+      dataAvaliacao: dataAvaliacao || null,
       sex: sexoCodigo,
       idade,
       alturaCm,
@@ -1269,6 +1288,82 @@ export default function AntropometriaLayout({
   }
 
   // Ações da Avaliação Física
+  async function handleSalvarAvaliacao() {
+    if (!pacienteId || salvandoAvaliacao) return;
+    if (!dataAvaliacao) {
+      setAvaliacaoMsg("Informe a data da avaliação antes de salvar.");
+      return;
+    }
+    try {
+      setSalvandoAvaliacao(true);
+      setAvaliacaoMsg("Salvando avaliação...");
+      const payload = createAvaliacaoPayload();
+      const resp = await fetch("/api/avaliacao-fisica/salvar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pacienteId: payload.pacienteId,
+          dataAvaliacao: payload.dataAvaliacao,
+          protocolLabel: payload.protocolLabel,
+          currentDobras: payload.currentDobras,
+          currentCircunferencias: payload.currentCircunferencias,
+          resumo: {
+            pesoKg: payload.pesoKg,
+            bodyFatPct: payload.bodyFatPct,
+            massaMuscularKg: payload.massaMuscularKg,
+            massaAdiposaKg: payload.massaAdiposaKg,
+            aguaPct: payload.aguaPct,
+            imme: immeVal,
+            img: imgVal,
+            ffmi: ffmiVal,
+            protocolLabel: payload.protocolLabel,
+          },
+        }),
+      });
+      const json = await resp.json().catch(() => ({}));
+      if (!resp.ok || json?.ok === false) {
+        setAvaliacaoMsg(json?.erro || "Não foi possível salvar a avaliação.");
+      } else {
+        setAvaliacaoMsg(
+          `Avaliação salva como ${json?.numeroAvaliacao ?? "—"}ª avaliação (data ${
+            json?.dataAvaliacao
+              ? new Date(json.dataAvaliacao).toLocaleDateString("pt-BR")
+              : "—"
+          }).`
+        );
+        router.refresh();
+      }
+    } catch (e: any) {
+      setAvaliacaoMsg(e?.message || "Erro ao salvar avaliação.");
+    } finally {
+      setSalvandoAvaliacao(false);
+    }
+  }
+
+  async function handleExcluirAvaliacao(id: string) {
+    if (!pacienteId || !id || excluindoAvaliacaoId) return;
+    if (!window.confirm("Excluir esta avaliação e todos os seus resultados?")) return;
+    try {
+      setExcluindoAvaliacaoId(id);
+      const resp = await fetch(
+        `/api/avaliacao-fisica/historico?id=${encodeURIComponent(id)}&pacienteId=${encodeURIComponent(pacienteId)}`,
+        { method: "DELETE" }
+      );
+      const json = await resp.json().catch(() => ({}));
+      if (!resp.ok || json?.ok === false) {
+        setAvaliacaoMsg(json?.erro || "Não foi possível excluir a avaliação.");
+      } else {
+        setEvolucaoSelecionadaIds((prev) => prev.filter((x) => x !== id));
+        setAvaliacaoMsg("Avaliação excluída.");
+        router.refresh();
+      }
+    } catch (e: any) {
+      setAvaliacaoMsg(e?.message || "Erro ao excluir avaliação.");
+    } finally {
+      setExcluindoAvaliacaoId(null);
+    }
+  }
+
   async function handleEnviarAvaliacao() {
     if (!pacienteId || enviandoAvaliacao) return;
     if (result.bodyFatPct === null) {
@@ -1658,6 +1753,30 @@ export default function AntropometriaLayout({
             </button>
           </div>
 
+          <div style={avaliacaoActionsRowStyle}>
+            <label style={avaliacaoCompareToggleStyle} htmlFor="data-avaliacao">
+              Data da avaliação:
+            </label>
+            <input
+              id="data-avaliacao"
+              type="date"
+              value={dataAvaliacao}
+              onChange={(e) => setDataAvaliacao(e.target.value)}
+              style={avaliacaoCompareSelectStyle}
+            />
+            <button
+              type="button"
+              onClick={handleSalvarAvaliacao}
+              disabled={salvandoAvaliacao}
+              style={{
+                ...avaliacaoActionBtnSecondary,
+                ...(salvandoAvaliacao ? avaliacaoActionBtnDisabled : {}),
+              }}
+            >
+              {salvandoAvaliacao ? "Salvando..." : "Salvar avaliação"}
+            </button>
+          </div>
+
           <div style={avaliacaoCompareRowStyle}>
             <label style={avaliacaoCompareToggleStyle}>
               <input
@@ -1677,16 +1796,28 @@ export default function AntropometriaLayout({
                   {historicoOrdenado.map((h, idx) => {
                     const label =
                       idx === 0 ? "1ª avaliação" : idx === 1 ? "2ª avaliação" : "3ª avaliação";
-                    const d = h.createdAt ? new Date(h.createdAt).toLocaleDateString("pt-BR") : "—";
+                    const dBase = h.dataAvaliacao || h.createdAt;
+                    const d = dBase ? new Date(dBase).toLocaleDateString("pt-BR") : "—";
                     return (
-                      <label key={h.id} style={avaliacaoCompareToggleStyle}>
-                        <input
-                          type="checkbox"
-                          checked={evolucaoSelecionadaIds.includes(h.id)}
-                          onChange={() => toggleEvolucaoSelecionada(h.id)}
-                        />
-                        <span>{label} — {d}</span>
-                      </label>
+                      <span key={h.id} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        <label style={avaliacaoCompareToggleStyle}>
+                          <input
+                            type="checkbox"
+                            checked={evolucaoSelecionadaIds.includes(h.id)}
+                            onChange={() => toggleEvolucaoSelecionada(h.id)}
+                          />
+                          <span>{label} — {d}</span>
+                        </label>
+                        <button
+                          type="button"
+                          title="Excluir esta avaliação e seus resultados"
+                          onClick={() => handleExcluirAvaliacao(h.id)}
+                          disabled={excluindoAvaliacaoId === h.id}
+                          style={avaliacaoExcluirBtnStyle}
+                        >
+                          {excluindoAvaliacaoId === h.id ? "…" : "✕"}
+                        </button>
+                      </span>
                     );
                   })}
                 </div>
@@ -1900,6 +2031,23 @@ const avaliacaoCompareSelectStyle: React.CSSProperties = {
   borderRadius: 8,
   fontSize: 13,
   background: "#fff",
+};
+const avaliacaoExcluirBtnStyle: React.CSSProperties = {
+  width: 20,
+  height: 20,
+  borderRadius: "50%",
+  border: "1px solid #fecaca",
+  background: "#fff",
+  color: "#dc2626",
+  fontSize: 11,
+  fontWeight: 800,
+  lineHeight: 1,
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 0,
+  flexShrink: 0,
 };
 const avaliacaoFeedbackBoxStyle: React.CSSProperties = {
   fontSize: 12,

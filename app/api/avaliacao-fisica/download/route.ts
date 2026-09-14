@@ -26,6 +26,7 @@ export const dynamic = "force-dynamic";
 
 type BodyShape = {
   pacienteId?: string;
+  dataAvaliacao?: string | null;
   sex?: "M" | "F" | string;
   idade?: number;
   alturaCm?: number;
@@ -46,10 +47,17 @@ type BodyShape = {
 
 function fmtData(d: Date | string | null | undefined) {
   if (!d) return "";
+  // String "YYYY-MM-DD": formata direto, sem conversão de fuso (evita o dia
+  // "voltar" em fusos negativos).
+  if (typeof d === "string") {
+    const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[3]}/${m[2]}`;
+  }
   const date = new Date(d);
   if (Number.isNaN(date.getTime())) return "";
-  const dd = String(date.getDate()).padStart(2, "0");
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  // data_avaliacao é gravada como meia-noite UTC: lê em UTC.
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
   return `${dd}/${mm}`;
 }
 
@@ -98,6 +106,7 @@ export async function POST(req: NextRequest) {
     // ==============================
     const registroAtual = await salvarAvaliacaoHistorico({
       pacienteId,
+      dataAvaliacao: body.dataAvaliacao || null,
       protocolLabel: body.protocolLabel || "",
       currentDobras: body.currentDobras || {},
       currentCircunferencias: body.currentCircunferencias || {},
@@ -120,13 +129,16 @@ export async function POST(req: NextRequest) {
     // ==============================
     const rotativas = await listarUltimasTresAvaliacoes(pacienteId);
     const historicoAnterior = rotativas.filter((r) => r.id !== registroAtual.id);
-    const criadoEmAtual = registroAtual.createdAt
-      ? new Date(registroAtual.createdAt)
-      : new Date();
+    // Data do ponto atual = data da avaliação informada pelo nutri.
+    const criadoEmAtual = registroAtual.snapshot.dataAvaliacao
+      ? new Date(registroAtual.snapshot.dataAvaliacao)
+      : registroAtual.createdAt
+        ? new Date(registroAtual.createdAt)
+        : new Date();
     const evolucao = historicoAnterior.map((r) => {
       const snap = extrairSnapshotDeEvolucao(r);
       return {
-        data: fmtData(r.created_at),
+        data: fmtData(r.data_avaliacao || r.created_at),
         peso: snap?.resumo.pesoKg ?? (Number(r.peso ?? 0) || null),
         massaMuscular: snap?.resumo.massaMuscularKg ?? (Number(r.massa_muscular ?? 0) || null),
         bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
@@ -143,7 +155,7 @@ export async function POST(req: NextRequest) {
       const snap = extrairSnapshotDeEvolucao(r);
       return {
         id: r.id,
-        data: fmtData(r.created_at),
+        data: fmtData(r.data_avaliacao || r.created_at),
         createdAt: r.created_at?.toISOString?.() || null,
         peso: snap?.resumo.pesoKg ?? (Number(r.peso ?? 0) || null),
         massaMuscular: snap?.resumo.massaMuscularKg ?? (Number(r.massa_muscular ?? 0) || null),
@@ -154,13 +166,18 @@ export async function POST(req: NextRequest) {
     const primeira = await primeiraAvaliacao(pacienteId);
     const anterior = historicoAnterior[historicoAnterior.length - 1] || null;
     const anteriorSnap = anterior ? extrairSnapshotDeEvolucao(anterior) : null;
-    const previousDobras = anteriorSnap
-      ? mapaSnapshotParaNumeros(anteriorSnap.dobras)
+    // "Antes" das tabelas de Dobras/Circunferências = SEMPRE a 1ª avaliação
+    // (a de data MAIS ANTIGA). A variação dos cards (resumo N vs N-1)
+    // continua usando a avaliação imediatamente anterior.
+    const primeiraSnap = primeira ? extrairSnapshotDeEvolucao(primeira) : null;
+    const previousDobras = primeiraSnap
+      ? mapaSnapshotParaNumeros(primeiraSnap.dobras)
       : body.previousDobras || {};
-    const previousCircunferencias = anteriorSnap
-      ? mapaSnapshotParaNumeros(anteriorSnap.circunferencias)
+    const previousCircunferencias = primeiraSnap
+      ? mapaSnapshotParaNumeros(primeiraSnap.circunferencias)
       : body.previousCircunferencias || {};
-    const dataAvaliacaoInicial = primeira?.created_at?.toISOString?.() || null;
+    const dataAvaliacaoInicial =
+      (primeira?.data_avaliacao || primeira?.created_at)?.toISOString?.() || null;
 
     const imagemFrenteUrl = imagemFrontalUrl(sexo, resumo.imagem.codigo);
     const imagemLateralUrlV = imagemLateralUrl(sexo, resumo.imagem.codigo);

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import {
   extrairSnapshotDeEvolucao,
   listarUltimasTresAvaliacoes,
-  primeiraAvaliacao,
+  ordenarAvaliacoes,
 } from "@/lib/avaliacaoHistorico";
 import AntropometriaLayout from "./AntropometriaLayout";
 import PatientTabsNav from "@/components/PatientTabsNav";
@@ -50,21 +50,25 @@ export default async function AntropometriaPage({ params }: Props) {
 
   // Traz até 3 avaliações rotativas (1ª fixa + 2ª + 3ª mais recentes)
   const rotativas = await listarUltimasTresAvaliacoes(id);
-  const historico = rotativas.map((r) => ({
-    id: r.id,
-    createdAt: r.created_at?.toISOString?.() || null,
-    snapshot: extrairSnapshotDeEvolucao(r),
-  }));
+  // Ordena pela DATA DA AVALIAÇÃO (a informada pelo nutri): a 1ª é a mais
+  // antiga, a 3ª a mais recente. createdAt desempata datas iguais.
+  const rotativasOrdenadas = ordenarAvaliacoes(rotativas);
+  const historico = rotativasOrdenadas.map((r) => {
+    const snapshot = extrairSnapshotDeEvolucao(r);
+    return {
+      id: r.id,
+      createdAt: r.created_at?.toISOString?.() || null,
+      dataAvaliacao:
+        snapshot?.dataAvaliacao || r.data_avaliacao?.toISOString?.() || null,
+      snapshot,
+    };
+  });
 
-  // A referência para "Antes" é sempre a avaliação imediatamente anterior
-  // na ordem real de criação. Isso também funciona quando várias avaliações
-  // têm a mesma data de calendário.
-  const primeira = await primeiraAvaliacao(id);
-  const avaliacaoAnterior = rotativas.length
-    ? extrairSnapshotDeEvolucao(rotativas[rotativas.length - 1])
-    : primeira
-      ? extrairSnapshotDeEvolucao(primeira)
-      : null;
+  // A referência para "Antes" (Dobras/Circunferências) é SEMPRE a 1ª
+  // avaliação — a de data MAIS ANTIGA — nunca a imediatamente anterior.
+  const avaliacaoAnterior = rotativasOrdenadas.length
+    ? extrairSnapshotDeEvolucao(rotativasOrdenadas[0])
+    : null;
 
   return (
     <div>

@@ -16,11 +16,17 @@ export const dynamic = "force-dynamic";
 
 function fmtData(d: Date | string | null | undefined) {
   if (!d) return "";
+  // String "YYYY-MM-DD": formata direto, sem conversão de fuso.
+  if (typeof d === "string") {
+    const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  }
   const date = new Date(d);
   if (Number.isNaN(date.getTime())) return "";
-  const dd = String(date.getDate()).padStart(2, "0");
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const yyyy = date.getFullYear();
+  // data_avaliacao é gravada como meia-noite UTC: lê em UTC.
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const yyyy = date.getUTCFullYear();
   return `${dd}/${mm}/${yyyy}`;
 }
 
