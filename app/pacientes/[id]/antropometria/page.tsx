@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import AntropometriaLayout, {
-  type HistoricoAvaliacao,
-} from "./AntropometriaLayout";
+import AntropometriaLayout from "./AntropometriaLayout";
 
 export const dynamic = "force-dynamic";
 
@@ -36,20 +34,6 @@ function calcularIdade(dataNascimento: Date | string | null): number {
   return idade;
 }
 
-function mapJsonMedidas(value: unknown): Record<string, number | null> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-
-  return Object.fromEntries(
-    Object.entries(value).map(([key, item]) => {
-      if (item === null || item === undefined || item === "") {
-        return [key, null];
-      }
-      const numberValue = typeof item === "number" ? item : Number(item);
-      return [key, Number.isFinite(numberValue) ? numberValue : null];
-    })
-  );
-}
-
 export default async function AntropometriaPage({
   params,
 }: Props) {
@@ -77,32 +61,6 @@ export default async function AntropometriaPage({
       created_at: "desc",
     },
   });
-
-  const registrosAvaliacao = await prisma.evolucao_corporal.findMany({
-    where: { paciente_id: id },
-    orderBy: [{ data_avaliacao: "asc" }, { created_at: "asc" }],
-  });
-
-  const avaliacoesIniciais: HistoricoAvaliacao[] = registrosAvaliacao
-    .slice(-3)
-    .map((registro) => ({
-      id: registro.id,
-      dataAvaliacao:
-        registro.data_avaliacao?.toISOString() ??
-        registro.created_at?.toISOString() ??
-        "",
-      createdAt: registro.created_at?.toISOString() ?? "",
-      peso: registro.peso === null ? null : Number(registro.peso),
-      percentualGordura:
-        registro.percentual_gordura === null
-          ? null
-          : Number(registro.percentual_gordura),
-      massaMuscular:
-        registro.massa_muscular === null ? null : Number(registro.massa_muscular),
-      dobras: mapJsonMedidas(registro.dobras_json),
-      circunferencias: mapJsonMedidas(registro.circunferencias_json),
-      protocoloId: registro.protocolo_id,
-    }));
 
   // ==============================
   // SEXO
@@ -196,7 +154,6 @@ export default async function AntropometriaPage({
         idade={idade}
         pesoKg={pesoKg}
         alturaCm={alturaCm}
-        avaliacoesIniciais={avaliacoesIniciais}
       />
     </div>
   );
