@@ -65,6 +65,8 @@ export type EvolucaoPonto = {
 export type EvolucaoHistoricoPonto = {
   id: string;
   data: string;
+  // Data REAL da avaliação (a informada pelo nutri) — usada na ordenação.
+  dataAvaliacao?: string | null;
   createdAt?: string | null;
   peso?: number | null;
   massaMuscular?: number | null;
@@ -112,6 +114,8 @@ type PdfProps = {
     // ponto do card Evolução, mesmo quando a comparação usa avaliações antigas.
     evolucaoAtual?: EvolucaoPonto | null;
     evolucaoAtualId?: string | null;
+    // Data REAL da avaliação atual (a informada pelo nutri), em ISO/"YYYY-MM-DD".
+    dataAvaliacaoAtual?: string | null;
     dataAvaliacaoInicial?: string | null;
   };
   nutricionista: {
@@ -869,7 +873,18 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
   // A lista vem do banco em ordem cronológica. O ID é usado para localizar
   // com precisão o registro recém-criado quando ele já foi persistido.
+  // REGRA: ordena SEMPRE pela DATA DA AVALIAÇÃO informada pelo nutri (campo
+  // dataAvaliacao do ponto). createdAt só desempata avaliações na mesma data —
+  // assim a 1ª avaliação é a de data MAIS ANTIGA mesmo que tenha sido
+  // digitada depois.
+  const tempoPonto = (h: any) => {
+    const base = h?.dataAvaliacao || h?.createdAt || 0;
+    const t = new Date(base).getTime();
+    return Number.isNaN(t) ? 0 : t;
+  };
   const historico = [...(dados.evolucaoHistorico || [])].sort((a, b) => {
+    const byData = tempoPonto(a) - tempoPonto(b);
+    if (byData !== 0) return byData;
     const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
     const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
     const byCreatedAt = aTime - bTime;
