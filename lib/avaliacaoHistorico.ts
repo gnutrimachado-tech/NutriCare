@@ -13,6 +13,67 @@
 
 import { prisma } from "@/lib/prisma";
 
+// Ponte de chaves: o front salva as circunferências como biceps_* e o PDF
+// lê na ordem braco_*. Esta ponte garante que os valores entrem nas linhas
+// corretas sem mexer em nenhum layout.
+export const PONTE_CHAVES_CIRC: Record<string, string> = {
+  biceps_direito: "braco_direito",
+  biceps_esquerdo: "braco_esquerdo",
+  braco_direito: "biceps_direito",
+  braco_esquerdo: "biceps_esquerdo",
+};
+
+export function mapaSnapshotParaNumerosComPonte(
+  values: Record<string, string | number> | null | undefined
+): Record<string, number> {
+  const base = mapaSnapshotParaNumeros(values);
+  const out: Record<string, number> = { ...base };
+  for (const [de, para] of Object.entries(PONTE_CHAVES_CIRC)) {
+    if (out[de] !== undefined && out[para] === undefined) out[para] = out[de];
+    else if (out[para] !== undefined && out[de] === undefined) out[de] = out[para];
+  }
+  return out;
+}
+
+// Ponto de série (peso / massa muscular / % gordura) com a data REAL da
+// avaliação. O PDF usa esse campo para ordenar — nunca pela data de digitação.
+export type EvolucaoPontoHistorico = {
+  id: string;
+  data: string;
+  dataAvaliacao: string | null;
+  createdAt: string | null;
+  peso: number | null;
+  massaMuscular: number | null;
+  bfPct: number | null;
+};
+
+// Monta o ponto de evolução de um registro do banco, lendo a data da
+// avaliação salva no snapshot (fallback: coluna data_avaliacao → created_at).
+export function evolucaoPontoDeRegistro(
+  r: {
+    id: string;
+    data_avaliacao?: Date | null;
+    created_at?: Date | null;
+    peso?: unknown;
+    massa_muscular?: unknown;
+    percentual_gordura?: unknown;
+  },
+  fmtData: (d: Date | string | null | undefined) => string
+): EvolucaoPontoHistorico {
+  const snap = extrairSnapshotDeEvolucao(r);
+  const baseData: any = snap?.dataAvaliacao || r.data_avaliacao || r.created_at || null;
+  return {
+    id: r.id,
+    data: fmtData(baseData),
+    dataAvaliacao:
+      typeof baseData === "string" ? baseData : baseData?.toISOString?.() || null,
+    createdAt: r.created_at?.toISOString?.() || null,
+    peso: snap?.resumo.pesoKg ?? (Number(r.peso ?? 0) || null),
+    massaMuscular: snap?.resumo.massaMuscularKg ?? (Number(r.massa_muscular ?? 0) || null),
+    bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
+  };
+}
+
 export type AvaliacaoHistoricoResumo = {
   pesoKg: number | null;
   bodyFatPct: number | null;
@@ -24,6 +85,12 @@ export type AvaliacaoHistoricoResumo = {
   ffmi: number | null;
   createdAt?: string | null;
   protocolLabel?: string | null;
+  // Campos extras opcionais aceitos na entrada (a rota /salvar envia alguns
+  // deles). Não são persistidos no snapshot — apenas evitam erro de tipo.
+  massaMuscularEsqueleticaKg?: number | null;
+  circunferenciaAbdominalCm?: number | null;
+  vo2maxMlKgMin?: number | null;
+  imc?: number | null;
 };
 
 export type AvaliacaoHistoricoSnapshot = {
