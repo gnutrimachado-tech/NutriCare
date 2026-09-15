@@ -1073,9 +1073,17 @@ export default function AntropometriaLayout({
     return arr;
   }, [historicoAvaliacoes]);
   // Caixas de seleção: quais avaliações (1ª/2ª/3ª) entram na comparação.
-  // A 1ª avaliação é a base automática; as demais marcadas definem o ponto
-  // final dos cards inferiores.
+  // A 1ª avaliação é a base automática e a MAIS RECENTE já vem marcada —
+  // o resultado atual sempre entra nos cards de evolução.
   const [evolucaoSelecionadaIds, setEvolucaoSelecionadaIds] = useState<string[]>([]);
+  useEffect(() => {
+    const ultima = historicoOrdenado[historicoOrdenado.length - 1];
+    if (!ultima) return;
+    setEvolucaoSelecionadaIds((prev) => {
+      const valid = prev.filter((id) => historicoOrdenado.some((h) => h.id === id));
+      return valid.includes(ultima.id) ? valid : [...valid, ultima.id];
+    });
+  }, [historicoOrdenado]);
   function toggleEvolucaoSelecionada(id: string) {
     setEvolucaoSelecionadaIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -1400,10 +1408,43 @@ export default function AntropometriaLayout({
     try {
       setBaixandoAvaliacao(true);
       setAvaliacaoMsg("Gerando PDF...");
+      const payload = createAvaliacaoPayload();
+      // REGRA: ao baixar, a avaliação é gravada no histórico. Se já existe um
+      // registro NA MESMA DATA da avaliação, ele JÁ é a "Atual" — então o PDF
+      // usa os valores salvos (dobras/circunferências + peso/MM/%G) desse
+      // registro, garantindo comparação correta 1ª (mais antiga) vs atual.
+      const mesmoDia = historicoOrdenado.find((h) => {
+        const raw = h.dataAvaliacao || h.createdAt;
+        if (!raw || !dataAvaliacao) return false;
+        const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (m) return `${m[1]}-${m[2]}-${m[3]}` === dataAvaliacao;
+        const d = new Date(raw);
+        if (Number.isNaN(d.getTime())) return false;
+        const iso = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+        return iso === dataAvaliacao;
+      });
+      if (mesmoDia?.snapshot) {
+        const resumoSalvo = mesmoDia.snapshot.resumo || {};
+        payload.currentDobras = parseSnapshotValues(
+          mesmoDia.snapshot.dobras as Record<string, string> | undefined
+        );
+        payload.currentCircunferencias = parseSnapshotValues(
+          mesmoDia.snapshot.circunferencias as Record<string, string> | undefined
+        );
+        payload.pesoKg = parseStorageFloat(resumoSalvo.pesoKg) ?? payload.pesoKg;
+        payload.bodyFatPct = parseStorageFloat(resumoSalvo.bodyFatPct) ?? payload.bodyFatPct;
+        payload.massaMuscularKg =
+          parseStorageFloat(resumoSalvo.massaMuscularKg) ?? payload.massaMuscularKg;
+        payload.massaAdiposaKg =
+          parseStorageFloat(resumoSalvo.massaAdiposaKg) ?? payload.massaAdiposaKg;
+        payload.aguaPct = parseStorageFloat(resumoSalvo.aguaPct) ?? payload.aguaPct;
+        payload.protocolLabel =
+          mesmoDia.snapshot.protocolLabel || payload.protocolLabel;
+      }
       const resp = await fetch("/api/avaliacao-fisica/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(createAvaliacaoPayload()),
+        body: JSON.stringify(payload),
       });
       if (!resp.ok) {
         const json = await resp.json().catch(() => ({}));
@@ -1787,10 +1828,12 @@ export default function AntropometriaLayout({
               <span>Comparação de resultados</span>
             </label>
 
-            {compararResultados ? (
+            {historicoOrdenado.length > 0 ? (
               <div style={avaliacaoCompareSelectWrapStyle}>
                 <span style={compareHintStyle}>
-                  A comparação começa sempre na 1ª avaliação. Marque as demais para calcular o período até elas:
+                  {compararResultados
+                    ? "A comparação começa sempre na 1ª avaliação (a mais antiga). A mais recente já vem marcada:"
+                    : "Avaliações salvas (a 1ª é a de data mais antiga). Use o ✕ para excluir uma avaliação e seus resultados:"}
                 </span>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                   {historicoOrdenado.map((h, idx) => {
@@ -1800,14 +1843,18 @@ export default function AntropometriaLayout({
                     const d = dBase ? new Date(dBase).toLocaleDateString("pt-BR") : "—";
                     return (
                       <span key={h.id} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                        <label style={avaliacaoCompareToggleStyle}>
-                          <input
-                            type="checkbox"
-                            checked={evolucaoSelecionadaIds.includes(h.id)}
-                            onChange={() => toggleEvolucaoSelecionada(h.id)}
-                          />
-                          <span>{label} — {d}</span>
-                        </label>
+                        {compararResultados ? (
+                          <label style={avaliacaoCompareToggleStyle}>
+                            <input
+                              type="checkbox"
+                              checked={evolucaoSelecionadaIds.includes(h.id)}
+                              onChange={() => toggleEvolucaoSelecionada(h.id)}
+                            />
+                            <span>{label} — {d}</span>
+                          </label>
+                        ) : (
+                          <span style={avaliacaoCompareToggleStyle}>{label} — {d}</span>
+                        )}
                         <button
                           type="button"
                           title="Excluir esta avaliação e seus resultados"
