@@ -17,7 +17,9 @@ import {
   listarUltimasTresAvaliacoes,
   primeiraAvaliacao,
   extrairSnapshotDeEvolucao,
-  mapaSnapshotParaNumeros,
+  mapaSnapshotParaNumerosComPonte,
+  evolucaoPontoDeRegistro,
+  ordenarAvaliacoes,
 } from "@/lib/avaliacaoHistorico";
 
 export const runtime = "nodejs";
@@ -102,28 +104,22 @@ export async function POST(req: NextRequest) {
     });
 
     // Evolução: 1ª (fixa) + 2ª + 3ª = ATUAL (ainda não gravada porque envio não salva).
-    const rotativas = await listarUltimasTresAvaliacoes(pacienteId);
+    // REGRA: ordena pela DATA DA AVALIAÇÃO informada pelo nutri.
+    const rotativas = ordenarAvaliacoes(await listarUltimasTresAvaliacoes(pacienteId));
     const evolucaoBanco = rotativas.map((r) => {
       const snap = extrairSnapshotDeEvolucao(r);
       return {
-        data: fmtData(r.data_avaliacao || r.created_at),
+        data: fmtData(snap?.dataAvaliacao || r.data_avaliacao || r.created_at),
         peso: snap?.resumo.pesoKg ?? (Number(r.peso ?? 0) || null),
         massaMuscular: snap?.resumo.massaMuscularKg ?? (Number(r.massa_muscular ?? 0) || null),
         bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
       };
     });
-    // Mesma lista com o id de cada avaliação — alimenta as caixas de seleção
-    const evolucaoHistorico = rotativas.map((r) => {
-      const snap = extrairSnapshotDeEvolucao(r);
-      return {
-        id: r.id,
-        data: fmtData(r.data_avaliacao || r.created_at),
-        createdAt: r.created_at?.toISOString?.() || null,
-        peso: snap?.resumo.pesoKg ?? (Number(r.peso ?? 0) || null),
-        massaMuscular: snap?.resumo.massaMuscularKg ?? (Number(r.massa_muscular ?? 0) || null),
-        bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
-      };
-    });
+    // Mesma lista com o id de cada avaliação + a data REAL da avaliação —
+    // alimenta as caixas de seleção e a ordenação no PDF.
+    const evolucaoHistorico = rotativas.map((r) =>
+      evolucaoPontoDeRegistro(r, fmtData)
+    );
 
     // Acrescenta o ponto ATUAL no final, sem persistir. Usa a data da
     // avaliação informada pelo nutri (ou a data do dia, se não informada).
@@ -150,11 +146,13 @@ export async function POST(req: NextRequest) {
     // (a de data MAIS ANTIGA). A variação dos cards (resumo N vs N-1)
     // continua usando a avaliação imediatamente anterior.
     const primeiraSnap = primeira ? extrairSnapshotDeEvolucao(primeira) : null;
+    // Com ponte de chaves: biceps_direito/esquerdo (salvos pelo front) entram
+    // nas linhas braco_direito/esquerdo do PDF — sem mexer no layout.
     const previousDobras = primeiraSnap
-      ? mapaSnapshotParaNumeros(primeiraSnap.dobras)
+      ? mapaSnapshotParaNumerosComPonte(primeiraSnap.dobras)
       : body.previousDobras || {};
     const previousCircunferencias = primeiraSnap
-      ? mapaSnapshotParaNumeros(primeiraSnap.circunferencias)
+      ? mapaSnapshotParaNumerosComPonte(primeiraSnap.circunferencias)
       : body.previousCircunferencias || {};
     const dataAvaliacaoInicial =
       (primeira?.data_avaliacao || primeira?.created_at)?.toISOString?.() || null;
@@ -230,6 +228,8 @@ export async function POST(req: NextRequest) {
           ? body.evolucaoSelecionadaIds
           : [],
         evolucaoAtual: atualPonto,
+        // Data REAL da avaliação atual (a informada pelo nutri; envio não grava).
+        dataAvaliacaoAtual: body.dataAvaliacao || null,
         dataAvaliacaoInicial,
       },
       nutricionista,
