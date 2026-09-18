@@ -22,9 +22,18 @@ function formatarNumero(valor: unknown) {
   return numero.toFixed(2).replace(".", ",");
 }
 
-function formatarData(data: Date | null) {
+function formatarDataEscolhida(data: Date | null) {
   if (!data) return "--";
-  return new Intl.DateTimeFormat("pt-BR").format(new Date(data));
+  const dd = String(data.getUTCDate()).padStart(2, "0");
+  const mm = String(data.getUTCMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${data.getUTCFullYear()}`;
+}
+
+function formatarDataCriacao(data: Date | null) {
+  if (!data) return "--";
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+  }).format(data);
 }
 
 export default async function EvolucaoPage({ params }: Props) {
@@ -115,7 +124,9 @@ export default async function EvolucaoPage({ params }: Props) {
               {avaliacoes.map((item) => (
                 <tr key={item.id}>
                   <td style={tdStyle}>
-                    {formatarData(item.created_at)}
+                    {item.data_avaliacao
+                      ? formatarDataEscolhida(item.data_avaliacao)
+                      : formatarDataCriacao(item.created_at)}
                   </td>
                   <td style={tdStyle}>
                     {formatarNumero(item.peso)}

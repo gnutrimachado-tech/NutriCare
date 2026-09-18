@@ -15,6 +15,23 @@ function parseFormData(formData: FormData) {
     return numero;
   };
 
+  const toDateOnly = (valor: FormDataEntryValue | null) => {
+    const texto = String(valor || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(texto)) return null;
+
+    const [ano, mes, dia] = texto.split("-").map(Number);
+    const data = new Date(Date.UTC(ano, mes - 1, dia));
+    if (
+      data.getUTCFullYear() !== ano ||
+      data.getUTCMonth() !== mes - 1 ||
+      data.getUTCDate() !== dia
+    ) {
+      return null;
+    }
+
+    return data;
+  };
+
   const observacoesBase = String(formData.get("observacoes") || "").trim();
   const customLines: string[] = [];
 
@@ -47,6 +64,7 @@ function parseFormData(formData: FormData) {
     suplementos: (formData.get("suplementos") as string) || null,
     habitos_alimentares: (formData.get("habitos_alimentares") as string) || null,
     observacoes: observacoes || null,
+    data_avaliacao: toDateOnly(formData.get("data_avaliacao")),
   };
 }
 
@@ -113,16 +131,22 @@ export async function sincronizarAntropometria(
     return valor;
   };
 
-  const patch: ResultadoAntropometria = {
-    massa_muscular: limpar(resultado.massa_muscular),
-    percentual_gordura: limpar(resultado.percentual_gordura),
-    massa_adiposa: limpar(resultado.massa_adiposa),
-    agua_corporal: limpar(resultado.agua_corporal),
-  };
+  const patch: ResultadoAntropometria = {};
 
-  // Se não existe Anamnese, não criamos uma linha vazia apenas porque a
-  // Antropometria está sem campos preenchidos.
-  if (!existente && Object.values(patch).every((value) => value === null)) return;
+  if (limpar(resultado.massa_muscular) !== null) {
+    patch.massa_muscular = limpar(resultado.massa_muscular);
+  }
+  if (limpar(resultado.percentual_gordura) !== null) {
+    patch.percentual_gordura = limpar(resultado.percentual_gordura);
+  }
+  if (limpar(resultado.massa_adiposa) !== null) {
+    patch.massa_adiposa = limpar(resultado.massa_adiposa);
+  }
+  if (limpar(resultado.agua_corporal) !== null) {
+    patch.agua_corporal = limpar(resultado.agua_corporal);
+  }
+
+  if (Object.keys(patch).length === 0) return; // nada calculado -> mantem como esta
 
   if (existente) {
     await prisma.anamneses.update({

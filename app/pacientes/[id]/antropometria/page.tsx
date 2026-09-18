@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import {
   extrairSnapshotDeEvolucao,
   listarUltimasTresAvaliacoes,
-  ordenarAvaliacoes,
+  primeiraAvaliacao,
 } from "@/lib/avaliacaoHistorico";
 import AntropometriaLayout from "./AntropometriaLayout";
 import PatientTabsNav from "@/components/PatientTabsNav";
@@ -50,25 +50,25 @@ export default async function AntropometriaPage({ params }: Props) {
 
   // Traz até 3 avaliações rotativas (1ª fixa + 2ª + 3ª mais recentes)
   const rotativas = await listarUltimasTresAvaliacoes(id);
-  // Ordena pela DATA DA AVALIAÇÃO (a informada pelo nutri): a 1ª é a mais
-  // antiga, a 3ª a mais recente. createdAt desempata datas iguais.
-  const rotativasOrdenadas = ordenarAvaliacoes(rotativas);
-  const historico = rotativasOrdenadas.map((r) => {
+  const historico = rotativas.map((r) => {
     const snapshot = extrairSnapshotDeEvolucao(r);
     return {
       id: r.id,
-      createdAt: r.created_at?.toISOString?.() || null,
-      dataAvaliacao:
-        snapshot?.dataAvaliacao || r.data_avaliacao?.toISOString?.() || null,
+      createdAt:
+        snapshot?.dataAvaliacao ||
+        r.data_avaliacao?.toISOString?.() ||
+        r.created_at?.toISOString?.() ||
+        null,
       snapshot,
     };
   });
 
-  // A referência para "Antes" (Dobras/Circunferências) é SEMPRE a 1ª
-  // avaliação — a de data MAIS ANTIGA — nunca a imediatamente anterior.
-  const avaliacaoAnterior = rotativasOrdenadas.length
-    ? extrairSnapshotDeEvolucao(rotativasOrdenadas[0])
-    : null;
+  const primeira = await primeiraAvaliacao(id);
+  const avaliacaoAnterior = rotativas.length
+    ? extrairSnapshotDeEvolucao(rotativas[rotativas.length - 1])
+    : primeira
+      ? extrairSnapshotDeEvolucao(primeira)
+      : null;
 
   return (
     <div>
@@ -89,6 +89,7 @@ export default async function AntropometriaPage({ params }: Props) {
         idade={idade}
         pesoKg={pesoKg}
         alturaCm={alturaCm}
+        dataAvaliacao={anamnese?.data_avaliacao?.toISOString?.().slice(0, 10) || null}
         avaliacaoAnteriorInicial={avaliacaoAnterior}
         historicoAvaliacoes={historico}
       />

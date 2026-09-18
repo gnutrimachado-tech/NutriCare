@@ -16,18 +16,27 @@ export const dynamic = "force-dynamic";
 
 function fmtData(d: Date | string | null | undefined) {
   if (!d) return "";
-  // String "YYYY-MM-DD": formata direto, sem conversão de fuso.
-  if (typeof d === "string") {
-    const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) return `${m[3]}/${m[2]}/${m[1]}`;
-  }
+  const texto = String(d);
+  const dataDireta = texto.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dataDireta) return `${dataDireta[3]}/${dataDireta[2]}/${dataDireta[1]}`;
   const date = new Date(d);
   if (Number.isNaN(date.getTime())) return "";
-  // data_avaliacao é gravada como meia-noite UTC: lê em UTC.
-  const dd = String(date.getUTCDate()).padStart(2, "0");
-  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const yyyy = date.getUTCFullYear();
-  return `${dd}/${mm}/${yyyy}`;
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
+function fmtDataEscolhida(d: Date | string | null | undefined) {
+  if (!d) return "";
+  if (d instanceof Date) {
+    const dd = String(d.getUTCDate()).padStart(2, "0");
+    const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+    return `${dd}/${mm}/${d.getUTCFullYear()}`;
+  }
+  return fmtData(d);
 }
 
 export async function GET(req: NextRequest) {
@@ -43,10 +52,8 @@ export async function GET(req: NextRequest) {
       const snap = extrairSnapshotDeEvolucao(r);
       return {
         id: r.id,
-        createdAt: r.created_at?.toISOString?.() || null,
-        // Data REAL da avaliação (a que o nutri informou), não a de digitação.
-        dataAvaliacao: snap?.dataAvaliacao || r.data_avaliacao?.toISOString?.() || null,
-        dataLabel: fmtData(r.data_avaliacao || r.created_at),
+        createdAt: snap?.dataAvaliacao || r.data_avaliacao?.toISOString?.() || r.created_at?.toISOString?.() || null,
+        dataLabel: fmtDataEscolhida(snap?.dataAvaliacao || r.data_avaliacao) || fmtData(r.created_at),
         resumo: snap?.resumo || {
           pesoKg: Number(r.peso ?? 0) || null,
           bodyFatPct: Number(r.percentual_gordura ?? 0) || null,
@@ -56,7 +63,7 @@ export async function GET(req: NextRequest) {
           imme: null,
           img: null,
           ffmi: null,
-          createdAt: r.created_at?.toISOString?.() || null,
+          createdAt: r.data_avaliacao?.toISOString?.() || r.created_at?.toISOString?.() || null,
           protocolLabel: "",
         },
         dobras: snap?.dobras || {},
@@ -75,6 +82,7 @@ export async function GET(req: NextRequest) {
 
 type BodyShape = {
   pacienteId?: string;
+  dataAvaliacao?: string | null;
   protocolLabel?: string;
   currentDobras?: Record<string, number>;
   currentCircunferencias?: Record<string, number>;
@@ -102,6 +110,7 @@ export async function POST(req: NextRequest) {
     // O histórico só é persistido no fluxo do /download.
     const snapshot = buildAvaliacaoSnapshot({
       pacienteId: body.pacienteId,
+      dataAvaliacao: body.dataAvaliacao || null,
       protocolLabel: body.protocolLabel || body.resumo?.protocolLabel || "",
       currentDobras: body.currentDobras || {},
       currentCircunferencias: body.currentCircunferencias || {},
@@ -122,34 +131,6 @@ export async function POST(req: NextRequest) {
   } catch (e: any) {
     return NextResponse.json(
       { ok: false, erro: e?.message ?? "Erro ao montar snapshot" },
-      { status: 500 }
-    );
-  }
-}
-
-// DELETE /api/avaliacao-fisica/historico?id=<evolucaoId>&pacienteId=<pacienteId>
-// Apaga do banco (tabela evolucao_corporal) a avaliação salva, chamada pelo
-// botão ✕ ao lado da caixa "Comparar com" na aba Antropometria.
-export async function DELETE(req: NextRequest) {
-  try {
-    const url = new URL(req.url);
-    const id = url.searchParams.get("id");
-    const pacienteId = url.searchParams.get("pacienteId");
-    if (!id) {
-      return NextResponse.json({ ok: false, erro: "id ausente" }, { status: 400 });
-    }
-
-    // Segurança: só apaga se o registro pertencer ao paciente informado.
-    const registro = await prisma.evolucao_corporal.findUnique({ where: { id } });
-    if (!registro || (pacienteId && registro.paciente_id !== pacienteId)) {
-      return NextResponse.json({ ok: false, erro: "Avaliação não encontrada" }, { status: 404 });
-    }
-
-    await prisma.evolucao_corporal.delete({ where: { id } });
-    return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, erro: e?.message ?? "Erro ao excluir avaliação" },
       { status: 500 }
     );
   }

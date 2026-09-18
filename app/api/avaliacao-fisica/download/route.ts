@@ -18,7 +18,6 @@ import {
   listarUltimasTresAvaliacoes,
   primeiraAvaliacao,
   extrairSnapshotDeEvolucao,
-  mapaSnapshotParaNumeros,
 } from "@/lib/avaliacaoHistorico";
 
 export const runtime = "nodejs";
@@ -26,7 +25,6 @@ export const dynamic = "force-dynamic";
 
 type BodyShape = {
   pacienteId?: string;
-  dataAvaliacao?: string | null;
   sex?: "M" | "F" | string;
   idade?: number;
   alturaCm?: number;
@@ -41,24 +39,38 @@ type BodyShape = {
   currentCircunferencias?: Record<string, number>;
   previousDobras?: Record<string, number>;
   previousCircunferencias?: Record<string, number>;
+  dataAvaliacao?: string | null;
   // Ids das avaliações (1ª/2ª/3ª) marcadas nas caixas de seleção da aba Antropometria
   evolucaoSelecionadaIds?: string[];
 };
 
 function fmtData(d: Date | string | null | undefined) {
   if (!d) return "";
-  // String "YYYY-MM-DD": formata direto, sem conversão de fuso (evita o dia
-  // "voltar" em fusos negativos).
-  if (typeof d === "string") {
-    const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) return `${m[3]}/${m[2]}`;
-  }
+  const texto = String(d);
+  const dataDireta = texto.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dataDireta) return `${dataDireta[3]}/${dataDireta[2]}/${dataDireta[1]}`;
   const date = new Date(d);
   if (Number.isNaN(date.getTime())) return "";
-  // data_avaliacao é gravada como meia-noite UTC: lê em UTC.
-  const dd = String(date.getUTCDate()).padStart(2, "0");
-  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
-  return `${dd}/${mm}`;
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
+function fmtDataEscolhida(d: Date | string | null | undefined) {
+  if (!d) return "";
+  if (d instanceof Date) {
+    const dd = String(d.getUTCDate()).padStart(2, "0");
+    const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+    return `${dd}/${mm}/${d.getUTCFullYear()}`;
+  }
+  return fmtData(d);
+}
+
+function dataRegistro(r: { data_avaliacao?: Date | null; created_at?: Date | null }, snapshot: any) {
+  return fmtDataEscolhida(snapshot?.dataAvaliacao || r.data_avaliacao) || fmtData(r.created_at);
 }
 
 export async function POST(req: NextRequest) {
@@ -101,15 +113,30 @@ export async function POST(req: NextRequest) {
       bfPct: Number(body.bodyFatPct) || 0,
     });
 
+    // Guarda a lista que estava visível antes de gravar a avaliação atual.
+    // Isso preserva a seleção do nutri mesmo quando a rotação do histórico
+    // remove a antiga avaliação intermediária.
+    const rotativasAntes = await listarUltimasTresAvaliacoes(pacienteId);
+    const evolucaoHistorico = rotativasAntes.map((r) => {
+      const snap = extrairSnapshotDeEvolucao(r);
+      return {
+        id: r.id,
+        data: dataRegistro(r, snap),
+        peso: snap?.resumo.pesoKg ?? (Number(r.peso ?? 0) || null),
+        massaMuscular: snap?.resumo.massaMuscularKg ?? (Number(r.massa_muscular ?? 0) || null),
+        bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
+      };
+    });
+
     // ==============================
     // 1) SALVA no histórico ANTES de renderizar o PDF (rotação 1ª/2ª/3ª)
     // ==============================
-    const registroAtual = await salvarAvaliacaoHistorico({
+    await salvarAvaliacaoHistorico({
       pacienteId,
-      dataAvaliacao: body.dataAvaliacao || null,
       protocolLabel: body.protocolLabel || "",
       currentDobras: body.currentDobras || {},
       currentCircunferencias: body.currentCircunferencias || {},
+      dataAvaliacao: body.dataAvaliacao || null,
       resumo: {
         pesoKg: resumo.pesoKg,
         bodyFatPct: resumo.bfPct,
@@ -124,60 +151,25 @@ export async function POST(req: NextRequest) {
     });
 
     // ==============================
-    // 2) Monta evolução com os registros anteriores. O resultado atual já
-    // será acrescentado pelo PDF como último ponto; não o duplica na série.
+    // 2) Monta evolução com os 3 registros já rotacionados
     // ==============================
     const rotativas = await listarUltimasTresAvaliacoes(pacienteId);
-    const historicoAnterior = rotativas.filter((r) => r.id !== registroAtual.id);
-    // Data do ponto atual = data da avaliação informada pelo nutri.
-    const criadoEmAtual = registroAtual.snapshot.dataAvaliacao
-      ? new Date(registroAtual.snapshot.dataAvaliacao)
-      : registroAtual.createdAt
-        ? new Date(registroAtual.createdAt)
-        : new Date();
-    const evolucao = historicoAnterior.map((r) => {
+    const evolucao = rotativas.map((r) => {
       const snap = extrairSnapshotDeEvolucao(r);
       return {
-        data: fmtData(r.data_avaliacao || r.created_at),
+        data: dataRegistro(r, snap),
         peso: snap?.resumo.pesoKg ?? (Number(r.peso ?? 0) || null),
         massaMuscular: snap?.resumo.massaMuscularKg ?? (Number(r.massa_muscular ?? 0) || null),
         bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
       };
     });
-    const evolucaoAtual = {
-      data: fmtData(criadoEmAtual),
-      peso: resumo.pesoKg,
-      massaMuscular: resumo.massaMagraKg,
-      bfPct: resumo.bfPct,
-    };
-    // Mesma lista com o id de cada avaliação — alimenta as caixas de seleção
-    const evolucaoHistorico = historicoAnterior.map((r) => {
-      const snap = extrairSnapshotDeEvolucao(r);
-      return {
-        id: r.id,
-        data: fmtData(r.data_avaliacao || r.created_at),
-        createdAt: r.created_at?.toISOString?.() || null,
-        peso: snap?.resumo.pesoKg ?? (Number(r.peso ?? 0) || null),
-        massaMuscular: snap?.resumo.massaMuscularKg ?? (Number(r.massa_muscular ?? 0) || null),
-        bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
-      };
-    });
-
     const primeira = await primeiraAvaliacao(pacienteId);
-    const anterior = historicoAnterior[historicoAnterior.length - 1] || null;
-    const anteriorSnap = anterior ? extrairSnapshotDeEvolucao(anterior) : null;
-    // "Antes" das tabelas de Dobras/Circunferências = SEMPRE a 1ª avaliação
-    // (a de data MAIS ANTIGA). A variação dos cards (resumo N vs N-1)
-    // continua usando a avaliação imediatamente anterior.
     const primeiraSnap = primeira ? extrairSnapshotDeEvolucao(primeira) : null;
-    const previousDobras = primeiraSnap
-      ? mapaSnapshotParaNumeros(primeiraSnap.dobras)
-      : body.previousDobras || {};
-    const previousCircunferencias = primeiraSnap
-      ? mapaSnapshotParaNumeros(primeiraSnap.circunferencias)
-      : body.previousCircunferencias || {};
     const dataAvaliacaoInicial =
-      (primeira?.data_avaliacao || primeira?.created_at)?.toISOString?.() || null;
+      primeiraSnap?.dataAvaliacao ||
+      primeira?.data_avaliacao?.toISOString?.() ||
+      primeira?.created_at?.toISOString?.() ||
+      null;
 
     const imagemFrenteUrl = imagemFrontalUrl(sexo, resumo.imagem.codigo);
     const imagemLateralUrlV = imagemLateralUrl(sexo, resumo.imagem.codigo);
@@ -206,7 +198,7 @@ export async function POST(req: NextRequest) {
         nascimento: paciente.data_nascimento ? new Date(paciente.data_nascimento).toISOString() : null,
       },
       dados: {
-        data: new Date().toLocaleDateString("pt-BR"),
+         data: fmtDataEscolhida(body.dataAvaliacao) || fmtData(new Date()),
         pesoKg: resumo.pesoKg,
         pctAgua: resumo.pctAgua,
         massaMagraKg: resumo.massaMagraKg,
@@ -218,7 +210,7 @@ export async function POST(req: NextRequest) {
         classificacaoAgua: resumo.classificacoes.agua,
         classificacaoMassaMuscular: resumo.classificacoes.massaMuscular,
         classificacaoImme: resumo.classificacoes.imme,
-        classificacaoMassaAdiposa: resumo.classificacoes.img,
+         classificacaoMassaAdiposa: resumo.classificacoes.massaAdiposa,
         classificacaoImg: resumo.classificacoes.img,
         classificacaoFfmi: resumo.classificacoes.ffmi,
         classificacaoGordura: resumo.classificacoes.gordura,
@@ -227,20 +219,20 @@ export async function POST(req: NextRequest) {
         compareResults: Boolean(body.compareResults),
         currentDobras: body.currentDobras || {},
         currentCircunferencias: body.currentCircunferencias || {},
-        previousDobras,
-        previousCircunferencias,
-        previousSummary: anteriorSnap
+        previousDobras: body.previousDobras || {},
+        previousCircunferencias: body.previousCircunferencias || {},
+        previousSummary: primeiraSnap
           ? {
-              pesoKg: anteriorSnap.resumo.pesoKg,
-              bodyFatPct: anteriorSnap.resumo.bodyFatPct,
-              massaMuscularKg: anteriorSnap.resumo.massaMuscularKg,
-              massaAdiposaKg: anteriorSnap.resumo.massaAdiposaKg,
-              aguaPct: anteriorSnap.resumo.aguaPct,
-              imme: anteriorSnap.resumo.imme,
-              img: anteriorSnap.resumo.img,
-              ffmi: anteriorSnap.resumo.ffmi,
-              createdAt: anterior?.created_at?.toISOString?.() || null,
-              protocolLabel: anteriorSnap.resumo.protocolLabel || "",
+              pesoKg: primeiraSnap.resumo.pesoKg,
+              bodyFatPct: primeiraSnap.resumo.bodyFatPct,
+              massaMuscularKg: primeiraSnap.resumo.massaMuscularKg,
+              massaAdiposaKg: primeiraSnap.resumo.massaAdiposaKg,
+              aguaPct: primeiraSnap.resumo.aguaPct,
+              imme: primeiraSnap.resumo.imme,
+              img: primeiraSnap.resumo.img,
+              ffmi: primeiraSnap.resumo.ffmi,
+               createdAt: dataAvaliacaoInicial,
+              protocolLabel: primeiraSnap.resumo.protocolLabel || "",
             }
           : null,
         evolucao,
@@ -248,8 +240,6 @@ export async function POST(req: NextRequest) {
         evolucaoSelecionadaIds: Array.isArray(body.evolucaoSelecionadaIds)
           ? body.evolucaoSelecionadaIds
           : [],
-        evolucaoAtual,
-        evolucaoAtualId: registroAtual.id,
         dataAvaliacaoInicial,
       },
       nutricionista,

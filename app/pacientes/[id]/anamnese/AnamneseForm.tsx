@@ -96,12 +96,6 @@ function normalizeLabel(value: string) {
     .toLowerCase();
 }
 
-function valorData(valor: unknown) {
-  if (!valor) return "";
-  const texto = String(valor);
-  return /^\d{4}-\d{2}-\d{2}/.test(texto) ? texto.slice(0, 10) : "";
-}
-
 function extraKey(fieldId: string | undefined, label: string) {
   if (fieldId && fieldId.startsWith("field_")) return `field:${fieldId}`;
   return `label:${normalizeLabel(label)}`;
@@ -161,8 +155,6 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
   const [camposSelecionados, setCamposSelecionados] = useState<string[]>([]);
   const [envioStatus, setEnvioStatus]       = useState<"idle" | "loading" | "ok" | "erro">("idle");
   const [envioMsg, setEnvioMsg]             = useState("");
-  const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false);
-  const [avaliacaoMsg, setAvaliacaoMsg]     = useState("");
 
   // ── Carrega campos globais e seleção salva ao montar / trocar paciente ──
   useEffect(() => {
@@ -253,6 +245,16 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
         : Number(valor);
     if (isNaN(numero)) return "";
     return Math.round(numero).toString();
+  }
+
+  function valorData(valor: unknown) {
+    if (!valor) return "";
+    const texto = String(valor);
+    const dataDireta = texto.match(/^\d{4}-\d{2}-\d{2}/);
+    if (dataDireta) return dataDireta[0];
+
+    const data = new Date(texto);
+    return Number.isNaN(data.getTime()) ? "" : data.toISOString().slice(0, 10);
   }
 
   function validarFormulario(event: React.FormEvent<HTMLFormElement>) {
@@ -385,52 +387,6 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
     setCamposSelecionados([]);
   }
 
-  // ── Salvar avaliação: quando o paciente já traz a avaliação física pronta,
-  //    o nutri sobe os valores (peso, % gordura, massa muscular etc.) + a data
-  //    e grava no histórico rotativo 1ª / 2ª / 3ª. Não gera PDF nem envia e-mail. ──
-  async function handleSalvarAvaliacao() {
-    if (salvandoAvaliacao) return;
-    const ler = (nome: string) =>
-      Number(String((formRef.current?.elements.namedItem(nome) as HTMLInputElement | null)?.value || "").replace(",", ".")) || null;
-    const dataInput = formRef.current?.elements.namedItem("data_avaliacao") as HTMLInputElement | null;
-    const peso = ler("peso");
-    const gordura = ler("percentual_gordura");
-    const muscular = ler("massa_muscular");
-    if (!(peso && peso > 0) && !(gordura && gordura > 0) && !(muscular && muscular > 0)) {
-      setAvaliacaoMsg("Informe ao menos peso, % de gordura ou massa muscular para salvar a avaliação.");
-      return;
-    }
-    setSalvandoAvaliacao(true);
-    setAvaliacaoMsg("Salvando avaliação...");
-    try {
-      const resp = await fetch("/api/avaliacao-fisica/salvar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pacienteId,
-          dataAvaliacao: dataInput?.value || null,
-          resumo: {
-            pesoKg: peso,
-            bodyFatPct: gordura,
-            massaMuscularKg: muscular,
-            massaAdiposaKg: ler("massa_adiposa"),
-            aguaPct: ler("agua_corporal"),
-          },
-        }),
-      });
-      const json = await resp.json().catch(() => ({}));
-      if (!resp.ok || json?.ok === false) {
-        setAvaliacaoMsg(json?.erro || "Não foi possível salvar a avaliação.");
-      } else {
-        setAvaliacaoMsg(`Avaliação nº ${json?.numeroAvaliacao ?? "?"} salva no histórico (comparação no PDF da Antropometria).`);
-      }
-    } catch (e: any) {
-      setAvaliacaoMsg(e?.message || "Erro ao salvar avaliação.");
-    } finally {
-      setSalvandoAvaliacao(false);
-    }
-  }
-
   async function handleEnviarFormulario() {
     if (camposSelecionados.length === 0) {
       alert("Selecione pelo menos um campo para enviar.");
@@ -499,42 +455,6 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
           </div>
         </div>
 
-        <div style={dataAvaliacaoRowStyle}>
-          <div style={dataAvaliacaoFieldStyle}>
-            <label style={campoLabelStyle}>Data da avaliação</label>
-            <input
-              type="date"
-              name="data_avaliacao"
-              style={inputLinhaStyle}
-              defaultValue={valorData(dados?.data_avaliacao)}
-            />
-          </div>
-          <button
-            type="button"
-            onClick={handleSalvarAvaliacao}
-            disabled={salvandoAvaliacao}
-            style={{
-              padding: "10px 16px",
-              background: "#2f5d31",
-              color: "#fff",
-              border: "none",
-              borderRadius: "10px",
-              fontWeight: 700,
-              cursor: salvandoAvaliacao ? "not-allowed" : "pointer",
-              fontSize: "13px",
-              opacity: salvandoAvaliacao ? 0.55 : 1,
-            }}
-          >
-            {salvandoAvaliacao ? "Salvando..." : "💾 Salvar avaliação"}
-          </button>
-        </div>
-
-        {avaliacaoMsg && (
-          <div style={{ marginBottom: "16px", padding: "10px 12px", background: "#f6f7f4", border: "1px solid #e6ebde", borderRadius: "8px", fontSize: "13px", color: "#334" }}>
-            {avaliacaoMsg}
-          </div>
-        )}
-
         {/* Campos de medição numérica */}
         <div style={rowStyle}>
           <div style={campoPequenoStyle}>
@@ -561,6 +481,21 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
             <label style={campoLabelStyle}>Água Corporal (%)</label>
             <input type="text" name="agua_corporal" style={inputLinhaStyle} defaultValue={valorDecimal(dados?.agua_corporal)} />
           </div>
+        </div>
+
+        <div style={dataAvaliacaoBarStyle}>
+          <div>
+            <label style={campoLabelStyle}>Data da avaliação</label>
+            <div style={dataAvaliacaoHintStyle}>
+              Usada pela Antropometria e pelo PDF para identificar a avaliação atual.
+            </div>
+          </div>
+          <input
+            type="date"
+            name="data_avaliacao"
+            style={dataAvaliacaoInputStyle}
+            defaultValue={valorData(dados?.data_avaliacao)}
+          />
         </div>
 
         {/* Campos de texto (fixos + dinâmicos) */}
@@ -671,10 +606,27 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
 }
 
 const rowStyle = { display: "flex", gap: "12px", marginBottom: "12px", flexWrap: "nowrap" as const, alignItems: "stretch" };
-const dataAvaliacaoRowStyle = { display: "flex", gap: "12px", marginBottom: "20px", alignItems: "flex-end", flexWrap: "wrap" as const };
-const dataAvaliacaoFieldStyle = { width: "220px", display: "flex" as const, flexDirection: "column" as const };
-const dataAvaliacaoHintStyle = { fontSize: "12px", color: "#64748b", paddingBottom: "12px", maxWidth: "620px" };
 const campoPequenoStyle = { flex: 1, minWidth: 0, display: "flex" as const, flexDirection: "column" as const };
 const campoLabelStyle = { fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "4px" } as const;
 const inputLinhaStyle  = { width: "100%", padding: "12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "14px" } as const;
 const textareaStyle    = { width: "100%", padding: "10px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "14px", resize: "vertical" as const, boxSizing: "border-box" as const } as const;
+const dataAvaliacaoBarStyle = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "16px",
+  marginBottom: "12px",
+  padding: "10px 12px",
+  border: "1px solid #e2e8f0",
+  borderRadius: "8px",
+  background: "#f8fafc",
+} as const;
+const dataAvaliacaoHintStyle = { fontSize: "11px", color: "#64748b" } as const;
+const dataAvaliacaoInputStyle = {
+  width: "170px",
+  padding: "10px 12px",
+  border: "1px solid #cbd5e1",
+  borderRadius: "8px",
+  fontSize: "14px",
+  background: "#fff",
+} as const;
