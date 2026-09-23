@@ -14,9 +14,7 @@ import {
   imagemLateralUrl,
 } from "@/lib/bodyComposition";
 import {
-  salvarAvaliacaoHistorico,
   listarUltimasTresAvaliacoes,
-  primeiraAvaliacao,
   extrairSnapshotDeEvolucao,
   mapaSnapshotParaNumerosComPonte,
   evolucaoPontoDeRegistro,
@@ -28,6 +26,7 @@ export const dynamic = "force-dynamic";
 
 type BodyShape = {
   pacienteId?: string;
+  avaliacaoId?: string | null;
   dataAvaliacao?: string | null;
   sex?: "M" | "F" | string;
   idade?: number;
@@ -103,44 +102,14 @@ export async function POST(req: NextRequest) {
       bfPct: Number(body.bodyFatPct) || 0,
     });
 
-    // ==============================
-    // 1) SALVA no histórico ANTES de renderizar o PDF (rotação 1ª/2ª/3ª)
-    // ==============================
-    const registroAtual = await salvarAvaliacaoHistorico({
-      pacienteId,
-      dataAvaliacao: body.dataAvaliacao || null,
-      protocolLabel: body.protocolLabel || "",
-      currentDobras: body.currentDobras || {},
-      currentCircunferencias: body.currentCircunferencias || {},
-      resumo: {
-        pesoKg: resumo.pesoKg,
-        bodyFatPct: resumo.bfPct,
-        massaMuscularKg: resumo.massaMagraKg,
-        massaAdiposaKg: resumo.massaGordaKg,
-        aguaPct: resumo.pctAgua,
-        imme: resumo.imme,
-        img: resumo.img,
-        ffmi: resumo.ffmi,
-        protocolLabel: body.protocolLabel || "",
-      },
-    });
-
-    // ==============================
-    // 2) Monta evolução com os registros anteriores. O resultado atual já
-    // será acrescentado pelo PDF como último ponto; não o duplica na série.
-    // ==============================
+    // O PDF não altera o histórico. A persistência acontece exclusivamente
+    // quando o nutricionista clica em "Salvar avaliação".
     const rotativas = await listarUltimasTresAvaliacoes(pacienteId);
-    // REGRA: ordena pela DATA DA AVALIAÇÃO (a informada pelo nutri). Assim a
-    // 1ª é sempre a mais antiga e a 3ª a mais recente, mesmo com datas antigas.
+    // Se o PDF for gerado depois de salvar, exclui o registro atual para não
+    // duplicá-lo no gráfico.
     const historicoAnterior = ordenarAvaliacoes(
-      rotativas.filter((r) => r.id !== registroAtual.id)
+      rotativas.filter((r) => !body.avaliacaoId || r.id !== body.avaliacaoId)
     );
-    // Data do ponto atual = data da avaliação informada pelo nutri.
-    const criadoEmAtual = registroAtual.snapshot.dataAvaliacao
-      ? new Date(registroAtual.snapshot.dataAvaliacao)
-      : registroAtual.createdAt
-        ? new Date(registroAtual.createdAt)
-        : new Date();
     const evolucao = historicoAnterior.map((r) => {
       const snap = extrairSnapshotDeEvolucao(r);
       return {
@@ -151,7 +120,7 @@ export async function POST(req: NextRequest) {
       };
     });
     const evolucaoAtual = {
-      data: fmtData(criadoEmAtual),
+      data: fmtData(body.dataAvaliacao) || fmtData(new Date()),
       peso: resumo.pesoKg,
       massaMuscular: resumo.massaMagraKg,
       bfPct: resumo.bfPct,
@@ -162,7 +131,7 @@ export async function POST(req: NextRequest) {
       evolucaoPontoDeRegistro(r, fmtData)
     );
 
-    const primeira = await primeiraAvaliacao(pacienteId);
+    const primeira = historicoAnterior[0] || null;
     const anterior = historicoAnterior[historicoAnterior.length - 1] || null;
     const anteriorSnap = anterior ? extrairSnapshotDeEvolucao(anterior) : null;
     // "Antes" das tabelas de Dobras/Circunferências = SEMPRE a 1ª avaliação
@@ -219,7 +188,7 @@ export async function POST(req: NextRequest) {
         classificacaoAgua: resumo.classificacoes.agua,
         classificacaoMassaMuscular: resumo.classificacoes.massaMuscular,
         classificacaoImme: resumo.classificacoes.imme,
-        classificacaoMassaAdiposa: resumo.classificacoes.img,
+         classificacaoMassaAdiposa: resumo.classificacoes.massaAdiposa,
         classificacaoImg: resumo.classificacoes.img,
         classificacaoFfmi: resumo.classificacoes.ffmi,
         classificacaoGordura: resumo.classificacoes.gordura,
@@ -227,7 +196,7 @@ export async function POST(req: NextRequest) {
         imagemLateralUrl: imagemLateralUrlV,
         compareResults: Boolean(body.compareResults),
         currentDobras: body.currentDobras || {},
-        currentCircunferencias: body.currentCircunferencias || {},
+        currentCircunferencias: mapaSnapshotParaNumerosComPonte(body.currentCircunferencias || {}),
         previousDobras,
         previousCircunferencias,
         previousSummary: anteriorSnap
@@ -250,9 +219,9 @@ export async function POST(req: NextRequest) {
           ? body.evolucaoSelecionadaIds
           : [],
         evolucaoAtual,
-        evolucaoAtualId: registroAtual.id,
+        evolucaoAtualId: body.avaliacaoId || null,
         // Data REAL da avaliação atual (a informada pelo nutri).
-        dataAvaliacaoAtual: registroAtual.snapshot.dataAvaliacao || null,
+        dataAvaliacaoAtual: body.dataAvaliacao || null,
         dataAvaliacaoInicial,
       },
       nutricionista,
