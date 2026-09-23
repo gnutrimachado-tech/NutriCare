@@ -132,8 +132,8 @@ const CIRC_LABELS: Record<string, string> = {
   quadril: "Quadril",
   abdomen: "Abdômen",
   peitoral: "Peitoral",
-  braco_direito: "Braço direito",
-  braco_esquerdo: "Braço esquerdo",
+  braco_direito: "Bíceps direito",
+  braco_esquerdo: "Bíceps esquerdo",
   biceps: "Bíceps",
   biceps_direito: "Bíceps direito",
   biceps_esquerdo: "Bíceps esquerdo",
@@ -578,18 +578,18 @@ type ReferenciaFaixa = Record<Exclude<ReferenciaParametro, "peso">, string>;
 
 const REFERENCIAS_COMPOSICAO: Record<"M" | "F", ReferenciaFaixa[]> = {
   M: [
-    { agua: "≥ 58,0%", massaMuscular: "≥ 58,0 kg", imme: "≥ 12,6 kg/m²", massaMagra: "≥ 58,0 kg", massaAdiposa: "2,3–2,9 kg/m²", img: "2,3–2,9 kg/m²", gordura: "6,1–10,0%" },
-    { agua: "≥ 58,0%", massaMuscular: "≥ 58,0 kg", imme: "≥ 12,6 kg/m²", massaMagra: "≥ 58,0 kg", massaAdiposa: "2,3–2,9 kg/m²", img: "2,3–2,9 kg/m²", gordura: "11,1–15,0%" },
-    { agua: "≥ 58,0%", massaMuscular: "≥ 58,0 kg", imme: "≥ 12,6 kg/m²", massaMagra: "≥ 58,0 kg", massaAdiposa: "2,3–2,9 kg/m²", img: "2,3–2,9 kg/m²", gordura: "14,1–18,0%" },
-    { agua: "≥ 58,0%", massaMuscular: "≥ 56,0 kg", imme: "≥ 12,4 kg/m²", massaMagra: "≥ 56,0 kg", massaAdiposa: "3,2–3,9 kg/m²", img: "3,2–3,9 kg/m²", gordura: "16,1–20,0%" },
-    { agua: "≥ 58,0%", massaMuscular: "≥ 53,0 kg", imme: "≥ 11,5 kg/m²", massaMagra: "≥ 53,0 kg", massaAdiposa: "3,6–4,5 kg/m²", img: "3,6–4,5 kg/m²", gordura: "18,1–21,0%" },
+    { agua: ">= 58,0%", massaMuscular: ">= 58,0 kg", imme: ">= 12,6 kg/m²", massaMagra: ">= 58,0 kg", massaAdiposa: "3,1 a 7,0 kg", img: "2,3 a 2,9 kg/m²", gordura: "6,1 a 10,0%" },
+    { agua: ">= 58,0%", massaMuscular: ">= 58,0 kg", imme: ">= 12,6 kg/m²", massaMagra: ">= 58,0 kg", massaAdiposa: "5,0 a 9,8 kg", img: "2,3 a 2,9 kg/m²", gordura: "11,1 a 15,0%" },
+    { agua: ">= 58,0%", massaMuscular: ">= 58,0 kg", imme: ">= 12,6 kg/m²", massaMagra: ">= 58,0 kg", massaAdiposa: "6,0 a 11,5 kg", img: "2,3 a 2,9 kg/m²", gordura: "14,1 a 18,0%" },
+    { agua: ">= 58,0%", massaMuscular: ">= 56,0 kg", imme: ">= 12,4 kg/m²", massaMagra: ">= 56,0 kg", massaAdiposa: "8,5 a 14,5 kg", img: "3,2 a 3,9 kg/m²", gordura: "16,1 a 20,0%" },
+    { agua: ">= 58,0%", massaMuscular: ">= 53,0 kg", imme: ">= 11,5 kg/m²", massaMagra: ">= 53,0 kg", massaAdiposa: "9,8 a 15,8 kg", img: "3,6 a 4,5 kg/m²", gordura: "18,1 a 21,0%" },
   ],
   F: [
-    { agua: "≥ 50,0%", massaMuscular: "≥ 42,0 kg", imme: "≥ 9,7 kg/m²", massaMagra: "≥ 42,0 kg", massaAdiposa: "4,4–5,3 kg/m²", img: "4,4–5,3 kg/m²", gordura: "16,1–19,0%" },
-    { agua: "≥ 50,0%", massaMuscular: "≥ 42,0 kg", imme: "≥ 9,7 kg/m²", massaMagra: "≥ 42,0 kg", massaAdiposa: "4,4–5,3 kg/m²", img: "4,4–5,3 kg/m²", gordura: "16,1–20,0%" },
-    { agua: "≥ 50,0%", massaMuscular: "≥ 42,0 kg", imme: "≥ 9,7 kg/m²", massaMagra: "≥ 42,0 kg", massaAdiposa: "4,4–5,3 kg/m²", img: "4,4–5,3 kg/m²", gordura: "19,1–23,0%" },
-    { agua: "≥ 50,0%", massaMuscular: "≥ 40,5 kg", imme: "≥ 9,5 kg/m²", massaMagra: "≥ 40,5 kg", massaAdiposa: "5,4–6,4 kg/m²", img: "5,4–6,4 kg/m²", gordura: "21,1–25,0%" },
-    { agua: "≥ 50,0%", massaMuscular: "≥ 38,0 kg", imme: "≥ 8,9 kg/m²", massaMagra: "≥ 38,0 kg", massaAdiposa: "6,1–7,2 kg/m²", img: "6,1–7,2 kg/m²", gordura: "22,1–26,0%" },
+    { agua: ">= 50,0%", massaMuscular: ">= 42,0 kg", imme: ">= 9,7 kg/m²", massaMagra: ">= 42,0 kg", massaAdiposa: "8,1 a 11,5 kg", img: "4,4 a 5,3 kg/m²", gordura: "16,1 a 19,0%" },
+    { agua: ">= 50,0%", massaMuscular: ">= 42,0 kg", imme: ">= 9,7 kg/m²", massaMagra: ">= 42,0 kg", massaAdiposa: "8,5 a 12,5 kg", img: "4,4 a 5,3 kg/m²", gordura: "16,1 a 20,0%" },
+    { agua: ">= 50,0%", massaMuscular: ">= 42,0 kg", imme: ">= 9,7 kg/m²", massaMagra: ">= 42,0 kg", massaAdiposa: "10,5 a 14,8 kg", img: "4,4 a 5,3 kg/m²", gordura: "19,1 a 23,0%" },
+    { agua: ">= 50,0%", massaMuscular: ">= 40,5 kg", imme: ">= 9,5 kg/m²", massaMagra: ">= 40,5 kg", massaAdiposa: "12,0 a 16,5 kg", img: "5,4 a 6,4 kg/m²", gordura: "21,1 a 25,0%" },
+    { agua: ">= 50,0%", massaMuscular: ">= 38,0 kg", imme: ">= 8,9 kg/m²", massaMagra: ">= 38,0 kg", massaAdiposa: "13,0 a 17,8 kg", img: "6,1 a 7,2 kg/m²", gordura: "22,1 a 26,0%" },
   ],
 };
 
@@ -1094,11 +1094,11 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                   <Text style={styles.ccColParamText}>Massa adiposa</Text>
                 </View>
                 <ReferenciaCelula parametro="massaAdiposa" sexo={paciente.sexo} idade={paciente.idade} />
-                <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
+                <Text style={styles.ccColRes}>{toFixedPt(dados.massaGordaKg)} kg</Text>
                 <View style={styles.ccColEval}>
                   <EvalPill
-                    cor={(dados.classificacaoMassaAdiposa || dados.classificacaoImg)?.cor}
-                    label={(dados.classificacaoMassaAdiposa || dados.classificacaoImg)?.label}
+                    cor={dados.classificacaoMassaAdiposa?.cor}
+                    label={dados.classificacaoMassaAdiposa?.label}
                   />
                 </View>
               </View>
