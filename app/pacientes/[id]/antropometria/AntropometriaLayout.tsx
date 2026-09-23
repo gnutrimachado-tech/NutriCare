@@ -8,7 +8,7 @@ import {
   classificarAgua,
   classificarIMME,
   classificarIMG,
-  classificarFFMI,
+  classificarMassaLivreGordura,
   classificarPercentualGordura,
   calcularIMME,
   calcularIMG,
@@ -376,6 +376,8 @@ function readStoredVO2max(pacienteId: string) {
 
 function getSnapshotDateLabel(value?: string) {
   if (!value) return "—";
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) return `${match[3]}/${match[2]}/${match[1]}`;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleDateString("pt-BR");
@@ -1036,8 +1038,14 @@ export default function AntropometriaLayout({
       ? calcularFFMI(result.massaMuscular, alturaCm) : 0;
   const immeClass = immeVal > 0 ? classificarIMME(immeVal, sexoCodigo, idade) : null;
   const imgClass  = imgVal  > 0 ? classificarIMG(imgVal,  sexoCodigo, idade) : null;
-  const ffmiClass = ffmiVal > 0 ? classificarFFMI(ffmiVal, sexoCodigo) : null;
-  const gorduraClass = result.bodyFatPct !== null ? classificarPercentualGordura(result.bodyFatPct, sexoCodigo) : null;
+  const ffmiClass =
+    result.massaMuscular !== null
+      ? classificarMassaLivreGordura(result.massaMuscular, sexoCodigo, idade)
+      : null;
+  const gorduraClass =
+    result.bodyFatPct !== null
+      ? classificarPercentualGordura(result.bodyFatPct, sexoCodigo, idade)
+      : null;
   const aguaClass =
     aguaCorporalPct !== null ? classificarAgua(aguaCorporalPct, sexoCodigo) : null;
   const vo2maxAtual = pacienteId ? readStoredVO2max(pacienteId) : null;
@@ -1048,6 +1056,7 @@ export default function AntropometriaLayout({
   const [baixandoAvaliacao, setBaixandoAvaliacao] = useState(false);
   const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false);
   const [excluindoAvaliacaoId, setExcluindoAvaliacaoId] = useState<string | null>(null);
+  const [avaliacaoIdSalva, setAvaliacaoIdSalva] = useState<string | null>(null);
   const router = useRouter();
 
   // Data da avaliação (informada pelo nutri) — enviada ao salvar/baixar/enviar.
@@ -1084,6 +1093,29 @@ export default function AntropometriaLayout({
       return valid.includes(ultima.id) ? valid : [...valid, ultima.id];
     });
   }, [historicoOrdenado]);
+
+  function resumoAtualParaAvaliacao() {
+    const salvo = historicoOrdenado[historicoOrdenado.length - 1]?.snapshot?.resumo;
+    const calculado = result.bodyFatPct !== null;
+    return {
+      pesoKg: calculado ? pesoKg : parseStorageFloat(salvo?.pesoKg) ?? pesoKg,
+      bodyFatPct: calculado ? result.bodyFatPct : parseStorageFloat(salvo?.bodyFatPct),
+      massaMuscularKg: calculado
+        ? result.massaMuscular
+        : parseStorageFloat(salvo?.massaMuscularKg),
+      massaAdiposaKg: calculado
+        ? result.massaAdiposa
+        : parseStorageFloat(salvo?.massaAdiposaKg),
+      aguaPct: calculado ? aguaCorporalPct : parseStorageFloat(salvo?.aguaPct),
+      imme: calculado ? immeVal : parseStorageFloat(salvo?.imme),
+      img: calculado ? imgVal : parseStorageFloat(salvo?.img),
+      ffmi: calculado ? ffmiVal : parseStorageFloat(salvo?.ffmi),
+    };
+  }
+
+  const resumoAtual = resumoAtualParaAvaliacao();
+  const avaliacaoTemComposicao = resumoAtual.bodyFatPct !== null;
+
   function toggleEvolucaoSelecionada(id: string) {
     setEvolucaoSelecionadaIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -1230,42 +1262,36 @@ export default function AntropometriaLayout({
       dobras: currentDobras,
       circunferencias: currentCircunferencias,
       resumo: {
-        pesoKg,
-        bodyFatPct: result.bodyFatPct,
-        massaMuscularKg: result.massaMuscular,
-        massaAdiposaKg: result.massaAdiposa,
-        aguaPct: aguaCorporalPct,
-        imme: immeVal,
-        img: imgVal,
-        ffmi: ffmiVal,
+        pesoKg: resumoAtual.pesoKg,
+        bodyFatPct: resumoAtual.bodyFatPct,
+        massaMuscularKg: resumoAtual.massaMuscularKg,
+        massaAdiposaKg: resumoAtual.massaAdiposaKg,
+        aguaPct: resumoAtual.aguaPct,
+        imme: resumoAtual.imme,
+        img: resumoAtual.img,
+        ffmi: resumoAtual.ffmi,
       },
     };
   }
 
-  function persistAvaliacaoSnapshot() {
-    if (!pacienteId || typeof window === "undefined") return;
-    try {
-      const snapshot = buildCurrentSnapshot();
-      window.localStorage.setItem(`nutricare:avaliacao-snapshot:${pacienteId}`, JSON.stringify(snapshot));
-      setAvaliacaoAnterior(snapshot);
-    } catch {
-      // ignore
-    }
-  }
-
   function createAvaliacaoPayload() {
     const snapshot = buildCurrentSnapshot();
+    const avaliacaoDoMesmoDia = historicoOrdenado.find((h) => {
+      const raw = h.dataAvaliacao || h.createdAt || "";
+      return dataAvaliacao && String(raw).startsWith(dataAvaliacao);
+    });
     return {
       pacienteId,
+      avaliacaoId: avaliacaoIdSalva || avaliacaoDoMesmoDia?.id || null,
       dataAvaliacao: dataAvaliacao || null,
       sex: sexoCodigo,
       idade,
       alturaCm,
-      pesoKg,
-      bodyFatPct: result.bodyFatPct,
-      massaMuscularKg: result.massaMuscular,
-      massaAdiposaKg: result.massaAdiposa,
-      aguaPct: aguaCorporalPct,
+      pesoKg: resumoAtual.pesoKg,
+      bodyFatPct: resumoAtual.bodyFatPct,
+      massaMuscularKg: resumoAtual.massaMuscularKg,
+      massaAdiposaKg: resumoAtual.massaAdiposaKg,
+      aguaPct: resumoAtual.aguaPct,
       protocolLabel: protocoloAtual?.label ?? "",
       vo2max: vo2maxAtual,
       compareResults: compararResultados,
@@ -1321,9 +1347,9 @@ export default function AntropometriaLayout({
             massaMuscularKg: payload.massaMuscularKg,
             massaAdiposaKg: payload.massaAdiposaKg,
             aguaPct: payload.aguaPct,
-            imme: immeVal,
-            img: imgVal,
-            ffmi: ffmiVal,
+            imme: resumoAtual.imme,
+            img: resumoAtual.img,
+            ffmi: resumoAtual.ffmi,
             protocolLabel: payload.protocolLabel,
           },
         }),
@@ -1335,10 +1361,11 @@ export default function AntropometriaLayout({
         setAvaliacaoMsg(
           `Avaliação salva como ${json?.numeroAvaliacao ?? "—"}ª avaliação (data ${
             json?.dataAvaliacao
-              ? new Date(json.dataAvaliacao).toLocaleDateString("pt-BR")
+              ? getSnapshotDateLabel(json.dataAvaliacao)
               : "—"
           }).`
         );
+        if (json?.id) setAvaliacaoIdSalva(json.id);
         router.refresh();
       }
     } catch (e: any) {
@@ -1374,8 +1401,8 @@ export default function AntropometriaLayout({
 
   async function handleEnviarAvaliacao() {
     if (!pacienteId || enviandoAvaliacao) return;
-    if (result.bodyFatPct === null) {
-      setAvaliacaoMsg("Preencha e calcule antes de enviar.");
+    if (!avaliacaoTemComposicao) {
+      setAvaliacaoMsg("Informe e calcule a composição corporal antes de enviar.");
       return;
     }
     try {
@@ -1401,18 +1428,17 @@ export default function AntropometriaLayout({
 
   async function handleDownloadAvaliacao() {
     if (!pacienteId || baixandoAvaliacao) return;
-    if (result.bodyFatPct === null) {
-      setAvaliacaoMsg("Preencha e calcule antes de baixar.");
+    if (!avaliacaoTemComposicao) {
+      setAvaliacaoMsg("Informe e calcule a composição corporal antes de baixar.");
       return;
     }
     try {
       setBaixandoAvaliacao(true);
       setAvaliacaoMsg("Gerando PDF...");
       const payload = createAvaliacaoPayload();
-      // REGRA: ao baixar, a avaliação é gravada no histórico. Se já existe um
-      // registro NA MESMA DATA da avaliação, ele JÁ é a "Atual" — então o PDF
-      // usa os valores salvos (dobras/circunferências + peso/MM/%G) desse
-      // registro, garantindo comparação correta 1ª (mais antiga) vs atual.
+      // Se já existe um registro NA MESMA DATA da avaliação, ele já é a
+      // "Atual". O PDF usa os valores salvos desse registro sem gravar nada
+      // novo, garantindo comparação correta 1ª (mais antiga) vs atual.
       const mesmoDia = historicoOrdenado.find((h) => {
         const raw = h.dataAvaliacao || h.createdAt;
         if (!raw || !dataAvaliacao) return false;
@@ -1424,6 +1450,7 @@ export default function AntropometriaLayout({
         return iso === dataAvaliacao;
       });
       if (mesmoDia?.snapshot) {
+        payload.avaliacaoId = mesmoDia.id;
         const resumoSalvo = mesmoDia.snapshot.resumo || {};
         payload.currentDobras = parseSnapshotValues(
           mesmoDia.snapshot.dobras as Record<string, string> | undefined
@@ -1460,10 +1487,7 @@ export default function AntropometriaLayout({
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      // Persiste snapshot local (histórico do lado do front) — o backend também
-      // gravou no banco (rotação 1ª/2ª/3ª).
-      persistAvaliacaoSnapshot();
-      setAvaliacaoMsg("PDF gerado e histórico atualizado.");
+      setAvaliacaoMsg("PDF gerado. A avaliação só entra no histórico ao clicar em salvar.");
     } catch (e: any) {
       setAvaliacaoMsg(e?.message || "Erro ao gerar PDF.");
     } finally {
@@ -1547,7 +1571,7 @@ export default function AntropometriaLayout({
                     <div style={numberBubbleStyle}>{index + 1}</div>
 
                     <div style={{ flex: 1 }}>
-                      <span style={fieldLabelStyle}>{DOBRAS_LABELS[key]}</span>
+                      <span style={fieldLabelStyle}>{DOBRAS_LABELS[key as DobraKey]}</span>
                     </div>
 
                     <input
@@ -1730,7 +1754,7 @@ export default function AntropometriaLayout({
                 <div style={{ ...resultIconGreen, background: metricClassColor("musculo").iconBg, color: metricClassColor("musculo").icon }}>🧩</div>
                 <div>
                   <div style={{ ...resultTitleGreen, color: metricClassColor("musculo").text }}>Massa Livre de Gordura</div>
-                  <div style={resultValueStyle}>{formatPt(ffmiVal, " kg/m²")}</div>
+                  <div style={resultValueStyle}>{formatPt(result.massaMuscular, " kg")}</div>
                 </div>
               </div>
             </div>
@@ -1772,10 +1796,10 @@ export default function AntropometriaLayout({
             <button
               type="button"
               onClick={handleEnviarAvaliacao}
-              disabled={enviandoAvaliacao || result.bodyFatPct === null}
+              disabled={enviandoAvaliacao || !avaliacaoTemComposicao}
               style={{
                 ...avaliacaoActionBtnPrimary,
-                ...(enviandoAvaliacao || result.bodyFatPct === null ? avaliacaoActionBtnDisabled : {}),
+                ...(enviandoAvaliacao || !avaliacaoTemComposicao ? avaliacaoActionBtnDisabled : {}),
               }}
             >
               {enviandoAvaliacao ? "Enviando..." : "Enviar avaliação física"}
@@ -1784,10 +1808,10 @@ export default function AntropometriaLayout({
             <button
               type="button"
               onClick={handleDownloadAvaliacao}
-              disabled={baixandoAvaliacao || result.bodyFatPct === null}
+              disabled={baixandoAvaliacao || !avaliacaoTemComposicao}
               style={{
                 ...avaliacaoActionBtnSecondary,
-                ...(baixandoAvaliacao || result.bodyFatPct === null ? avaliacaoActionBtnDisabled : {}),
+                ...(baixandoAvaliacao || !avaliacaoTemComposicao ? avaliacaoActionBtnDisabled : {}),
               }}
             >
               {baixandoAvaliacao ? "Gerando..." : "Download do PDF"}
@@ -1840,7 +1864,7 @@ export default function AntropometriaLayout({
                     const label =
                       idx === 0 ? "1ª avaliação" : idx === 1 ? "2ª avaliação" : "3ª avaliação";
                     const dBase = h.dataAvaliacao || h.createdAt;
-                    const d = dBase ? new Date(dBase).toLocaleDateString("pt-BR") : "—";
+                    const d = dBase ? getSnapshotDateLabel(dBase) : "—";
                     return (
                       <span key={h.id} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                         {compararResultados ? (
