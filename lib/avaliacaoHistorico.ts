@@ -248,6 +248,11 @@ type RowOrdenavel = {
   id: string;
   created_at?: Date | null;
   data_avaliacao?: Date | null;
+  observacoes?: string | null;
+  peso?: unknown;
+  massa_muscular?: unknown;
+  percentual_gordura?: unknown;
+  circunferencia_abdominal?: unknown;
 };
 
 function tempoOrdenacao(r: RowOrdenavel) {
