@@ -15,7 +15,6 @@ import {
 import { sendBrevoEmail, bufferToBase64 } from "@/lib/brevoEmail";
 import {
   listarUltimasTresAvaliacoes,
-  primeiraAvaliacao,
   extrairSnapshotDeEvolucao,
   mapaSnapshotParaNumerosComPonte,
   evolucaoPontoDeRegistro,
@@ -27,6 +26,7 @@ export const dynamic = "force-dynamic";
 
 type BodyShape = {
   pacienteId?: string;
+  avaliacaoId?: string | null;
   dataAvaliacao?: string | null;
   sex?: "M" | "F" | string;
   idade?: number;
@@ -105,7 +105,11 @@ export async function POST(req: NextRequest) {
 
     // Evolução: 1ª (fixa) + 2ª + 3ª = ATUAL (ainda não gravada porque envio não salva).
     // REGRA: ordena pela DATA DA AVALIAÇÃO informada pelo nutri.
-    const rotativas = ordenarAvaliacoes(await listarUltimasTresAvaliacoes(pacienteId));
+    const rotativas = ordenarAvaliacoes(
+      (await listarUltimasTresAvaliacoes(pacienteId)).filter(
+        (r) => !body.avaliacaoId || r.id !== body.avaliacaoId
+      )
+    );
     const evolucaoBanco = rotativas.map((r) => {
       const snap = extrairSnapshotDeEvolucao(r);
       return {
@@ -139,7 +143,7 @@ export async function POST(req: NextRequest) {
       evolucao = [first, ...lastTwo];
     }
 
-    const primeira = await primeiraAvaliacao(pacienteId);
+    const primeira = rotativas[0] || null;
     const anterior = rotativas[rotativas.length - 1] || null;
     const anteriorSnap = anterior ? extrairSnapshotDeEvolucao(anterior) : null;
     // "Antes" das tabelas de Dobras/Circunferências = SEMPRE a 1ª avaliação
@@ -197,7 +201,7 @@ export async function POST(req: NextRequest) {
         classificacaoAgua: resumo.classificacoes.agua,
         classificacaoMassaMuscular: resumo.classificacoes.massaMuscular,
         classificacaoImme: resumo.classificacoes.imme,
-        classificacaoMassaAdiposa: resumo.classificacoes.img,
+        classificacaoMassaAdiposa: resumo.classificacoes.massaAdiposa,
         classificacaoImg: resumo.classificacoes.img,
         classificacaoFfmi: resumo.classificacoes.ffmi,
         classificacaoGordura: resumo.classificacoes.gordura,
@@ -205,7 +209,7 @@ export async function POST(req: NextRequest) {
         imagemLateralUrl: imagemLateralUrlV,
         compareResults: Boolean(body.compareResults),
         currentDobras: body.currentDobras || {},
-        currentCircunferencias: body.currentCircunferencias || {},
+        currentCircunferencias: mapaSnapshotParaNumerosComPonte(body.currentCircunferencias || {}),
         previousDobras,
         previousCircunferencias,
         previousSummary: anteriorSnap
@@ -281,7 +285,7 @@ export async function POST(req: NextRequest) {
         <li>Peso: <strong>${resumo.pesoKg.toFixed(1).replace(".", ",")} kg</strong></li>
         <li>Músculo Esquelético: <strong>${resumo.imme.toFixed(2).replace(".", ",")} kg/m²</strong> (${esc(resumo.classificacoes.imme.label)})</li>
         <li>Índice de Massa Gorda: <strong>${resumo.img.toFixed(2).replace(".", ",")} kg/m²</strong> (${esc(resumo.classificacoes.img.label)})</li>
-        <li>Massa Livre de Gordura: <strong>${resumo.ffmi.toFixed(2).replace(".", ",")} kg/m²</strong></li>
+        <li>Massa Livre de Gordura: <strong>${resumo.massaMagraKg.toFixed(1).replace(".", ",")} kg</strong></li>
         <li>% de Gordura: <strong>${resumo.bfPct.toFixed(1).replace(".", ",")}%</strong> (${esc(resumo.classificacoes.gordura.label)})</li>
         <li>% de Água corporal: <strong>${resumo.pctAgua.toFixed(1).replace(".", ",")}%</strong> (${esc(resumo.classificacoes.agua.label)})</li>
       </ul>
@@ -304,7 +308,7 @@ export async function POST(req: NextRequest) {
         `Peso: ${resumo.pesoKg.toFixed(1)} kg\n` +
         `Músculo Esquelético: ${resumo.imme.toFixed(2)} kg/m²\n` +
         `Índice de Massa Gorda: ${resumo.img.toFixed(2)} kg/m²\n` +
-        `Massa Livre de Gordura: ${resumo.ffmi.toFixed(2)} kg/m²\n` +
+        `Massa Livre de Gordura: ${resumo.massaMagraKg.toFixed(1)} kg\n` +
         `% de Gordura: ${resumo.bfPct.toFixed(1)}%\n` +
         `% de Água corporal: ${resumo.pctAgua.toFixed(1)}%\n`,
       attachments: [{ name: `avaliacao-${slug}.pdf`, content: bufferToBase64(buffer) }],
