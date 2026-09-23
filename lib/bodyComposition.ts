@@ -21,44 +21,90 @@ export interface Classificacao {
   label: string;
 }
 
-const IMME_TABLE = {
-  F: [
-    { idadeMin: 18, idadeMax: 39, limite: 8.3, bom: 9.7 },
-    { idadeMin: 40, idadeMax: 59, limite: 8.1, bom: 9.4 },
-    { idadeMin: 60, idadeMax: 999, limite: 7.5, bom: 8.9 },
-  ],
-  M: [
-    { idadeMin: 18, idadeMax: 39, limite: 10.8, bom: 12.6 },
-    { idadeMin: 40, idadeMax: 59, limite: 10.6, bom: 12.4 },
-    { idadeMin: 60, idadeMax: 999, limite: 9.7, bom: 11.5 },
-  ],
-} as const;
+type ReferenceBand = {
+  idadeMin: number;
+  idadeMax: number;
+  aguaMin: number;
+  massaMuscularMin: number;
+  massaMuscularMax: number;
+  immeMin: number;
+  massaLivreMin: number;
+  massaAdiposaMin: number;
+  massaAdiposaMax: number;
+  imgMin: number;
+  imgMax: number;
+  gorduraMin: number;
+  gorduraMax: number;
+};
 
-const MASSA_MUSCULAR_TABLE = {
-  F: [
-    { idadeMin: 18, idadeMax: 39, limite: 37.0, bom: 42.0 },
-    { idadeMin: 40, idadeMax: 59, limite: 35.5, bom: 40.5 },
-    { idadeMin: 60, idadeMax: 999, limite: 33.0, bom: 38.0 },
-  ],
+// Matriz de referência enviada nas imagens: cinco faixas de idade para cada
+// sexo. Massa adiposa é uma massa em kg; IMG é um índice em kg/m².
+const REFERENCE_TABLE: Record<Sexo, ReferenceBand[]> = {
   M: [
-    { idadeMin: 18, idadeMax: 39, limite: 51.0, bom: 58.0 },
-    { idadeMin: 40, idadeMax: 59, limite: 49.5, bom: 56.0 },
-    { idadeMin: 60, idadeMax: 999, limite: 46.0, bom: 53.0 },
+    {
+      idadeMin: 18, idadeMax: 25, aguaMin: 58.0,
+      massaMuscularMin: 38.0, massaMuscularMax: 44.0, immeMin: 12.6,
+      massaLivreMin: 58.0, massaAdiposaMin: 3.1, massaAdiposaMax: 7.0,
+      imgMin: 2.3, imgMax: 2.9, gorduraMin: 6.1, gorduraMax: 10.0,
+    },
+    {
+      idadeMin: 26, idadeMax: 35, aguaMin: 58.0,
+      massaMuscularMin: 38.0, massaMuscularMax: 44.0, immeMin: 12.6,
+      massaLivreMin: 58.0, massaAdiposaMin: 5.0, massaAdiposaMax: 9.8,
+      imgMin: 2.3, imgMax: 2.9, gorduraMin: 11.1, gorduraMax: 15.0,
+    },
+    {
+      idadeMin: 36, idadeMax: 45, aguaMin: 58.0,
+      massaMuscularMin: 38.0, massaMuscularMax: 44.0, immeMin: 12.6,
+      massaLivreMin: 58.0, massaAdiposaMin: 6.0, massaAdiposaMax: 11.5,
+      imgMin: 2.3, imgMax: 2.9, gorduraMin: 14.1, gorduraMax: 18.0,
+    },
+    {
+      idadeMin: 46, idadeMax: 55, aguaMin: 58.0,
+      massaMuscularMin: 36.5, massaMuscularMax: 42.5, immeMin: 12.4,
+      massaLivreMin: 56.0, massaAdiposaMin: 8.5, massaAdiposaMax: 14.5,
+      imgMin: 3.2, imgMax: 3.9, gorduraMin: 16.1, gorduraMax: 20.0,
+    },
+    {
+      idadeMin: 56, idadeMax: 999, aguaMin: 58.0,
+      massaMuscularMin: 34.0, massaMuscularMax: 40.0, immeMin: 11.5,
+      massaLivreMin: 53.0, massaAdiposaMin: 9.8, massaAdiposaMax: 15.8,
+      imgMin: 3.6, imgMax: 4.5, gorduraMin: 18.1, gorduraMax: 21.0,
+    },
   ],
-} as const;
-
-const IMG_TABLE = {
   F: [
-    { idadeMin: 18, idadeMax: 39, limite: 4.4, otimoMax: 5.3, bom: 9.3 },
-    { idadeMin: 40, idadeMax: 59, limite: 5.4, otimoMax: 6.4, bom: 11.3 },
-    { idadeMin: 60, idadeMax: 999, limite: 6.1, otimoMax: 7.2, bom: 12.0 },
+    {
+      idadeMin: 18, idadeMax: 25, aguaMin: 50.0,
+      massaMuscularMin: 24.5, massaMuscularMax: 30.5, immeMin: 9.7,
+      massaLivreMin: 42.0, massaAdiposaMin: 8.1, massaAdiposaMax: 11.5,
+      imgMin: 4.4, imgMax: 5.3, gorduraMin: 16.1, gorduraMax: 19.0,
+    },
+    {
+      idadeMin: 26, idadeMax: 35, aguaMin: 50.0,
+      massaMuscularMin: 24.5, massaMuscularMax: 30.5, immeMin: 9.7,
+      massaLivreMin: 42.0, massaAdiposaMin: 8.5, massaAdiposaMax: 12.5,
+      imgMin: 4.4, imgMax: 5.3, gorduraMin: 16.1, gorduraMax: 20.0,
+    },
+    {
+      idadeMin: 36, idadeMax: 45, aguaMin: 50.0,
+      massaMuscularMin: 24.5, massaMuscularMax: 30.5, immeMin: 9.7,
+      massaLivreMin: 42.0, massaAdiposaMin: 10.5, massaAdiposaMax: 14.8,
+      imgMin: 4.4, imgMax: 5.3, gorduraMin: 19.1, gorduraMax: 23.0,
+    },
+    {
+      idadeMin: 46, idadeMax: 55, aguaMin: 50.0,
+      massaMuscularMin: 23.0, massaMuscularMax: 29.0, immeMin: 9.5,
+      massaLivreMin: 40.5, massaAdiposaMin: 12.0, massaAdiposaMax: 16.5,
+      imgMin: 5.4, imgMax: 6.4, gorduraMin: 21.1, gorduraMax: 25.0,
+    },
+    {
+      idadeMin: 56, idadeMax: 999, aguaMin: 50.0,
+      massaMuscularMin: 21.5, massaMuscularMax: 27.5, immeMin: 8.9,
+      massaLivreMin: 38.0, massaAdiposaMin: 13.0, massaAdiposaMax: 17.8,
+      imgMin: 6.1, imgMax: 7.2, gorduraMin: 22.1, gorduraMax: 26.0,
+    },
   ],
-  M: [
-    { idadeMin: 18, idadeMax: 39, limite: 2.3, otimoMax: 2.9, bom: 6.0 },
-    { idadeMin: 40, idadeMax: 59, limite: 3.2, otimoMax: 3.9, bom: 7.4 },
-    { idadeMin: 60, idadeMax: 999, limite: 3.6, otimoMax: 4.5, bom: 8.2 },
-  ],
-} as const;
+};
 
 const round = (v: number, d = 2) => {
   const m = 10 ** d;
@@ -70,16 +116,20 @@ function pegarFaixa<S extends "M" | "F">(sexo: S, idade: number, tabela: any) {
   return t.find((f: any) => idade >= f.idadeMin && idade <= f.idadeMax) ?? t[t.length - 1];
 }
 
-function classificarTrinca(kind: "baixo-bom-alto" | "baixo-bom-excesso", value: number, limite: number, bom: number): Classificacao {
-  if (kind === "baixo-bom-alto") {
-    if (value > bom) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
-    if (value >= limite) return { status: "BOM", cor: "verde", label: "Bom" };
-    return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
-  }
+function classificacaoOtima(): Classificacao {
+  return { status: "OTIMO", cor: "verde", label: "Ótimo" };
+}
 
-  if (value > bom) return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
-  if (value >= limite) return { status: "BOM", cor: "verde", label: "Bom" };
+function classificacaoAtencao(): Classificacao {
   return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
+}
+
+function classificarFaixa(value: number, min: number, max: number): Classificacao {
+  return value >= min && value <= max ? classificacaoOtima() : classificacaoAtencao();
+}
+
+function classificarMinimo(value: number, min: number): Classificacao {
+  return value >= min ? classificacaoOtima() : classificacaoAtencao();
 }
 
 // Aproximação usada quando o sistema só dispõe da massa magra.
@@ -104,8 +154,7 @@ export function calcularFFMI(massaLivreGorduraKg: number, alturaCm: number) {
 }
 
 export function classificarIMME(imme: number, sexo: Sexo, idade: number): Classificacao {
-  const f = pegarFaixa(sexo, idade, IMME_TABLE);
-  return classificarTrinca("baixo-bom-alto", imme, f.limite, f.bom);
+  return classificarMinimo(imme, pegarFaixa(sexo, idade, REFERENCE_TABLE).immeMin);
 }
 
 export function classificarMassaMuscular(
@@ -113,55 +162,56 @@ export function classificarMassaMuscular(
   sexo: Sexo,
   idade: number,
 ): Classificacao {
-  const f = pegarFaixa(sexo, idade, MASSA_MUSCULAR_TABLE);
-  return classificarTrinca("baixo-bom-alto", massaLivreGorduraKg, f.limite, f.bom);
+  const f = pegarFaixa(sexo, idade, REFERENCE_TABLE);
+  // O produto já usa este valor como massa livre de gordura (o card e o PDF
+  // exibem a mesma medida em kg). A referência correspondente é FFM.
+  return classificarMinimo(massaLivreGorduraKg, f.massaLivreMin);
+}
+
+export function classificarMassaLivreGordura(
+  massaLivreGorduraKg: number,
+  sexo: Sexo,
+  idade: number,
+): Classificacao {
+  return classificarMinimo(
+    massaLivreGorduraKg,
+    pegarFaixa(sexo, idade, REFERENCE_TABLE).massaLivreMin,
+  );
+}
+
+export function classificarMassaAdiposa(
+  massaAdiposaKg: number,
+  sexo: Sexo,
+  idade: number,
+): Classificacao {
+  const f = pegarFaixa(sexo, idade, REFERENCE_TABLE);
+  return classificarFaixa(massaAdiposaKg, f.massaAdiposaMin, f.massaAdiposaMax);
 }
 
 export function classificarIMG(img: number, sexo: Sexo, idade: number): Classificacao {
-  const f = pegarFaixa(sexo, idade, IMG_TABLE);
-  if (img < f.limite || img > f.bom) {
-    return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
-  }
-  if (img <= f.otimoMax) {
-    return { status: "OTIMO", cor: "verde", label: "Ótimo" };
-  }
-  return { status: "BOM", cor: "verde", label: "Bom" };
+  const f = pegarFaixa(sexo, idade, REFERENCE_TABLE);
+  return classificarFaixa(img, f.imgMin, f.imgMax);
 }
 
 export function classificarAgua(pct: number, sexo: Sexo): Classificacao {
-  if (sexo === "M") {
-    if (pct >= 58) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
-    if (pct >= 50) return { status: "BOM", cor: "verde", label: "Bom" };
-    return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
-  }
-
-  if (pct >= 50) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
-  if (pct >= 42) return { status: "BOM", cor: "verde", label: "Bom" };
-  return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
+  return classificarMinimo(pct, sexo === "M" ? 58 : 50);
 }
 
 export function classificarFFMI(ffmi: number, sexo: Sexo): Classificacao {
-  if (sexo === "M") {
-    if (ffmi >= 21.5) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
-    if (ffmi >= 17.5) return { status: "BOM", cor: "verde", label: "Bom" };
-    return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
-  }
-
-  if (ffmi >= 19.0) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
-  if (ffmi >= 14.5) return { status: "BOM", cor: "verde", label: "Bom" };
-  return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
+  // Mantido para compatibilidade com chamadas antigas que realmente passam
+  // FFMI. A classificação exibida no produto usa
+  // classificarMassaLivreGordura, pois a referência é em kg.
+  if (sexo === "M") return classificarMinimo(ffmi, 21.5);
+  return classificarMinimo(ffmi, 19.0);
 }
 
-export function classificarPercentualGordura(bfPct: number, sexo: Sexo): Classificacao {
-  if (sexo === "M") {
-    if (bfPct <= 12) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
-    if (bfPct <= 16) return { status: "BOM", cor: "verde", label: "Bom" };
-    return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
-  }
-
-  if (bfPct <= 20) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
-  if (bfPct <= 26) return { status: "BOM", cor: "verde", label: "Bom" };
-  return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
+export function classificarPercentualGordura(
+  bfPct: number,
+  sexo: Sexo,
+  idade = 18,
+): Classificacao {
+  const f = pegarFaixa(sexo, idade, REFERENCE_TABLE);
+  return classificarFaixa(bfPct, f.gorduraMin, f.gorduraMax);
 }
 
 export function escolherImagemFrontal(sexo: Sexo, ffmi: number, bfPct: number): CodigoImagem {
@@ -192,11 +242,20 @@ export function imagemLateralUrl(sexo: Sexo, code: CodigoImagem): string {
 }
 
 export function resumoCompleto(input: AvaliacaoInput) {
-  const massaMuscularEsqueletica = Math.max(0, (input.massaMagraKg || 0) * FRACAO_MUSCULO_ESQUELETICO);
+  const pesoKg = Math.max(0, Number(input.pesoKg) || 0);
+  const bfPct = Math.max(0, Number(input.bfPct) || 0);
+  const massaGordaCalculada =
+    bfPct > 0 ? (pesoKg * bfPct) / 100 : Number(input.massaGordaKg) || 0;
+  const massaGordaKg = Math.max(0, massaGordaCalculada);
+  const massaMagraKg =
+    pesoKg > 0 && massaGordaKg >= 0
+      ? Math.max(0, pesoKg - massaGordaKg)
+      : Math.max(0, Number(input.massaMagraKg) || 0);
+  const massaMuscularEsqueletica = Math.max(0, massaMagraKg * FRACAO_MUSCULO_ESQUELETICO);
   const imme = calcularIMME(massaMuscularEsqueletica, input.alturaCm);
-  const img = calcularIMG(input.massaGordaKg, input.alturaCm);
-  const ffmi = calcularFFMI(input.massaMagraKg, input.alturaCm);
-  const code = escolherImagemFrontal(input.sexo, ffmi, input.bfPct);
+  const img = calcularIMG(massaGordaKg, input.alturaCm);
+  const ffmi = calcularFFMI(massaMagraKg, input.alturaCm);
+  const code = escolherImagemFrontal(input.sexo, ffmi, bfPct);
   const frontalUrl = imagemFrontalUrl(input.sexo, code);
   const lateralUrl = imagemLateralUrl(input.sexo, code);
 
@@ -204,20 +263,21 @@ export function resumoCompleto(input: AvaliacaoInput) {
     imme,
     img,
     ffmi,
-    bfPct: round(input.bfPct, 1),
+    bfPct: round(bfPct, 1),
     pctAgua: round(input.pctAgua, 1),
-    pesoKg: round(input.pesoKg, 1),
+    pesoKg: round(pesoKg, 1),
     alturaCm: round(input.alturaCm, 1),
-    massaMagraKg: round(input.massaMagraKg, 1),
-    massaGordaKg: round(input.massaGordaKg, 1),
+    massaMagraKg: round(massaMagraKg, 1),
+    massaGordaKg: round(massaGordaKg, 1),
     massaMuscularEsqueleticaKg: round(massaMuscularEsqueletica, 1),
     classificacoes: {
       agua: classificarAgua(input.pctAgua, input.sexo),
-      massaMuscular: classificarMassaMuscular(input.massaMagraKg, input.sexo, input.idade),
+      massaMuscular: classificarMassaMuscular(massaMagraKg, input.sexo, input.idade),
       imme: classificarIMME(imme, input.sexo, input.idade),
+      massaAdiposa: classificarMassaAdiposa(massaGordaKg, input.sexo, input.idade),
       img: classificarIMG(img, input.sexo, input.idade),
-      ffmi: classificarFFMI(ffmi, input.sexo),
-      gordura: classificarPercentualGordura(input.bfPct, input.sexo),
+      ffmi: classificarMassaLivreGordura(massaMagraKg, input.sexo, input.idade),
+      gordura: classificarPercentualGordura(bfPct, input.sexo, input.idade),
     },
     imagem: {
       codigo: code,
