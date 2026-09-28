@@ -208,10 +208,20 @@ function guessMime(p: string) {
   return "application/octet-stream";
 }
 function fileToDataUri(rel?: string) {
-  const full = absPublic(rel);
-  if (!full || !fs.existsSync(full)) return null;
-  const buf = fs.readFileSync(full);
-  return `data:${guessMime(full)};base64,${buf.toString("base64")}`;
+  if (!rel) return null;
+  const clean = rel.replace(/^\/+/, "");
+  const candidates = [
+    clean,
+    clean.endsWith(".png") ? `${clean}.jpg` : null,
+    clean.endsWith(".png") ? `${clean}.png` : null,
+  ].filter(Boolean) as string[];
+  for (const candidate of candidates) {
+    const full = absPublic(candidate);
+    if (!full || !fs.existsSync(full)) continue;
+    const buf = fs.readFileSync(full);
+    return `data:${guessMime(full)};base64,${buf.toString("base64")}`;
+  }
+  return null;
 }
 function hasPositive(v: any) {
   return v !== null && v !== undefined && Number(v) > 0;
