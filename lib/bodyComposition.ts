@@ -181,12 +181,11 @@ function imagemPrefixo(sexo: Sexo) {
 }
 
 export function imagemFrontalUrl(sexo: Sexo, code: CodigoImagem): string {
-  const extension = code <= 3 ? "png.jpg" : "png.png";
-  return `/images/avaliacao/${imagemPrefixo(sexo)}-frente-${code}.${extension}`;
+  return `/images/avaliacao/${imagemPrefixo(sexo)}-frente-${code}.png`;
 }
 
 export function imagemLateralUrl(sexo: Sexo, code: CodigoImagem): string {
-  return `/images/avaliacao/${imagemPrefixo(sexo)}-lateral-${code}.png.jpg`;
+  return `/images/avaliacao/${imagemPrefixo(sexo)}-lateral-${code}.png`;
 }
 
 export function resumoCompleto(input: AvaliacaoInput) {
