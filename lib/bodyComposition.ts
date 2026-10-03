@@ -70,7 +70,12 @@ function pegarFaixa<S extends "M" | "F">(sexo: S, idade: number, tabela: any) {
   return t.find((f: any) => idade >= f.idadeMin && idade <= f.idadeMax) ?? t[t.length - 1];
 }
 
-function classificarTrinca(kind: "baixo-bom-alto" | "baixo-bom-excesso", value: number, limite: number, bom: number): Classificacao {
+function classificarTrinca(
+  kind: "baixo-bom-alto" | "baixo-bom-excesso",
+  value: number,
+  limite: number,
+  bom: number,
+): Classificacao {
   if (kind === "baixo-bom-alto") {
     if (value > bom) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
     if (value >= limite) return { status: "BOM", cor: "verde", label: "Bom" };
@@ -116,6 +121,9 @@ export function classificarMassaMuscular(
   const f = pegarFaixa(sexo, idade, MASSA_MUSCULAR_TABLE);
   return classificarTrinca("baixo-bom-alto", massaLivreGorduraKg, f.limite, f.bom);
 }
+
+// Alias compatível com telas que nomeiam a massa livre de gordura diretamente.
+export const classificarMassaLivreGordura = classificarMassaMuscular;
 
 export function classificarIMG(img: number, sexo: Sexo, idade: number): Classificacao {
   const f = pegarFaixa(sexo, idade, IMG_TABLE);
@@ -196,6 +204,7 @@ export function resumoCompleto(input: AvaliacaoInput) {
   const code = escolherImagemFrontal(input.sexo, ffmi, input.bfPct);
   const frontalUrl = imagemFrontalUrl(input.sexo, code);
   const lateralUrl = imagemLateralUrl(input.sexo, code);
+  const classificacaoImg = classificarIMG(img, input.sexo, input.idade);
 
   return {
     imme,
@@ -212,7 +221,8 @@ export function resumoCompleto(input: AvaliacaoInput) {
       agua: classificarAgua(input.pctAgua, input.sexo),
       massaMuscular: classificarMassaMuscular(input.massaMagraKg, input.sexo, input.idade),
       imme: classificarIMME(imme, input.sexo, input.idade),
-      img: classificarIMG(img, input.sexo, input.idade),
+      img: classificacaoImg,
+      massaAdiposa: classificacaoImg,
       ffmi: classificarFFMI(ffmi, input.sexo),
       gordura: classificarPercentualGordura(input.bfPct, input.sexo),
     },
