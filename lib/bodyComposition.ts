@@ -160,7 +160,11 @@ export function classificarFFMI(ffmi: number, sexo: Sexo): Classificacao {
   return { status: "ATENCAO", cor: "amarelo", label: "Atenção" };
 }
 
-export function classificarPercentualGordura(bfPct: number, sexo: Sexo): Classificacao {
+export function classificarPercentualGordura(
+  bfPct: number,
+  sexo: Sexo,
+  _idade?: number,
+): Classificacao {
   if (sexo === "M") {
     if (bfPct <= 12) return { status: "OTIMO", cor: "verde", label: "Ótimo" };
     if (bfPct <= 16) return { status: "BOM", cor: "verde", label: "Bom" };
