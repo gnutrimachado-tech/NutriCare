@@ -15,10 +15,9 @@ import {
 import { sendBrevoEmail, bufferToBase64 } from "@/lib/brevoEmail";
 import {
   listarUltimasTresAvaliacoes,
+  primeiraAvaliacao,
   extrairSnapshotDeEvolucao,
-  mapaSnapshotParaNumerosComPonte,
-  evolucaoPontoDeRegistro,
-  ordenarAvaliacoes,
+  obterMassaMuscularHistorica,
 } from "@/lib/avaliacaoHistorico";
 
 export const runtime = "nodejs";
@@ -26,15 +25,15 @@ export const dynamic = "force-dynamic";
 
 type BodyShape = {
   pacienteId?: string;
-  avaliacaoId?: string | null;
-  dataAvaliacao?: string | null;
   sex?: "M" | "F" | string;
   idade?: number;
   alturaCm?: number;
   pesoKg?: number;
   bodyFatPct?: number | null;
   massaMuscularKg?: number | null;
+  massaLivreGorduraKg?: number | null;
   massaAdiposaKg?: number | null;
+  imme?: number | null;
   aguaPct?: number | null;
   protocolLabel?: string;
   compareResults?: boolean;
@@ -42,24 +41,60 @@ type BodyShape = {
   currentCircunferencias?: Record<string, number>;
   previousDobras?: Record<string, number>;
   previousCircunferencias?: Record<string, number>;
+  dataAvaliacao?: string | null;
   // Ids das avaliações (1ª/2ª/3ª) marcadas nas caixas de seleção da aba Antropometria
   evolucaoSelecionadaIds?: string[];
 };
 
 function fmtData(d: Date | string | null | undefined) {
   if (!d) return "";
-  // String "YYYY-MM-DD": formata direto, sem conversão de fuso (evita o dia
-  // "voltar" em fusos negativos).
-  if (typeof d === "string") {
-    const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) return `${m[3]}/${m[2]}`;
+  if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}/.test(d)) {
+    const [yyyy, mm, dd] = d.slice(0, 10).split("-");
+    return `${dd}/${mm}`;
   }
   const date = new Date(d);
   if (Number.isNaN(date.getTime())) return "";
-  // data_avaliacao é gravada como meia-noite UTC: lê em UTC.
-  const dd = String(date.getUTCDate()).padStart(2, "0");
-  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
   return `${dd}/${mm}`;
+}
+
+function dataAvaliacaoDoRegistro(
+  registro: Parameters<typeof extrairSnapshotDeEvolucao>[0],
+  snapshot: ReturnType<typeof extrairSnapshotDeEvolucao>
+) {
+  return snapshot?.dataAvaliacao || registro.data_avaliacao?.toISOString?.() || registro.created_at?.toISOString?.() || null;
+}
+
+function chaveDataAvaliacao(value: string | Date | null | undefined) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value.toISOString().slice(0, 10);
+  }
+  const texto = String(value);
+  if (/^\d{4}-\d{2}-\d{2}/.test(texto)) return texto.slice(0, 10);
+  const date = new Date(texto);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
+
+function escolherAnteriorPorData(
+  registros: Array<Parameters<typeof extrairSnapshotDeEvolucao>[0]>,
+  dataAtual: string | null | undefined
+) {
+  const dataAtualKey = chaveDataAvaliacao(dataAtual) || new Date().toISOString().slice(0, 10);
+  return (
+    [...registros]
+      .filter((registro) => {
+        const snapshot = extrairSnapshotDeEvolucao(registro);
+        const dataKey = chaveDataAvaliacao(dataAvaliacaoDoRegistro(registro, snapshot));
+        return dataKey ? dataKey < dataAtualKey : false;
+      })
+      .sort((a, b) => {
+        const dataA = chaveDataAvaliacao(dataAvaliacaoDoRegistro(a, extrairSnapshotDeEvolucao(a))) || "";
+        const dataB = chaveDataAvaliacao(dataAvaliacaoDoRegistro(b, extrairSnapshotDeEvolucao(b))) || "";
+        return dataB.localeCompare(dataA);
+      })[0] || null
+  );
 }
 
 export async function POST(req: NextRequest) {
@@ -98,40 +133,43 @@ export async function POST(req: NextRequest) {
       idade: Number(body.idade) || 0,
       sexo,
       pctAgua: Number(body.aguaPct) || 0,
-      massaMagraKg: Number(body.massaMuscularKg) || 0,
+      massaMagraKg: Number(body.massaLivreGorduraKg ?? body.massaMuscularKg) || 0,
       massaGordaKg: Number(body.massaAdiposaKg) || 0,
       bfPct: Number(body.bodyFatPct) || 0,
+      imme: Number(body.imme) || null,
     });
 
     // Evolução: 1ª (fixa) + 2ª + 3ª = ATUAL (ainda não gravada porque envio não salva).
-    // REGRA: ordena pela DATA DA AVALIAÇÃO informada pelo nutri.
-    const rotativas = ordenarAvaliacoes(
-      (await listarUltimasTresAvaliacoes(pacienteId)).filter(
-        (r) => !body.avaliacaoId || r.id !== body.avaliacaoId
-      )
-    );
+    const rotativas = await listarUltimasTresAvaliacoes(pacienteId);
     const evolucaoBanco = rotativas.map((r) => {
       const snap = extrairSnapshotDeEvolucao(r);
       return {
-        data: fmtData(snap?.dataAvaliacao || r.data_avaliacao || r.created_at),
+        data: fmtData(dataAvaliacaoDoRegistro(r, snap)),
         peso: snap?.resumo.pesoKg ?? (Number(r.peso ?? 0) || null),
-        massaMuscular: snap?.resumo.massaMuscularKg ?? (Number(r.massa_muscular ?? 0) || null),
+        massaMuscular: obterMassaMuscularHistorica(snap, r.massa_muscular, Number(body.alturaCm) || 0),
         bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
       };
     });
-    // Mesma lista com o id de cada avaliação + a data REAL da avaliação —
-    // alimenta as caixas de seleção e a ordenação no PDF.
-    const evolucaoHistorico = rotativas.map((r) =>
-      evolucaoPontoDeRegistro(r, fmtData)
-    );
+    // Mesma lista com o id de cada avaliação — alimenta as caixas de seleção
+    const evolucaoHistorico = rotativas.map((r) => {
+      const snap = extrairSnapshotDeEvolucao(r);
+      return {
+        id: r.id,
+        data: fmtData(dataAvaliacaoDoRegistro(r, snap)),
+        createdAt: r.created_at?.toISOString?.() || null,
+        dataAvaliacao: snap?.dataAvaliacao || r.data_avaliacao?.toISOString?.() || null,
+        peso: snap?.resumo.pesoKg ?? (Number(r.peso ?? 0) || null),
+        massaMuscular: obterMassaMuscularHistorica(snap, r.massa_muscular, Number(body.alturaCm) || 0),
+        bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
+      };
+    });
 
-    // Acrescenta o ponto ATUAL no final, sem persistir. Usa a data da
-    // avaliação informada pelo nutri (ou a data do dia, se não informada).
+    // Acrescenta o ponto ATUAL (envio de hoje) no final, sem persistir.
     const hoje = new Date();
     const atualPonto = {
-      data: fmtData(body.dataAvaliacao) || fmtData(hoje),
+      data: fmtData(body.dataAvaliacao || hoje),
       peso: resumo.pesoKg,
-      massaMuscular: resumo.massaMagraKg,
+      massaMuscular: resumo.massaMuscularEsqueleticaKg,
       bfPct: resumo.bfPct,
     };
 
@@ -143,23 +181,13 @@ export async function POST(req: NextRequest) {
       evolucao = [first, ...lastTwo];
     }
 
-    const primeira = rotativas[0] || null;
-    const anterior = rotativas[rotativas.length - 1] || null;
+    const primeira = await primeiraAvaliacao(pacienteId);
+    const anterior = escolherAnteriorPorData(rotativas, body.dataAvaliacao);
     const anteriorSnap = anterior ? extrairSnapshotDeEvolucao(anterior) : null;
-    // "Antes" das tabelas de Dobras/Circunferências = SEMPRE a 1ª avaliação
-    // (a de data MAIS ANTIGA). A variação dos cards (resumo N vs N-1)
-    // continua usando a avaliação imediatamente anterior.
-    const primeiraSnap = primeira ? extrairSnapshotDeEvolucao(primeira) : null;
-    // Com ponte de chaves: biceps_direito/esquerdo (salvos pelo front) entram
-    // nas linhas braco_direito/esquerdo do PDF — sem mexer no layout.
-    const previousDobras = primeiraSnap
-      ? mapaSnapshotParaNumerosComPonte(primeiraSnap.dobras)
-      : body.previousDobras || {};
-    const previousCircunferencias = primeiraSnap
-      ? mapaSnapshotParaNumerosComPonte(primeiraSnap.circunferencias)
-      : body.previousCircunferencias || {};
-    const dataAvaliacaoInicial =
-      (primeira?.data_avaliacao || primeira?.created_at)?.toISOString?.() || null;
+    const primeiraSnapshot = primeira ? extrairSnapshotDeEvolucao(primeira) : null;
+    const dataAvaliacaoInicial = primeira
+      ? dataAvaliacaoDoRegistro(primeira, primeiraSnapshot)
+      : null;
 
     // Imagem do biotipo pela regra FFMI + BF%
     const imagemFrenteUrl = imagemFrontalUrl(sexo, resumo.imagem.codigo);
@@ -190,9 +218,11 @@ export async function POST(req: NextRequest) {
       },
       dados: {
         data: new Date().toLocaleDateString("pt-BR"),
+        dataAvaliacao: body.dataAvaliacao || hoje.toISOString(),
         pesoKg: resumo.pesoKg,
         pctAgua: resumo.pctAgua,
         massaMagraKg: resumo.massaMagraKg,
+        massaMuscularKg: resumo.massaMuscularEsqueleticaKg,
         massaGordaKg: resumo.massaGordaKg,
         bfPct: resumo.bfPct,
         imme: resumo.imme,
@@ -200,6 +230,7 @@ export async function POST(req: NextRequest) {
         ffmi: resumo.ffmi,
         classificacaoAgua: resumo.classificacoes.agua,
         classificacaoMassaMuscular: resumo.classificacoes.massaMuscular,
+        classificacaoMassaLivreGordura: resumo.classificacoes.massaLivreGordura,
         classificacaoImme: resumo.classificacoes.imme,
         classificacaoMassaAdiposa: resumo.classificacoes.massaAdiposa,
         classificacaoImg: resumo.classificacoes.img,
@@ -209,20 +240,24 @@ export async function POST(req: NextRequest) {
         imagemLateralUrl: imagemLateralUrlV,
         compareResults: Boolean(body.compareResults),
         currentDobras: body.currentDobras || {},
-        currentCircunferencias: mapaSnapshotParaNumerosComPonte(body.currentCircunferencias || {}),
-        previousDobras,
-        previousCircunferencias,
+        currentCircunferencias: body.currentCircunferencias || {},
+        previousDobras: body.previousDobras || {},
+        previousCircunferencias: body.previousCircunferencias || {},
         previousSummary: anteriorSnap
           ? {
               pesoKg: anteriorSnap.resumo.pesoKg,
               bodyFatPct: anteriorSnap.resumo.bodyFatPct,
-              massaMuscularKg: anteriorSnap.resumo.massaMuscularKg,
+              massaMuscularKg: obterMassaMuscularHistorica(
+                anteriorSnap,
+                anterior?.massa_muscular,
+                Number(body.alturaCm) || 0
+              ),
               massaAdiposaKg: anteriorSnap.resumo.massaAdiposaKg,
               aguaPct: anteriorSnap.resumo.aguaPct,
               imme: anteriorSnap.resumo.imme,
               img: anteriorSnap.resumo.img,
               ffmi: anteriorSnap.resumo.ffmi,
-              createdAt: anterior?.created_at?.toISOString?.() || null,
+              createdAt: anterior ? dataAvaliacaoDoRegistro(anterior, anteriorSnap) : null,
               protocolLabel: anteriorSnap.resumo.protocolLabel || "",
             }
           : null,
@@ -232,8 +267,6 @@ export async function POST(req: NextRequest) {
           ? body.evolucaoSelecionadaIds
           : [],
         evolucaoAtual: atualPonto,
-        // Data REAL da avaliação atual (a informada pelo nutri; envio não grava).
-        dataAvaliacaoAtual: body.dataAvaliacao || null,
         dataAvaliacaoInicial,
       },
       nutricionista,
@@ -283,9 +316,10 @@ export async function POST(req: NextRequest) {
       <div style="font-size:15px;font-weight:700;color:#166534;margin-bottom:8px;">Resumo principal</div>
       <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.8;color:#166534;">
         <li>Peso: <strong>${resumo.pesoKg.toFixed(1).replace(".", ",")} kg</strong></li>
+        <li>Massa muscular: <strong>${resumo.massaMuscularEsqueleticaKg.toFixed(1).replace(".", ",")} kg</strong> (${esc(resumo.classificacoes.massaMuscular.label)})</li>
         <li>Músculo Esquelético: <strong>${resumo.imme.toFixed(2).replace(".", ",")} kg/m²</strong> (${esc(resumo.classificacoes.imme.label)})</li>
         <li>Índice de Massa Gorda: <strong>${resumo.img.toFixed(2).replace(".", ",")} kg/m²</strong> (${esc(resumo.classificacoes.img.label)})</li>
-        <li>Massa Livre de Gordura: <strong>${resumo.massaMagraKg.toFixed(1).replace(".", ",")} kg</strong></li>
+        <li>Massa Livre de Gordura: <strong>${resumo.massaMagraKg.toFixed(1).replace(".", ",")} kg</strong> (${esc(resumo.classificacoes.massaLivreGordura.label)})</li>
         <li>% de Gordura: <strong>${resumo.bfPct.toFixed(1).replace(".", ",")}%</strong> (${esc(resumo.classificacoes.gordura.label)})</li>
         <li>% de Água corporal: <strong>${resumo.pctAgua.toFixed(1).replace(".", ",")}%</strong> (${esc(resumo.classificacoes.agua.label)})</li>
       </ul>
@@ -305,12 +339,13 @@ export async function POST(req: NextRequest) {
       html,
       text:
         `Olá ${paciente.nome}, segue em anexo sua Avaliação Física.\n\n` +
-        `Peso: ${resumo.pesoKg.toFixed(1)} kg\n` +
-        `Músculo Esquelético: ${resumo.imme.toFixed(2)} kg/m²\n` +
-        `Índice de Massa Gorda: ${resumo.img.toFixed(2)} kg/m²\n` +
-        `Massa Livre de Gordura: ${resumo.massaMagraKg.toFixed(1)} kg\n` +
-        `% de Gordura: ${resumo.bfPct.toFixed(1)}%\n` +
-        `% de Água corporal: ${resumo.pctAgua.toFixed(1)}%\n`,
+        `Peso: ${resumo.pesoKg.toFixed(1).replace(".", ",")} kg\n` +
+        `Massa muscular: ${resumo.massaMuscularEsqueleticaKg.toFixed(1).replace(".", ",")} kg\n` +
+        `Músculo Esquelético: ${resumo.imme.toFixed(2).replace(".", ",")} kg/m²\n` +
+        `Índice de Massa Gorda: ${resumo.img.toFixed(2).replace(".", ",")} kg/m²\n` +
+        `Massa Livre de Gordura: ${resumo.massaMagraKg.toFixed(1).replace(".", ",")} kg\n` +
+        `% de Gordura: ${resumo.bfPct.toFixed(1).replace(".", ",")}%\n` +
+        `% de Água corporal: ${resumo.pctAgua.toFixed(1).replace(".", ",")}%\n`,
       attachments: [{ name: `avaliacao-${slug}.pdf`, content: bufferToBase64(buffer) }],
       replyTo: nutricionista.email
         ? { email: nutricionista.email, name: nutricionista.nome }
