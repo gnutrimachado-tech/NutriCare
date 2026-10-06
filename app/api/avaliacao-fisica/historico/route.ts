@@ -9,6 +9,7 @@ import {
   buildAvaliacaoSnapshot,
   extrairSnapshotDeEvolucao,
   listarUltimasTresAvaliacoes,
+  obterMassaMuscularHistorica,
 } from "@/lib/avaliacaoHistorico";
 
 export const runtime = "nodejs";
@@ -16,17 +17,16 @@ export const dynamic = "force-dynamic";
 
 function fmtData(d: Date | string | null | undefined) {
   if (!d) return "";
-  // String "YYYY-MM-DD": formata direto, sem conversão de fuso.
-  if (typeof d === "string") {
-    const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  const texto = d instanceof Date ? d.toISOString() : String(d);
+  if (/^\d{4}-\d{2}-\d{2}/.test(texto)) {
+    const [yyyy, mm, dd] = texto.slice(0, 10).split("-");
+    return `${dd}/${mm}/${yyyy}`;
   }
   const date = new Date(d);
   if (Number.isNaN(date.getTime())) return "";
-  // data_avaliacao é gravada como meia-noite UTC: lê em UTC.
-  const dd = String(date.getUTCDate()).padStart(2, "0");
-  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const yyyy = date.getUTCFullYear();
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yyyy = date.getFullYear();
   return `${dd}/${mm}/${yyyy}`;
 }
 
@@ -38,19 +38,40 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, erro: "pacienteId ausente" }, { status: 400 });
     }
 
-    const rows = await listarUltimasTresAvaliacoes(pacienteId);
+    const [rows, paciente] = await Promise.all([
+      listarUltimasTresAvaliacoes(pacienteId),
+      prisma.pacientes.findUnique({
+        where: { id: pacienteId },
+        select: { altura_cm: true },
+      }),
+    ]);
+    const alturaCm = Number(paciente?.altura_cm ?? 0);
     const avaliacoes = rows.map((r) => {
       const snap = extrairSnapshotDeEvolucao(r);
+      const massaMuscularKg = obterMassaMuscularHistorica(
+        snap,
+        r.massa_muscular,
+        alturaCm
+      );
+      const dataAvaliacao = snap?.dataAvaliacao || r.data_avaliacao || r.created_at;
       return {
         id: r.id,
         createdAt: r.created_at?.toISOString?.() || null,
-        // Data REAL da avaliação (a que o nutri informou), não a de digitação.
-        dataAvaliacao: snap?.dataAvaliacao || r.data_avaliacao?.toISOString?.() || null,
-        dataLabel: fmtData(r.data_avaliacao || r.created_at),
-        resumo: snap?.resumo || {
+        dataLabel: fmtData(dataAvaliacao),
+        resumo: snap?.resumo
+          ? {
+              ...snap.resumo,
+              massaMuscularKg,
+              massaMuscularEsqueleticaKg: massaMuscularKg,
+              massaLivreGorduraKg:
+                snap.resumo.massaLivreGorduraKg ?? snap.resumo.massaMuscularKg,
+            }
+          : {
           pesoKg: Number(r.peso ?? 0) || null,
           bodyFatPct: Number(r.percentual_gordura ?? 0) || null,
-          massaMuscularKg: Number(r.massa_muscular ?? 0) || null,
+          massaMuscularKg,
+          massaMuscularEsqueleticaKg: massaMuscularKg,
+          massaLivreGorduraKg: null,
           massaAdiposaKg: null,
           aguaPct: null,
           imme: null,
@@ -82,6 +103,8 @@ type BodyShape = {
     pesoKg?: number | null;
     bodyFatPct?: number | null;
     massaMuscularKg?: number | null;
+    massaMuscularEsqueleticaKg?: number | null;
+    massaLivreGorduraKg?: number | null;
     massaAdiposaKg?: number | null;
     aguaPct?: number | null;
     imme?: number | null;
@@ -109,6 +132,9 @@ export async function POST(req: NextRequest) {
         pesoKg: body.resumo?.pesoKg ?? null,
         bodyFatPct: body.resumo?.bodyFatPct ?? null,
         massaMuscularKg: body.resumo?.massaMuscularKg ?? null,
+        massaMuscularEsqueleticaKg:
+          body.resumo?.massaMuscularEsqueleticaKg ?? body.resumo?.massaMuscularKg ?? null,
+        massaLivreGorduraKg: body.resumo?.massaLivreGorduraKg ?? null,
         massaAdiposaKg: body.resumo?.massaAdiposaKg ?? null,
         aguaPct: body.resumo?.aguaPct ?? null,
         imme: body.resumo?.imme ?? null,
@@ -122,34 +148,6 @@ export async function POST(req: NextRequest) {
   } catch (e: any) {
     return NextResponse.json(
       { ok: false, erro: e?.message ?? "Erro ao montar snapshot" },
-      { status: 500 }
-    );
-  }
-}
-
-// DELETE /api/avaliacao-fisica/historico?id=<evolucaoId>&pacienteId=<pacienteId>
-// Apaga do banco (tabela evolucao_corporal) a avaliação salva, chamada pelo
-// botão ✕ ao lado da caixa "Comparar com" na aba Antropometria.
-export async function DELETE(req: NextRequest) {
-  try {
-    const url = new URL(req.url);
-    const id = url.searchParams.get("id");
-    const pacienteId = url.searchParams.get("pacienteId");
-    if (!id) {
-      return NextResponse.json({ ok: false, erro: "id ausente" }, { status: 400 });
-    }
-
-    // Segurança: só apaga se o registro pertencer ao paciente informado.
-    const registro = await prisma.evolucao_corporal.findUnique({ where: { id } });
-    if (!registro || (pacienteId && registro.paciente_id !== pacienteId)) {
-      return NextResponse.json({ ok: false, erro: "Avaliação não encontrada" }, { status: 404 });
-    }
-
-    await prisma.evolucao_corporal.delete({ where: { id } });
-    return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, erro: e?.message ?? "Erro ao excluir avaliação" },
       { status: 500 }
     );
   }
