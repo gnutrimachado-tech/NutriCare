@@ -1,83 +1,25 @@
 // lib/avaliacaoHistorico.ts
-// Persistência da avaliação física com REGRA ROTATIVA 1ª / 2ª / 3ª,
-// ordenada pela DATA DA AVALIAÇÃO informada pelo nutri (data_avaliacao):
-// - A avaliação com a data MAIS ANTIGA é sempre a 1ª (referência "Antes").
-// - A de data mais recente é sempre a 3ª (a "Atual").
-// - Quando uma 4ª avaliação é salva, ela entra como a nova 3ª (mais recente),
-//   a antiga 3ª desce para 2ª e a antiga 2ª sai — a 1ª NUNCA muda.
-//   Ex.: [02/06], [02/07], [02/08] → nova em 02/09 → [02/06], [02/08], [02/09].
+// Persistência da avaliação física com REGRA ROTATIVA 1ª / 2ª / 3ª:
+// - A 1ª avaliação (mais antiga) NUNCA muda.
+// - Quando chega uma nova, ela vira a "3ª" e a antiga 3ª desce para "2ª".
+// - Ou seja: mantemos exatamente 3 registros → [1ª fixa, 2ª, 3ª].
+//   Ex.: [20/06], [20/07], [20/08] → nova em 20/09 → [20/06], [20/08], [20/09].
 //
 // Como o schema atual só tem prisma.evolucao_corporal, guardamos o snapshot
-// completo dentro de `observacoes` como JSON e a data real da avaliação na
-// coluna `data_avaliacao` (fallback: created_at para registros antigos).
+// completo dentro de `observacoes` como JSON. A rotação é aplicada apagando
+// o registro "do meio" (2º mais antigo) ANTES de inserir a nova avaliação,
+// quando já existirem 3 registros.
 
 import { prisma } from "@/lib/prisma";
-
-// Ponte de chaves: o front salva as circunferências como biceps_* e o PDF
-// lê na ordem braco_*. Esta ponte garante que os valores entrem nas linhas
-// corretas sem mexer em nenhum layout.
-export const PONTE_CHAVES_CIRC: Record<string, string> = {
-  biceps_direito: "braco_direito",
-  biceps_esquerdo: "braco_esquerdo",
-  braco_direito: "biceps_direito",
-  braco_esquerdo: "biceps_esquerdo",
-};
-
-export function mapaSnapshotParaNumerosComPonte(
-  values: Record<string, string | number> | null | undefined
-): Record<string, number> {
-  const base = mapaSnapshotParaNumeros(values);
-  const out: Record<string, number> = { ...base };
-  for (const [de, para] of Object.entries(PONTE_CHAVES_CIRC)) {
-    if (out[de] !== undefined && out[para] === undefined) out[para] = out[de];
-    else if (out[para] !== undefined && out[de] === undefined) out[de] = out[para];
-  }
-  return out;
-}
-
-// Ponto de série (peso / massa muscular / % gordura) com a data REAL da
-// avaliação. O PDF usa esse campo para ordenar — nunca pela data de digitação.
-export type EvolucaoPontoHistorico = {
-  id: string;
-  data: string;
-  dataAvaliacao: string | null;
-  createdAt: string | null;
-  peso: number | null;
-  massaMuscular: number | null;
-  bfPct: number | null;
-};
-
-// Monta o ponto de evolução de um registro do banco, lendo a data da
-// avaliação salva no snapshot (fallback: coluna data_avaliacao → created_at).
-export function evolucaoPontoDeRegistro(
-  r: {
-    id: string;
-    data_avaliacao?: Date | null;
-    created_at?: Date | null;
-    peso?: unknown;
-    massa_muscular?: unknown;
-    percentual_gordura?: unknown;
-  },
-  fmtData: (d: Date | string | null | undefined) => string
-): EvolucaoPontoHistorico {
-  const snap = extrairSnapshotDeEvolucao(r);
-  const baseData: any = snap?.dataAvaliacao || r.data_avaliacao || r.created_at || null;
-  return {
-    id: r.id,
-    data: fmtData(baseData),
-    dataAvaliacao:
-      typeof baseData === "string" ? baseData : baseData?.toISOString?.() || null,
-    createdAt: r.created_at?.toISOString?.() || null,
-    peso: snap?.resumo.pesoKg ?? (Number(r.peso ?? 0) || null),
-    massaMuscular: snap?.resumo.massaMuscularKg ?? (Number(r.massa_muscular ?? 0) || null),
-    bfPct: snap?.resumo.bodyFatPct ?? (Number(r.percentual_gordura ?? 0) || null),
-  };
-}
+import { FRACAO_MUSCULO_ESQUELETICO } from "@/lib/bodyComposition";
 
 export type AvaliacaoHistoricoResumo = {
   pesoKg: number | null;
+  alturaCm?: number | null;
   bodyFatPct: number | null;
   massaMuscularKg: number | null;
+  massaMuscularEsqueleticaKg?: number | null;
+  massaLivreGorduraKg?: number | null;
   massaAdiposaKg: number | null;
   aguaPct: number | null;
   imme: number | null;
@@ -85,17 +27,10 @@ export type AvaliacaoHistoricoResumo = {
   ffmi: number | null;
   createdAt?: string | null;
   protocolLabel?: string | null;
-  // Campos extras opcionais aceitos na entrada (a rota /salvar envia alguns
-  // deles). Não são persistidos no snapshot — apenas evitam erro de tipo.
-  massaMuscularEsqueleticaKg?: number | null;
-  circunferenciaAbdominalCm?: number | null;
-  vo2maxMlKgMin?: number | null;
-  imc?: number | null;
 };
 
 export type AvaliacaoHistoricoSnapshot = {
   createdAt: string;
-  // Data REAL da avaliação (a que o nutri informou), em ISO ou "YYYY-MM-DD".
   dataAvaliacao?: string | null;
   protocolLabel: string;
   dobras: Record<string, string | number>;
@@ -103,20 +38,8 @@ export type AvaliacaoHistoricoSnapshot = {
   resumo: AvaliacaoHistoricoResumo;
 };
 
-export function mapaSnapshotParaNumeros(
-  values: Record<string, string | number> | null | undefined
-): Record<string, number> {
-  const entries: Array<[string, number]> = [];
-  for (const [key, value] of Object.entries(values || {})) {
-    const numberValue = Number(String(value).replace(",", "."));
-    if (Number.isFinite(numberValue)) entries.push([key, numberValue]);
-  }
-  return Object.fromEntries(entries);
-}
-
 type PersistArgs = {
   pacienteId: string;
-  // "YYYY-MM-DD" (input type=date) ou ISO. Se ausente, usa a data do dia.
   dataAvaliacao?: string | null;
   protocolLabel?: string;
   currentDobras?: Record<string, number>;
@@ -125,42 +48,94 @@ type PersistArgs = {
 };
 
 function toNullableNumber(value: unknown) {
+  if (value === null || value === undefined || String(value).trim() === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
 
-// Normaliza a data informada pelo nutri para "YYYY-MM-DD" (string) e Date (UTC).
-export function normalizarDataAvaliacao(value?: string | null): {
-  iso: string | null;
-  date: Date | null;
-} {
-  if (!value) return { iso: null, date: null };
-  const raw = String(value).trim();
-  if (!raw) return { iso: null, date: null };
+function snapshotSalvo(item: { observacoes?: string | null }) {
+  if (!item.observacoes) return null;
+  try {
+    const parsed = JSON.parse(item.observacoes);
+    return parsed?.snapshot && typeof parsed.snapshot === "object"
+      ? (parsed.snapshot as AvaliacaoHistoricoSnapshot)
+      : null;
+  } catch {
+    return null;
+  }
+}
 
-  // Aceita "YYYY-MM-DD" direto do input date.
-  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m) {
-    const iso = `${m[1]}-${m[2]}-${m[3]}`;
-    const date = new Date(`${iso}T00:00:00.000Z`);
-    if (Number.isNaN(date.getTime())) return { iso: null, date: null };
-    return { iso, date };
+function dataAvaliacaoKey(value?: string | Date | null) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value.toISOString().slice(0, 10);
+  }
+  const text = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
+
+function dataAvaliacaoDoRegistro(item: {
+  observacoes?: string | null;
+  data_avaliacao?: Date | null;
+  created_at?: Date | null;
+}) {
+  const snapshot = snapshotSalvo(item);
+  return (
+    dataAvaliacaoKey(snapshot?.dataAvaliacao) ||
+    dataAvaliacaoKey(item.data_avaliacao) ||
+    dataAvaliacaoKey(item.created_at) ||
+    ""
+  );
+}
+
+function ordenarPorDataAvaliacao<
+  T extends { id: string; observacoes?: string | null; data_avaliacao?: Date | null; created_at?: Date | null },
+>(rows: T[]) {
+  return rows.sort((a, b) => {
+    const porData = dataAvaliacaoDoRegistro(a).localeCompare(dataAvaliacaoDoRegistro(b));
+    if (porData) return porData;
+    const porCriacao = (a.created_at?.getTime() ?? 0) - (b.created_at?.getTime() ?? 0);
+    return porCriacao || a.id.localeCompare(b.id);
+  });
+}
+
+export function obterMassaMuscularHistorica(
+  snapshot: AvaliacaoHistoricoSnapshot | null,
+  massaMuscularBanco: unknown,
+  alturaCm: number,
+) {
+  const resumo = snapshot?.resumo;
+  const massaMuscularEsqueletica = toNullableNumber(resumo?.massaMuscularEsqueleticaKg);
+  if (massaMuscularEsqueletica !== null) return massaMuscularEsqueletica;
+
+  // Os snapshots recentes guardam explicitamente massa muscular e massa livre
+  // de gordura; snapshots antigos guardavam somente a massa livre de gordura.
+  const massaMuscularSalva = toNullableNumber(resumo?.massaMuscularKg);
+  if (massaMuscularSalva !== null && toNullableNumber(resumo?.massaLivreGorduraKg) !== null) {
+    return massaMuscularSalva;
   }
 
-  // Aceita ISO completo.
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) return { iso: null, date: null };
-  const iso = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(
-    date.getUTCDate()
-  ).padStart(2, "0")}`;
-  return { iso, date: new Date(`${iso}T00:00:00.000Z`) };
+  const imme = toNullableNumber(resumo?.imme);
+  const alturaHistorica = toNullableNumber(resumo?.alturaCm) ?? alturaCm;
+  if (imme !== null && imme > 0 && alturaHistorica > 0) {
+    const h = alturaHistorica / 100;
+    return Math.round(imme * h * h * 10) / 10;
+  }
+
+  const massaLivreGorduraAntiga =
+    toNullableNumber(resumo?.massaLivreGorduraKg) ??
+    massaMuscularSalva ??
+    toNullableNumber(massaMuscularBanco);
+  if (massaLivreGorduraAntiga === null) return null;
+  return Math.round(massaLivreGorduraAntiga * FRACAO_MUSCULO_ESQUELETICO * 10) / 10;
 }
 
 export function buildAvaliacaoSnapshot(args: PersistArgs): AvaliacaoHistoricoSnapshot {
-  const { iso } = normalizarDataAvaliacao(args.dataAvaliacao);
   return {
     createdAt: new Date().toISOString(),
-    dataAvaliacao: iso,
+    dataAvaliacao: normalizeDataAvaliacao(args.dataAvaliacao) || new Date().toISOString(),
     protocolLabel: args.protocolLabel || "",
     dobras: Object.fromEntries(
       Object.entries(args.currentDobras || {}).map(([k, v]) => [k, String(v).replace(".", ",")])
@@ -170,8 +145,13 @@ export function buildAvaliacaoSnapshot(args: PersistArgs): AvaliacaoHistoricoSna
     ),
     resumo: {
       pesoKg: toNullableNumber(args.resumo.pesoKg),
+      alturaCm: toNullableNumber(args.resumo.alturaCm),
       bodyFatPct: toNullableNumber(args.resumo.bodyFatPct),
       massaMuscularKg: toNullableNumber(args.resumo.massaMuscularKg),
+      massaMuscularEsqueleticaKg: toNullableNumber(
+        args.resumo.massaMuscularEsqueleticaKg ?? args.resumo.massaMuscularKg
+      ),
+      massaLivreGorduraKg: toNullableNumber(args.resumo.massaLivreGorduraKg),
       massaAdiposaKg: toNullableNumber(args.resumo.massaAdiposaKg),
       aguaPct: toNullableNumber(args.resumo.aguaPct),
       imme: toNullableNumber(args.resumo.imme),
@@ -197,12 +177,7 @@ export function extrairSnapshotDeEvolucao(item: {
     try {
       const parsed = JSON.parse(raw);
       if (parsed?.snapshot && typeof parsed.snapshot === "object") {
-        const snap = parsed.snapshot as AvaliacaoHistoricoSnapshot;
-        // Registros antigos podem não ter dataAvaliacao no snapshot: usa a coluna.
-        if (!snap.dataAvaliacao && item?.data_avaliacao) {
-          snap.dataAvaliacao = item.data_avaliacao.toISOString();
-        }
-        return snap;
+        return parsed.snapshot as AvaliacaoHistoricoSnapshot;
       }
     } catch {
       // fallback abaixo
@@ -219,7 +194,10 @@ export function extrairSnapshotDeEvolucao(item: {
 
   return {
     createdAt: item?.created_at?.toISOString?.() || new Date().toISOString(),
-    dataAvaliacao: item?.data_avaliacao?.toISOString?.() || null,
+    dataAvaliacao:
+      item?.data_avaliacao?.toISOString?.() ||
+      item?.created_at?.toISOString?.() ||
+      null,
     protocolLabel: "",
     dobras: {},
     circunferencias: item?.circunferencia_abdominal
@@ -229,6 +207,8 @@ export function extrairSnapshotDeEvolucao(item: {
       pesoKg: toNullableNumber(item?.peso),
       bodyFatPct: toNullableNumber(item?.percentual_gordura),
       massaMuscularKg: toNullableNumber(item?.massa_muscular),
+      massaMuscularEsqueleticaKg: null,
+      massaLivreGorduraKg: null,
       massaAdiposaKg: null,
       aguaPct: null,
       imme: null,
@@ -240,68 +220,32 @@ export function extrairSnapshotDeEvolucao(item: {
   };
 }
 
-// -------------------- ORDENAÇÃO PELA DATA DA AVALIAÇÃO --------------------
-// Regra central: a "1ª avaliação" é a de data_avaliacao MAIS ANTIGA (não a de
-// digitação). created_at desempata avaliações salvas na mesma data.
-
-type RowOrdenavel = {
-  id: string;
-  created_at?: Date | null;
-  data_avaliacao?: Date | null;
-  observacoes?: string | null;
-  peso?: unknown;
-  massa_muscular?: unknown;
-  percentual_gordura?: unknown;
-  circunferencia_abdominal?: unknown;
-};
-
-function tempoOrdenacao(r: RowOrdenavel) {
-  const base = r.data_avaliacao || r.created_at || new Date(0);
-  const t = new Date(base).getTime();
-  return Number.isNaN(t) ? 0 : t;
-}
-
-export function ordenarAvaliacoes<T extends RowOrdenavel>(rows: T[]): T[] {
-  return [...rows].sort((a, b) => {
-    const byData = tempoOrdenacao(a) - tempoOrdenacao(b);
-    if (byData !== 0) return byData;
-    const byCreated =
-      new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
-    if (byCreated !== 0) return byCreated;
-    return a.id.localeCompare(b.id);
-  });
-}
-
 // -------------------- LEITURA (usada pelo page.tsx e pelas rotas) --------------------
 
 export async function listarUltimasTresAvaliacoes(pacienteId: string) {
-  const rows = await prisma.evolucao_corporal.findMany({
+  const rows = ordenarPorDataAvaliacao(await prisma.evolucao_corporal.findMany({
     where: { paciente_id: pacienteId },
-  });
+  }));
 
-  const ordenadas = ordenarAvaliacoes(rows);
-
-  // Regra: mantém 1ª (data mais antiga) + últimas 2 (rotativas).
-  if (ordenadas.length <= 3) return ordenadas;
-  const first = ordenadas[0];
-  const lastTwo = ordenadas.slice(-2);
+  // Regra: mantém 1ª (mais antiga) + últimas 2 (rotativas).
+  if (rows.length <= 3) return rows;
+  const first = rows[0];
+  const lastTwo = rows.slice(-2);
   return [first, ...lastTwo];
 }
 
 export async function primeiraAvaliacao(pacienteId: string) {
-  const rows = await prisma.evolucao_corporal.findMany({
+  const rows = ordenarPorDataAvaliacao(await prisma.evolucao_corporal.findMany({
     where: { paciente_id: pacienteId },
-  });
-  const ordenadas = ordenarAvaliacoes(rows);
-  return ordenadas[0] || null;
+  }));
+  return rows[0] ?? null;
 }
 
 export async function ultimaAvaliacao(pacienteId: string) {
-  const rows = await prisma.evolucao_corporal.findMany({
+  const rows = ordenarPorDataAvaliacao(await prisma.evolucao_corporal.findMany({
     where: { paciente_id: pacienteId },
-  });
-  const ordenadas = ordenarAvaliacoes(rows);
-  return ordenadas[ordenadas.length - 1] || null;
+  }));
+  return rows[rows.length - 1] ?? null;
 }
 
 // -------------------- ESCRITA COM ROTAÇÃO --------------------
@@ -310,48 +254,108 @@ export async function salvarAvaliacaoHistorico(args: PersistArgs) {
   const snapshot = buildAvaliacaoSnapshot(args);
   const abdomen = toNullableNumber(args.currentCircunferencias?.abdomen);
   const cintura = toNullableNumber(args.currentCircunferencias?.cintura);
-  const { iso: dataIso, date: dataDate } = normalizarDataAvaliacao(args.dataAvaliacao);
-  if (dataIso) snapshot.dataAvaliacao = dataIso;
+  const dataAvaliacao = toDateOnly(snapshot.dataAvaliacao);
+  const dataAvaliacaoKeyAtual = dataAvaliacaoKey(snapshot.dataAvaliacao);
+
+  const existentes = ordenarPorDataAvaliacao(await prisma.evolucao_corporal.findMany({
+    where: { paciente_id: args.pacienteId },
+  }));
+
+  // Uma data de avaliação identifica um único registro. Salvar novamente essa
+  // data substitui seus valores, sem criar outra avaliação ou avançar a rotação.
+  const mesmoDia = [...existentes]
+    .reverse()
+    .find((registro) => dataAvaliacaoDoRegistro(registro) === dataAvaliacaoKeyAtual);
+
+  if (mesmoDia) {
+    const createdAt = mesmoDia.created_at ?? new Date();
+    snapshot.createdAt = createdAt.toISOString();
+    snapshot.resumo.createdAt = createdAt.toISOString();
+    const atualizado = await prisma.evolucao_corporal.update({
+      where: { id: mesmoDia.id },
+      data: {
+        peso: snapshot.resumo.pesoKg,
+        percentual_gordura: snapshot.resumo.bodyFatPct,
+        massa_muscular: snapshot.resumo.massaMuscularEsqueleticaKg ?? snapshot.resumo.massaMuscularKg,
+        circunferencia_abdominal: abdomen ?? cintura,
+        data_avaliacao: dataAvaliacao,
+        observacoes: JSON.stringify({ tipo: "avaliacao_fisica", snapshot }),
+      },
+    });
+
+    return {
+      snapshot,
+      id: atualizado.id,
+      createdAt: atualizado.created_at?.toISOString?.() || createdAt.toISOString(),
+    };
+  }
+
+  // Aplica a rotação ANTES de inserir: mantém a 1ª e as duas avaliações mais
+  // recentes pela data da avaliação, não pelo momento em que foram cadastradas.
+  if (existentes.length >= 3) {
+    // Remove todos exceto a primeira avaliação e a mais recente.
+    const meio = existentes.slice(1, existentes.length - 1);
+    if (meio.length > 0) {
+      await prisma.evolucao_corporal.deleteMany({
+        where: { id: { in: meio.map((r) => r.id) } },
+      });
+    }
+    // Após a limpeza, a antiga mais recente fica em 2º lugar e o registro novo
+    // passa a ocupar a posição mais recente pela data da avaliação.
+  }
+
+  // created_at registra o momento em que o sistema persistiu a avaliação;
+  // data_avaliacao determina sua posição cronológica clínica.
+  const agora = new Date();
+  const ultimoCriado = existentes.reduce<Date | null>((maisRecente, registro) => {
+    const atual = registro.created_at;
+    return atual && (!maisRecente || atual > maisRecente) ? atual : maisRecente;
+  }, null);
+  const createdAt =
+    ultimoCriado && ultimoCriado.getTime() >= agora.getTime()
+      ? new Date(ultimoCriado.getTime() + 1)
+      : agora;
+  snapshot.createdAt = createdAt.toISOString();
+  snapshot.resumo.createdAt = createdAt.toISOString();
 
   const criado = await prisma.evolucao_corporal.create({
     data: {
       paciente_id: args.pacienteId,
-      // Grava a data REAL da avaliação informada pelo nutri.
-      // Sem data informada, cai no default CURRENT_DATE do banco (data do dia).
-      ...(dataDate ? { data_avaliacao: dataDate } : {}),
       peso: snapshot.resumo.pesoKg,
       percentual_gordura: snapshot.resumo.bodyFatPct,
-      massa_muscular: snapshot.resumo.massaMuscularKg,
+      massa_muscular:
+        snapshot.resumo.massaMuscularEsqueleticaKg ?? snapshot.resumo.massaMuscularKg,
       circunferencia_abdominal: abdomen ?? cintura,
+      data_avaliacao: dataAvaliacao,
       observacoes: JSON.stringify({ tipo: "avaliacao_fisica", snapshot }),
+      created_at: createdAt,
     },
   });
-
-  // ROTAÇÃO (após inserir, ordenando pela data da avaliação):
-  // Mantém exatamente 3 registros → [1ª (mais antiga, fixa), 2ª, 3ª (recente)].
-  // Ao salvar a 4ª, a nova entra como 3ª, a antiga 3ª vira 2ª e o "meio" sai.
-  const existentes = await prisma.evolucao_corporal.findMany({
-    where: { paciente_id: args.pacienteId },
-    select: { id: true, created_at: true, data_avaliacao: true },
-  });
-
-  if (existentes.length > 3) {
-    const ordenadas = ordenarAvaliacoes(existentes);
-    const manter = new Set<string>([
-      ordenadas[0].id,
-      ...ordenadas.slice(-2).map((r) => r.id),
-    ]);
-    const remover = ordenadas.filter((r) => !manter.has(r.id)).map((r) => r.id);
-    if (remover.length > 0) {
-      await prisma.evolucao_corporal.deleteMany({
-        where: { id: { in: remover } },
-      });
-    }
-  }
 
   return {
     snapshot,
     id: criado.id,
-    createdAt: criado.created_at?.toISOString?.() || new Date().toISOString(),
+    createdAt: criado.created_at?.toISOString?.() || createdAt.toISOString(),
   };
+}
+
+function normalizeDataAvaliacao(value?: string | null) {
+  if (!value) return null;
+  const texto = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+    const date = new Date(`${texto}T12:00:00.000Z`);
+    return Number.isNaN(date.getTime()) ? null : texto;
+  }
+  const date = new Date(texto);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
+function toDateOnly(value?: string | null) {
+  const normalized = normalizeDataAvaliacao(value);
+  if (!normalized) return new Date();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return new Date(`${normalized}T12:00:00.000Z`);
+  }
+  return new Date(normalized);
 }
