@@ -156,7 +156,12 @@ export function buildAvaliacaoSnapshot(args: PersistArgs): AvaliacaoHistoricoSna
       aguaPct: toNullableNumber(args.resumo.aguaPct),
       imme: toNullableNumber(args.resumo.imme),
       img: toNullableNumber(args.resumo.img),
-      ffmi: toNullableNumber(args.resumo.ffmi),
+            ffmi: toNullableNumber(args.resumo.ffmi),
+      circunferenciaAbdominalCm: toNullableNumber(
+        args.resumo.circunferenciaAbdominalCm
+      ),
+      vo2maxMlKgMin: toNullableNumber(args.resumo.vo2maxMlKgMin),
+      imc: toNullableNumber(args.resumo.imc),
       createdAt: args.resumo.createdAt || null,
       protocolLabel: args.resumo.protocolLabel || args.protocolLabel || "",
     },
