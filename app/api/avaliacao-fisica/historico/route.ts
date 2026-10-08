@@ -9,6 +9,7 @@ import {
   buildAvaliacaoSnapshot,
   extrairSnapshotDeEvolucao,
   listarUltimasTresAvaliacoes,
+  obterMassaMuscularHistorica,
 } from "@/lib/avaliacaoHistorico";
 
 export const runtime = "nodejs";
@@ -16,27 +17,17 @@ export const dynamic = "force-dynamic";
 
 function fmtData(d: Date | string | null | undefined) {
   if (!d) return "";
-  const texto = String(d);
-  const dataDireta = texto.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (dataDireta) return `${dataDireta[3]}/${dataDireta[2]}/${dataDireta[1]}`;
+  const texto = d instanceof Date ? d.toISOString() : String(d);
+  if (/^\d{4}-\d{2}-\d{2}/.test(texto)) {
+    const [yyyy, mm, dd] = texto.slice(0, 10).split("-");
+    return `${dd}/${mm}/${yyyy}`;
+  }
   const date = new Date(d);
   if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("pt-BR", {
-    timeZone: "America/Sao_Paulo",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
-}
-
-function fmtDataEscolhida(d: Date | string | null | undefined) {
-  if (!d) return "";
-  if (d instanceof Date) {
-    const dd = String(d.getUTCDate()).padStart(2, "0");
-    const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-    return `${dd}/${mm}/${d.getUTCFullYear()}`;
-  }
-  return fmtData(d);
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yyyy = date.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
 }
 
 export async function GET(req: NextRequest) {
@@ -47,23 +38,46 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, erro: "pacienteId ausente" }, { status: 400 });
     }
 
-    const rows = await listarUltimasTresAvaliacoes(pacienteId);
+    const [rows, paciente] = await Promise.all([
+      listarUltimasTresAvaliacoes(pacienteId),
+      prisma.pacientes.findUnique({
+        where: { id: pacienteId },
+        select: { altura_cm: true },
+      }),
+    ]);
+    const alturaCm = Number(paciente?.altura_cm ?? 0);
     const avaliacoes = rows.map((r) => {
       const snap = extrairSnapshotDeEvolucao(r);
+      const massaMuscularKg = obterMassaMuscularHistorica(
+        snap,
+        r.massa_muscular,
+        alturaCm
+      );
+      const dataAvaliacao = snap?.dataAvaliacao || r.data_avaliacao || r.created_at;
       return {
         id: r.id,
-        createdAt: snap?.dataAvaliacao || r.data_avaliacao?.toISOString?.() || r.created_at?.toISOString?.() || null,
-        dataLabel: fmtDataEscolhida(snap?.dataAvaliacao || r.data_avaliacao) || fmtData(r.created_at),
-        resumo: snap?.resumo || {
+        createdAt: r.created_at?.toISOString?.() || null,
+        dataLabel: fmtData(dataAvaliacao),
+        resumo: snap?.resumo
+          ? {
+              ...snap.resumo,
+              massaMuscularKg,
+              massaMuscularEsqueleticaKg: massaMuscularKg,
+              massaLivreGorduraKg:
+                snap.resumo.massaLivreGorduraKg ?? snap.resumo.massaMuscularKg,
+            }
+          : {
           pesoKg: Number(r.peso ?? 0) || null,
           bodyFatPct: Number(r.percentual_gordura ?? 0) || null,
-          massaMuscularKg: Number(r.massa_muscular ?? 0) || null,
+          massaMuscularKg,
+          massaMuscularEsqueleticaKg: massaMuscularKg,
+          massaLivreGorduraKg: null,
           massaAdiposaKg: null,
           aguaPct: null,
           imme: null,
           img: null,
           ffmi: null,
-          createdAt: r.data_avaliacao?.toISOString?.() || r.created_at?.toISOString?.() || null,
+          createdAt: r.created_at?.toISOString?.() || null,
           protocolLabel: "",
         },
         dobras: snap?.dobras || {},
@@ -82,7 +96,6 @@ export async function GET(req: NextRequest) {
 
 type BodyShape = {
   pacienteId?: string;
-  dataAvaliacao?: string | null;
   protocolLabel?: string;
   currentDobras?: Record<string, number>;
   currentCircunferencias?: Record<string, number>;
@@ -90,6 +103,8 @@ type BodyShape = {
     pesoKg?: number | null;
     bodyFatPct?: number | null;
     massaMuscularKg?: number | null;
+    massaMuscularEsqueleticaKg?: number | null;
+    massaLivreGorduraKg?: number | null;
     massaAdiposaKg?: number | null;
     aguaPct?: number | null;
     imme?: number | null;
@@ -110,7 +125,6 @@ export async function POST(req: NextRequest) {
     // O histórico só é persistido no fluxo do /download.
     const snapshot = buildAvaliacaoSnapshot({
       pacienteId: body.pacienteId,
-      dataAvaliacao: body.dataAvaliacao || null,
       protocolLabel: body.protocolLabel || body.resumo?.protocolLabel || "",
       currentDobras: body.currentDobras || {},
       currentCircunferencias: body.currentCircunferencias || {},
@@ -118,6 +132,9 @@ export async function POST(req: NextRequest) {
         pesoKg: body.resumo?.pesoKg ?? null,
         bodyFatPct: body.resumo?.bodyFatPct ?? null,
         massaMuscularKg: body.resumo?.massaMuscularKg ?? null,
+        massaMuscularEsqueleticaKg:
+          body.resumo?.massaMuscularEsqueleticaKg ?? body.resumo?.massaMuscularKg ?? null,
+        massaLivreGorduraKg: body.resumo?.massaLivreGorduraKg ?? null,
         massaAdiposaKg: body.resumo?.massaAdiposaKg ?? null,
         aguaPct: body.resumo?.aguaPct ?? null,
         imme: body.resumo?.imme ?? null,

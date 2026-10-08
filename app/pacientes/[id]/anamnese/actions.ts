@@ -7,29 +7,19 @@ import { redirect } from "next/navigation";
 const CUSTOM_SECTION_TITLE = "--- Perguntas personalizadas ---";
 
 function parseFormData(formData: FormData) {
+  const dataAvaliacaoRaw = String(formData.get("data_avaliacao") || "").trim();
+  const dataAvaliacao =
+    /^\d{4}-\d{2}-\d{2}$/.test(dataAvaliacaoRaw) &&
+    !Number.isNaN(new Date(`${dataAvaliacaoRaw}T12:00:00.000Z`).getTime())
+      ? new Date(`${dataAvaliacaoRaw}T12:00:00.000Z`)
+      : null;
+
   const toDecimal = (valor: FormDataEntryValue | null) => {
     const texto = String(valor || "").replace(",", ".").trim();
     if (!texto) return null;
     const numero = Number(texto);
     if (Number.isNaN(numero)) return null;
     return numero;
-  };
-
-  const toDateOnly = (valor: FormDataEntryValue | null) => {
-    const texto = String(valor || "").trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(texto)) return null;
-
-    const [ano, mes, dia] = texto.split("-").map(Number);
-    const data = new Date(Date.UTC(ano, mes - 1, dia));
-    if (
-      data.getUTCFullYear() !== ano ||
-      data.getUTCMonth() !== mes - 1 ||
-      data.getUTCDate() !== dia
-    ) {
-      return null;
-    }
-
-    return data;
   };
 
   const observacoesBase = String(formData.get("observacoes") || "").trim();
@@ -52,6 +42,7 @@ function parseFormData(formData: FormData) {
     .join("\n\n");
 
   return {
+    data_avaliacao: dataAvaliacao,
     peso: toDecimal(formData.get("peso")),
     altura: toDecimal(formData.get("altura")),
     percentual_gordura: toDecimal(formData.get("percentual_gordura")),
@@ -64,7 +55,6 @@ function parseFormData(formData: FormData) {
     suplementos: (formData.get("suplementos") as string) || null,
     habitos_alimentares: (formData.get("habitos_alimentares") as string) || null,
     observacoes: observacoes || null,
-    data_avaliacao: toDateOnly(formData.get("data_avaliacao")),
   };
 }
 

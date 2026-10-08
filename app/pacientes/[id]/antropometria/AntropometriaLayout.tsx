@@ -7,7 +7,7 @@ import {
   classificarAgua,
   classificarIMME,
   classificarIMG,
-  classificarMassaMuscular,
+  classificarMassaLivreGordura,
   classificarFFMI,
   classificarPercentualGordura,
   calcularIMME,
@@ -375,7 +375,14 @@ function readStoredVO2max(pacienteId: string) {
 }
 
 function getSnapshotDateLabel(value?: string) {
-  return formatarDataAvaliacao(value);
+  if (!value) return "—";
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+    const [yyyy, mm, dd] = value.slice(0, 10).split("-");
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("pt-BR");
 }
 
 function parsePtNumber(value: string) {
@@ -753,28 +760,6 @@ const PROTOCOLS: ProtocolDef[] = [
   },
 ];
 
-function dataAvaliacaoTimestamp(value: string | null | undefined) {
-  if (!value) return 0;
-  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (match) {
-    return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  }
-  const timestamp = new Date(value).getTime();
-  return Number.isFinite(timestamp) ? timestamp : 0;
-}
-
-function formatarDataAvaliacao(value: string | null | undefined) {
-  if (!value) return "—";
-  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (match) return `${match[3]}/${match[2]}/${match[1]}`;
-  const data = new Date(value);
-  return Number.isNaN(data.getTime())
-    ? "—"
-    : new Intl.DateTimeFormat("pt-BR", {
-        timeZone: "America/Sao_Paulo",
-      }).format(data);
-}
-
 export default function AntropometriaLayout({
   pacienteId,
   sexoPaciente,
@@ -853,6 +838,12 @@ export default function AntropometriaLayout({
   const [compararResultados, setCompararResultados] = useState(false);
   const [avaliacaoAnterior, setAvaliacaoAnterior] =
     useState<AvaliacaoHistoricoSnapshot | null>(avaliacaoAnteriorInicial);
+
+  const dataAvaliacaoAtual = useMemo(() => {
+    if (!dataAvaliacao) return null;
+    const texto = String(dataAvaliacao);
+    return /^\d{4}-\d{2}-\d{2}/.test(texto) ? texto.slice(0, 10) : null;
+  }, [dataAvaliacao]);
 
   useEffect(() => {
     if (!pacienteId) {
@@ -1049,13 +1040,17 @@ export default function AntropometriaLayout({
 
     // =================== IMME / IMG / FFMI / % de agua ===================
   const sexoCodigo: SexoBC = sexoPaciente === "Feminino" ? "F" : "M";
-  const massaMuscularEsqueleticaKg =
+  const massaMuscularEsqueleticaEstimada =
     result.massaMuscular !== null
       ? Math.max(0, result.massaMuscular * FRACAO_MUSCULO_ESQUELETICO)
       : null;
   const immeVal: number =
-    massaMuscularEsqueleticaKg !== null && alturaCm > 0
-      ? calcularIMME(massaMuscularEsqueleticaKg, alturaCm) : 0;
+    massaMuscularEsqueleticaEstimada !== null && alturaCm > 0
+      ? calcularIMME(massaMuscularEsqueleticaEstimada, alturaCm) : 0;
+  const massaMuscularEsqueleticaKg =
+    immeVal > 0 && alturaCm > 0
+      ? round1(immeVal * (alturaCm / 100) ** 2)
+      : null;
   const imgVal: number =
     result.massaAdiposa !== null && alturaCm > 0
       ? calcularIMG(result.massaAdiposa, alturaCm) : 0;
@@ -1066,7 +1061,7 @@ export default function AntropometriaLayout({
   const imgClass  = imgVal  > 0 ? classificarIMG(imgVal,  sexoCodigo, idade) : null;
   const massaLivreGorduraClass =
     result.massaMuscular !== null && result.massaMuscular > 0
-      ? classificarMassaMuscular(result.massaMuscular, sexoCodigo, idade)
+      ? classificarMassaLivreGordura(result.massaMuscular, sexoCodigo, idade)
       : null;
   const ffmiClass = ffmiVal > 0 ? classificarFFMI(ffmiVal, sexoCodigo) : null;
   const gorduraClass = result.bodyFatPct !== null
@@ -1084,7 +1079,11 @@ export default function AntropometriaLayout({
   // Seletor 1ª / 2ª / 3ª avaliação (para comparar)
   const historicoOrdenado = useMemo(() => {
     const arr = [...(historicoAvaliacoes || [])].filter((h) => h?.snapshot);
-    arr.sort((a, b) => dataAvaliacaoTimestamp(a.createdAt) - dataAvaliacaoTimestamp(b.createdAt));
+    arr.sort((a, b) => {
+      const aDate = a.snapshot?.dataAvaliacao || a.createdAt || 0;
+      const bDate = b.snapshot?.dataAvaliacao || b.createdAt || 0;
+      return new Date(aDate).getTime() - new Date(bDate).getTime();
+    });
     return arr;
   }, [historicoAvaliacoes]);
   const [avaliacaoBaseId, setAvaliacaoBaseId] = useState<string>("");
@@ -1240,14 +1239,17 @@ export default function AntropometriaLayout({
   function buildCurrentSnapshot(): AvaliacaoHistoricoSnapshot {
     return {
       createdAt: new Date().toISOString(),
+      dataAvaliacao: dataAvaliacaoAtual,
       protocolLabel: protocoloAtual?.label ?? "",
       dobras: currentDobras,
       circunferencias: currentCircunferencias,
-      dataAvaliacao: dataAvaliacao || null,
       resumo: {
         pesoKg,
+        alturaCm,
         bodyFatPct: result.bodyFatPct,
-        massaMuscularKg: result.massaMuscular,
+        massaMuscularKg: massaMuscularEsqueleticaKg,
+        massaMuscularEsqueleticaKg,
+        massaLivreGorduraKg: result.massaMuscular,
         massaAdiposaKg: result.massaAdiposa,
         aguaPct: aguaCorporalPct,
         imme: immeVal,
@@ -1272,17 +1274,19 @@ export default function AntropometriaLayout({
     const snapshot = buildCurrentSnapshot();
     return {
       pacienteId,
+      dataAvaliacao: dataAvaliacaoAtual,
       sex: sexoCodigo,
       idade,
       alturaCm,
       pesoKg,
       bodyFatPct: result.bodyFatPct,
-      massaMuscularKg: result.massaMuscular,
+      massaMuscularKg: massaMuscularEsqueleticaKg,
+      massaLivreGorduraKg: result.massaMuscular,
       massaAdiposaKg: result.massaAdiposa,
       aguaPct: aguaCorporalPct,
       protocolLabel: protocoloAtual?.label ?? "",
+      imme: immeVal,
       vo2max: vo2maxAtual,
-      dataAvaliacao: dataAvaliacao || null,
       compareResults: compararResultados,
       currentDobras: Object.fromEntries(
         Object.entries(snapshot.dobras).map(([key, value]) => [key, parsePtNumber(String(value ?? ""))])
@@ -1569,7 +1573,7 @@ export default function AntropometriaLayout({
               <div>
                 <div style={resultTitleGreen}>Massa muscular</div>
                 <div style={resultValueStyle}>
-                  {formatPt(result.massaMuscular, " kg")}
+                  {formatPt(massaMuscularEsqueleticaKg, " kg")}
                 </div>
                 <div style={resultFootNoteStyle}>estimada</div>
               </div>
@@ -1728,7 +1732,7 @@ export default function AntropometriaLayout({
                           : idx === 1
                           ? "2ª avaliação"
                           : "3ª avaliação";
-                      const d = formatarDataAvaliacao(h.createdAt);
+                      const d = getSnapshotDateLabel(h.snapshot?.dataAvaliacao || h.createdAt || undefined);
                       return (
                         <option key={h.id} value={h.id}>
                           {label} — {d}
@@ -1745,7 +1749,7 @@ export default function AntropometriaLayout({
                   {historicoOrdenado.map((h, idx) => {
                     const label =
                       idx === 0 ? "1ª avaliação" : idx === 1 ? "2ª avaliação" : "3ª avaliação";
-                    const d = formatarDataAvaliacao(h.createdAt);
+                    const d = getSnapshotDateLabel(h.snapshot?.dataAvaliacao || h.createdAt || undefined);
                     return (
                       <label key={h.id} style={avaliacaoCompareToggleStyle}>
                         <input
