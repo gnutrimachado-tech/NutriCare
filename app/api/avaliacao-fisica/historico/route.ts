@@ -38,14 +38,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, erro: "pacienteId ausente" }, { status: 400 });
     }
 
-    const [rows, paciente] = await Promise.all([
-      listarUltimasTresAvaliacoes(pacienteId),
-      prisma.pacientes.findUnique({
-        where: { id: pacienteId },
-        select: { altura_cm: true },
-      }),
-    ]);
-    const alturaCm = Number(paciente?.altura_cm ?? 0);
+    const [rows, anamnese] = await Promise.all([
+  listarUltimasTresAvaliacoes(pacienteId),
+  prisma.anamneses.findFirst({
+    where: { paciente_id: pacienteId },
+    orderBy: { created_at: "desc" },
+    select: { altura: true },
+  }),
+]);
+const alturaCm = Number(anamnese?.altura ?? 0);
     const avaliacoes = rows.map((r) => {
       const snap = extrairSnapshotDeEvolucao(r);
       const massaMuscularKg = obterMassaMuscularHistorica(
