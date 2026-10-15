@@ -25,6 +25,10 @@ export type AvaliacaoHistoricoResumo = {
   imme: number | null;
   img: number | null;
   ffmi: number | null;
+  // Métricas extras enviadas pela aba Antropometria (opcionais).
+  circunferenciaAbdominalCm?: number | null;
+  vo2maxMlKgMin?: number | null;
+  imc?: number | null;
   createdAt?: string | null;
   protocolLabel?: string | null;
 };
@@ -157,6 +161,9 @@ export function buildAvaliacaoSnapshot(args: PersistArgs): AvaliacaoHistoricoSna
       imme: toNullableNumber(args.resumo.imme),
       img: toNullableNumber(args.resumo.img),
       ffmi: toNullableNumber(args.resumo.ffmi),
+      circunferenciaAbdominalCm: toNullableNumber(args.resumo.circunferenciaAbdominalCm),
+      vo2maxMlKgMin: toNullableNumber(args.resumo.vo2maxMlKgMin),
+      imc: toNullableNumber(args.resumo.imc),
       createdAt: args.resumo.createdAt || null,
       protocolLabel: args.resumo.protocolLabel || args.protocolLabel || "",
     },
@@ -214,6 +221,9 @@ export function extrairSnapshotDeEvolucao(item: {
       imme: null,
       img: null,
       ffmi: null,
+      circunferenciaAbdominalCm: toNullableNumber(item?.circunferencia_abdominal),
+      vo2maxMlKgMin: null,
+      imc: null,
       createdAt: item?.created_at?.toISOString?.() || null,
       protocolLabel: "",
     },
