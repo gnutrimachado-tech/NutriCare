@@ -94,18 +94,51 @@ export async function salvarAvaliacaoAntropometrica(
 ) {
   const dataAvaliacao = dataAvaliacaoValida(input.dataAvaliacao);
 
-  const saved = await prisma.evolucao_corporal.create({
-    data: {
-      paciente_id: pacienteId,
-      data_avaliacao: dataAvaliacao,
-      peso: input.peso,
-      percentual_gordura: input.percentualGordura,
-      massa_muscular: input.massaMuscular,
-      dobras_json: input.dobras,
-      circunferencias_json: input.circunferencias,
-      protocolo_id: input.protocoloId || null,
+  // O schema de `evolucao_corporal` não possui colunas dobras_json /
+  // circunferencias_json / protocolo_id. Essas medidas são preservadas no
+  // snapshot dentro de `observacoes` (mesmo padrão de lib/avaliacaoHistorico).
+  // Regra solicitada: se já existir avaliação na MESMA data, atualiza os
+  // valores do registro existente em vez de criar uma nova avaliação.
+  const observacoesSnapshot = JSON.stringify({
+    tipo: "avaliacao_antropometrica",
+    snapshot: {
+      dataAvaliacao: input.dataAvaliacao,
+      protocoloId: input.protocoloId || null,
+      dobras: input.dobras,
+      circunferencias: input.circunferencias,
     },
   });
+
+  const inicioDoDia = new Date(`${input.dataAvaliacao}T00:00:00.000Z`);
+  const fimDoDia = new Date(`${input.dataAvaliacao}T23:59:59.999Z`);
+  const existente = await prisma.evolucao_corporal.findFirst({
+    where: {
+      paciente_id: pacienteId,
+      data_avaliacao: { gte: inicioDoDia, lte: fimDoDia },
+    },
+    orderBy: { created_at: "desc" },
+  });
+
+  const saved = existente
+    ? await prisma.evolucao_corporal.update({
+        where: { id: existente.id },
+        data: {
+          peso: input.peso,
+          percentual_gordura: input.percentualGordura,
+          massa_muscular: input.massaMuscular,
+          observacoes: observacoesSnapshot,
+        },
+      })
+    : await prisma.evolucao_corporal.create({
+        data: {
+          paciente_id: pacienteId,
+          data_avaliacao: dataAvaliacao,
+          peso: input.peso,
+          percentual_gordura: input.percentualGordura,
+          massa_muscular: input.massaMuscular,
+          observacoes: observacoesSnapshot,
+        },
+      });
 
   const registros = await prisma.evolucao_corporal.findMany({
     where: { paciente_id: pacienteId },
@@ -149,7 +182,7 @@ export async function salvarAvaliacaoAntropometrica(
     massaMuscular: saved.massa_muscular === null ? null : Number(saved.massa_muscular),
     dobras: input.dobras,
     circunferencias: input.circunferencias,
-    protocoloId: saved.protocolo_id,
+    protocoloId: input.protocoloId || null,
   };
 }
 
