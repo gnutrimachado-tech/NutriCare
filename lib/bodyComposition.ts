@@ -22,16 +22,18 @@ export interface Classificacao {
   label: string;
 }
 
+// IMME (Índice de Massa Muscular Esquelética, kg/m²) — matriz de referência
+// por sexo e faixa etária (5 faixas), conforme tabela enviada pelo nutri.
 const IMME_TABLE = {
   F: [
     { idadeMin: 18, idadeMax: 45, limite: 8.3, bom: 9.7 },
-    { idadeMin: 46, idadeMax: 55, limite: 8.1, bom: 9.5 },
+    { idadeMin: 46, idadeMax: 55, limite: 8.3, bom: 9.5 },
     { idadeMin: 56, idadeMax: 999, limite: 7.5, bom: 8.9 },
   ],
   M: [
     { idadeMin: 18, idadeMax: 45, limite: 10.8, bom: 12.6 },
-    { idadeMin: 46, idadeMax: 55, limite: 10.6, bom: 12.4 },
-    { idadeMin: 56, idadeMax: 999, limite: 9.7, bom: 11.5 },
+    { idadeMin: 46, idadeMax: 55, limite: 10.8, bom: 12.4 },
+    { idadeMin: 56, idadeMax: 999, limite: 10.0, bom: 11.5 },
   ],
 } as const;
 
@@ -86,6 +88,8 @@ const MASSA_ADIPOSA_TABLE = {
   ],
 } as const;
 
+// IMG (Índice de Massa Gorda, kg/m²) — matriz de referência por sexo e
+// faixa etária (5 faixas). 'limite'/'otimoMax' = faixa ótima da tabela.
 const IMG_TABLE = {
   F: [
     { idadeMin: 18, idadeMax: 45, limite: 4.4, otimoMax: 5.3, bom: 9.3 },
