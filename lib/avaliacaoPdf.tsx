@@ -198,7 +198,7 @@ if (greatVibesPath && fs.existsSync(greatVibesPath)) {
   } catch {}
 }
 function toFixedPt(v: number | null | undefined, digits = 1) {
-  if (v === null || v === undefined || !Number.isFinite(Number(v))) return "—";
+  if (v === null || v === undefined || !Number.isFinite(Number(v))) return "";
   return Number(v).toFixed(digits).replace(".", ",");
 }
 function formatBirth(v?: string | null) {
@@ -540,7 +540,9 @@ const styles = StyleSheet.create({
   },
   signLine: {
     position: "absolute",
-    top: PAGE_HEIGHT - (56 + 10),
+    // O traço passa a acompanhar o texto do CRN (linha de baixo), como na
+    // imagem de referência enviada pelo nutri.
+    top: PAGE_HEIGHT - (56 - 8),
     left: PAGE_MARGIN_X,
     height: 0.8,
     backgroundColor: "#333",
@@ -548,7 +550,8 @@ const styles = StyleSheet.create({
   },
   signCrn: {
     position: "absolute",
-    top: PAGE_HEIGHT - (56 - 16) - 16,
+    // CRN abaixo do traço, na segunda linha da assinatura.
+    top: PAGE_HEIGHT - (56 - 8) + 3,
     left: PAGE_MARGIN_X,
     fontSize: 16,
     fontFamily: "GreatVibes",
@@ -954,27 +957,27 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
       }
     : null);
   const pesoComparado = atual?.peso ?? dados.pesoKg;
-  const massaMuscularComparada = atual?.massaMuscular ?? dados.massaMuscularKg ?? 0;
+  const massaMuscularComparada = atual?.massaMuscular ?? dados.massaMuscularKg;
   const gorduraComparada = atual?.bfPct ?? dados.bfPct;
   const dPeso =
     base?.pesoKg != null ? pesoComparado - Number(base.pesoKg) : null;
   const dMM =
-    base?.massaMuscularKg != null
+    base?.massaMuscularKg != null && massaMuscularComparada != null
       ? massaMuscularComparada - Number(base.massaMuscularKg)
       : null;
   const dBF = base?.bodyFatPct != null ? gorduraComparada - Number(base.bodyFatPct) : null;
 
-  // Cálculo da largura do traço da assinatura (mesma lógica do PDF de Orientações:
-  // linha acompanha exatamente o comprimento do texto "Nutricionista: {nome}").
+  // Rodapé em duas linhas (igual ao PDF de Orientações):
+  //   linha 1 (acima do traço): "Nutricionista: {nome}"
+  //   linha 2 (abaixo do traço): "CRN: {crn}"
   const nomeBase = (nutricionista?.nome || "").trim();
   const fullNutriText = nomeBase ? `Nutricionista: ${nomeBase}` : "Nutricionista:";
-  // Estimativa de largura em GreatVibes 18pt (~0.42 * fontSize por char).
+  const crnRodape = (nutricionista?.crn ? `CRN: ${nutricionista.crn}` : "CRN:").trim();
+  // O traço acompanha o comprimento do texto MAIS LONGO entre as duas linhas.
   const estWidth = Math.min(
-    fullNutriText.length * 18 * 0.42,
+    Math.max(fullNutriText.length * 18, crnRodape.length * 16) * 0.42,
     PAGE_WIDTH - PAGE_MARGIN_X * 2 - 70
   );
-
-  const crnRodape = (nutricionista?.crn ? `CRN: ${nutricionista.crn}` : "CRN:").trim();
 
   return (
     <Document>
@@ -1038,7 +1041,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                   <Text style={styles.ccColParamText}>Massa muscular</Text>
                 </View>
                 <ReferenciaCelula parametro="massaMuscular" sexo={paciente.sexo} idade={paciente.idade} />
-                <Text style={styles.ccColRes}>{toFixedPt(dados.massaMuscularKg ?? 0)} kg</Text>
+                <Text style={styles.ccColRes}>{toFixedPt(dados.massaMuscularKg)} kg</Text>
                 <View style={styles.ccColEval}>
                   <EvalPill
                     cor={dados.classificacaoMassaMuscular?.cor}

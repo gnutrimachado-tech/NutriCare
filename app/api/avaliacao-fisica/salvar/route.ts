@@ -12,7 +12,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { salvarAvaliacaoHistorico } from "@/lib/avaliacaoHistorico";
+import {
+  listarUltimasTresAvaliacoes,
+  salvarAvaliacaoHistorico,
+} from "@/lib/avaliacaoHistorico";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +30,7 @@ type BodyShape = {
     pesoKg?: number | null;
     bodyFatPct?: number | null;
     massaMuscularKg?: number | null;
+    massaLivreGorduraKg?: number | null;
     massaAdiposaKg?: number | null;
     aguaPct?: number | null;
     imme?: number | null;
@@ -73,12 +77,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Número da avaliação = total já salvo + 1, travado em 3 (a "mais recente").
-    const totalAntes = await prisma.evolucao_corporal.count({
-      where: { paciente_id: pacienteId },
-    });
-    const numeroAvaliacao = Math.min(totalAntes + 1, 3);
-
     const salvo = await salvarAvaliacaoHistorico({
       pacienteId,
       dataAvaliacao: body.dataAvaliacao || null,
@@ -89,6 +87,7 @@ export async function POST(req: NextRequest) {
         pesoKg: body.resumo?.pesoKg ?? null,
         bodyFatPct: body.resumo?.bodyFatPct ?? null,
         massaMuscularKg: body.resumo?.massaMuscularKg ?? null,
+        massaLivreGorduraKg: body.resumo?.massaLivreGorduraKg ?? null,
         massaAdiposaKg: body.resumo?.massaAdiposaKg ?? null,
         aguaPct: body.resumo?.aguaPct ?? null,
         imme: body.resumo?.imme ?? null,
@@ -102,11 +101,15 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    const historicoAtual = await listarUltimasTresAvaliacoes(pacienteId);
+    const posicao = historicoAtual.findIndex((registro) => registro.id === salvo.id);
+
     return NextResponse.json({
       ok: true,
       id: salvo.id,
-      numeroAvaliacao,
-      totalAvaliacoes: totalAntes + 1,
+      numeroAvaliacao: posicao >= 0 ? posicao + 1 : historicoAtual.length,
+      totalAvaliacoes: historicoAtual.length,
+      atualizada: salvo.atualizada,
       dataAvaliacao: salvo.snapshot.dataAvaliacao || null,
     });
   } catch (e: any) {

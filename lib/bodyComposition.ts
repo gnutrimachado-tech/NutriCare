@@ -22,16 +22,20 @@ export interface Classificacao {
   label: string;
 }
 
+// IMME (Índice de Massa Muscular Esquelética, kg/m²) — matriz de referência
+// por sexo e faixa etária (5 faixas), conforme tabela enviada pelo nutri.
 const IMME_TABLE = {
   F: [
     { idadeMin: 18, idadeMax: 45, limite: 8.3, bom: 9.7 },
-    { idadeMin: 46, idadeMax: 55, limite: 8.1, bom: 9.5 },
+    { idadeMin: 46, idadeMax: 55, limite: 8.3, bom: 9.5 },
     { idadeMin: 56, idadeMax: 999, limite: 7.5, bom: 8.9 },
   ],
   M: [
-    { idadeMin: 18, idadeMax: 45, limite: 10.8, bom: 12.6 },
-    { idadeMin: 46, idadeMax: 55, limite: 10.6, bom: 12.4 },
-    { idadeMin: 56, idadeMax: 999, limite: 9.7, bom: 11.5 },
+    { idadeMin: 18, idadeMax: 25, limite: 10.8, bom: 12.6 },
+    { idadeMin: 26, idadeMax: 35, limite: 10.8, bom: 12.6 },
+    { idadeMin: 36, idadeMax: 45, limite: 10.8, bom: 12.6 },
+    { idadeMin: 46, idadeMax: 55, limite: 10.8, bom: 12.4 },
+    { idadeMin: 56, idadeMax: 999, limite: 10.0, bom: 11.5 },
   ],
 } as const;
 
@@ -44,8 +48,8 @@ const MASSA_MUSCULAR_TABLE = {
     { idadeMin: 56, idadeMax: 999, min: 21.5, max: 27.5 },
   ],
   M: [
-    { idadeMin: 18, idadeMax: 25, min: 38.0, max: 44.0 },
-    { idadeMin: 26, idadeMax: 35, min: 38.0, max: 44.0 },
+    { idadeMin: 18, idadeMax: 25, min: 38.8, max: 44.0 },
+    { idadeMin: 26, idadeMax: 35, min: 38.8, max: 44.0 },
     { idadeMin: 36, idadeMax: 45, min: 38.0, max: 44.0 },
     { idadeMin: 46, idadeMax: 55, min: 36.5, max: 42.5 },
     { idadeMin: 56, idadeMax: 999, min: 34.0, max: 40.0 },
@@ -61,9 +65,9 @@ const MASSA_LIVRE_GORDURA_TABLE = {
     { idadeMin: 56, idadeMax: 999, minimo: 38.0 },
   ],
   M: [
-    { idadeMin: 18, idadeMax: 25, minimo: 58.0 },
-    { idadeMin: 26, idadeMax: 35, minimo: 58.0 },
-    { idadeMin: 36, idadeMax: 45, minimo: 58.0 },
+    { idadeMin: 18, idadeMax: 25, minimo: 58.6 },
+    { idadeMin: 26, idadeMax: 35, minimo: 58.6 },
+    { idadeMin: 36, idadeMax: 45, minimo: 58.6 },
     { idadeMin: 46, idadeMax: 55, minimo: 56.0 },
     { idadeMin: 56, idadeMax: 999, minimo: 53.0 },
   ],
@@ -78,7 +82,7 @@ const MASSA_ADIPOSA_TABLE = {
     { idadeMin: 56, idadeMax: 999, min: 13.0, max: 17.5 },
   ],
   M: [
-    { idadeMin: 18, idadeMax: 25, min: 3.1, max: 7.0 },
+    { idadeMin: 18, idadeMax: 25, min: 5.0, max: 9.0 },
     { idadeMin: 26, idadeMax: 35, min: 5.0, max: 9.8 },
     { idadeMin: 36, idadeMax: 45, min: 6.0, max: 11.5 },
     { idadeMin: 46, idadeMax: 55, min: 8.5, max: 14.5 },
@@ -86,6 +90,8 @@ const MASSA_ADIPOSA_TABLE = {
   ],
 } as const;
 
+// IMG (Índice de Massa Gorda, kg/m²) — matriz de referência por sexo e
+// faixa etária (5 faixas). 'limite'/'otimoMax' = faixa ótima da tabela.
 const IMG_TABLE = {
   F: [
     { idadeMin: 18, idadeMax: 45, limite: 4.4, otimoMax: 5.3, bom: 9.3 },
@@ -101,17 +107,17 @@ const IMG_TABLE = {
 
 const PERCENTUAL_GORDURA_TABLE = {
   F: [
-    { idadeMin: 18, idadeMax: 25, min: 16.1, max: 19.0 },
+    { idadeMin: 18, idadeMax: 25, min: 16.3, max: 19.9 },
     { idadeMin: 26, idadeMax: 35, min: 16.1, max: 20.0 },
-    { idadeMin: 36, idadeMax: 45, min: 19.1, max: 23.0 },
-    { idadeMin: 46, idadeMax: 55, min: 21.1, max: 25.0 },
-    { idadeMin: 56, idadeMax: 999, min: 22.1, max: 26.0 },
+    { idadeMin: 36, idadeMax: 45, min: 19.1, max: 23.3 },
+    { idadeMin: 46, idadeMax: 55, min: 21.1, max: 25.4 },
+    { idadeMin: 56, idadeMax: 999, min: 22.1, max: 26.8 },
   ],
   M: [
     { idadeMin: 18, idadeMax: 25, min: 6.1, max: 10.0 },
-    { idadeMin: 26, idadeMax: 35, min: 11.1, max: 15.0 },
+    { idadeMin: 26, idadeMax: 35, min: 11.3, max: 15.0 },
     { idadeMin: 36, idadeMax: 45, min: 14.1, max: 18.0 },
-    { idadeMin: 46, idadeMax: 55, min: 16.1, max: 20.0 },
+    { idadeMin: 46, idadeMax: 55, min: 16.1, max: 20.4 },
     { idadeMin: 56, idadeMax: 999, min: 18.1, max: 21.0 },
   ],
 } as const;
@@ -120,17 +126,17 @@ const PERCENTUAL_GORDURA_TABLE = {
 // coluna "Referência" do card, como valor adequado por sexo e idade.
 const REFERENCIA_ADEQUADA_TABLE = {
   F: [
-    { idadeMin: 18, idadeMax: 25, agua: 50.0, massaMuscularMin: 24.5, massaMuscularMax: 30.5, imme: 9.7, massaLivreGordura: 42.0, massaAdiposaMin: 8.1, massaAdiposaMax: 11.5, imgMin: 4.4, imgMax: 5.3, gorduraMin: 16.1, gorduraMax: 19.0 },
+    { idadeMin: 18, idadeMax: 25, agua: 50.0, massaMuscularMin: 24.5, massaMuscularMax: 30.5, imme: 9.7, massaLivreGordura: 42.0, massaAdiposaMin: 8.1, massaAdiposaMax: 11.5, imgMin: 4.4, imgMax: 5.3, gorduraMin: 16.3, gorduraMax: 19.9 },
     { idadeMin: 26, idadeMax: 35, agua: 50.0, massaMuscularMin: 24.5, massaMuscularMax: 30.5, imme: 9.7, massaLivreGordura: 42.0, massaAdiposaMin: 8.5, massaAdiposaMax: 12.5, imgMin: 4.4, imgMax: 5.3, gorduraMin: 16.1, gorduraMax: 20.0 },
-    { idadeMin: 36, idadeMax: 45, agua: 50.0, massaMuscularMin: 24.5, massaMuscularMax: 30.5, imme: 9.7, massaLivreGordura: 42.0, massaAdiposaMin: 10.5, massaAdiposaMax: 14.8, imgMin: 4.4, imgMax: 5.3, gorduraMin: 19.1, gorduraMax: 23.0 },
-    { idadeMin: 46, idadeMax: 55, agua: 50.0, massaMuscularMin: 23.0, massaMuscularMax: 29.0, imme: 9.5, massaLivreGordura: 40.5, massaAdiposaMin: 12.0, massaAdiposaMax: 16.5, imgMin: 5.4, imgMax: 6.4, gorduraMin: 21.1, gorduraMax: 25.0 },
-    { idadeMin: 56, idadeMax: 999, agua: 50.0, massaMuscularMin: 21.5, massaMuscularMax: 27.5, imme: 8.9, massaLivreGordura: 38.0, massaAdiposaMin: 13.0, massaAdiposaMax: 17.5, imgMin: 6.1, imgMax: 7.2, gorduraMin: 22.1, gorduraMax: 26.0 },
+    { idadeMin: 36, idadeMax: 45, agua: 50.0, massaMuscularMin: 24.5, massaMuscularMax: 30.5, imme: 9.7, massaLivreGordura: 42.0, massaAdiposaMin: 10.5, massaAdiposaMax: 14.8, imgMin: 4.4, imgMax: 5.3, gorduraMin: 19.1, gorduraMax: 23.3 },
+    { idadeMin: 46, idadeMax: 55, agua: 50.0, massaMuscularMin: 23.0, massaMuscularMax: 29.0, imme: 9.5, massaLivreGordura: 40.5, massaAdiposaMin: 12.0, massaAdiposaMax: 16.5, imgMin: 5.4, imgMax: 6.4, gorduraMin: 21.1, gorduraMax: 25.4 },
+    { idadeMin: 56, idadeMax: 999, agua: 50.0, massaMuscularMin: 21.5, massaMuscularMax: 27.5, imme: 8.9, massaLivreGordura: 38.0, massaAdiposaMin: 13.0, massaAdiposaMax: 17.8, imgMin: 6.1, imgMax: 7.2, gorduraMin: 22.1, gorduraMax: 26.8 },
   ],
   M: [
-    { idadeMin: 18, idadeMax: 25, agua: 58.0, massaMuscularMin: 38.0, massaMuscularMax: 44.0, imme: 12.6, massaLivreGordura: 58.0, massaAdiposaMin: 3.1, massaAdiposaMax: 7.0, imgMin: 2.3, imgMax: 2.9, gorduraMin: 6.1, gorduraMax: 10.0 },
-    { idadeMin: 26, idadeMax: 35, agua: 58.0, massaMuscularMin: 38.0, massaMuscularMax: 44.0, imme: 12.6, massaLivreGordura: 58.0, massaAdiposaMin: 5.0, massaAdiposaMax: 9.8, imgMin: 2.3, imgMax: 2.9, gorduraMin: 11.1, gorduraMax: 15.0 },
-    { idadeMin: 36, idadeMax: 45, agua: 58.0, massaMuscularMin: 38.0, massaMuscularMax: 44.0, imme: 12.6, massaLivreGordura: 58.0, massaAdiposaMin: 6.0, massaAdiposaMax: 11.5, imgMin: 2.3, imgMax: 2.9, gorduraMin: 14.1, gorduraMax: 18.0 },
-    { idadeMin: 46, idadeMax: 55, agua: 58.0, massaMuscularMin: 36.5, massaMuscularMax: 42.5, imme: 12.4, massaLivreGordura: 56.0, massaAdiposaMin: 8.5, massaAdiposaMax: 14.5, imgMin: 3.2, imgMax: 3.9, gorduraMin: 16.1, gorduraMax: 20.0 },
+    { idadeMin: 18, idadeMax: 25, agua: 58.0, massaMuscularMin: 38.8, massaMuscularMax: 44.0, imme: 12.6, massaLivreGordura: 58.6, massaAdiposaMin: 5.0, massaAdiposaMax: 9.0, imgMin: 2.3, imgMax: 2.9, gorduraMin: 6.1, gorduraMax: 10.0 },
+    { idadeMin: 26, idadeMax: 35, agua: 58.0, massaMuscularMin: 38.8, massaMuscularMax: 44.0, imme: 12.6, massaLivreGordura: 58.6, massaAdiposaMin: 5.0, massaAdiposaMax: 9.8, imgMin: 2.3, imgMax: 2.9, gorduraMin: 11.3, gorduraMax: 15.0 },
+    { idadeMin: 36, idadeMax: 45, agua: 58.0, massaMuscularMin: 38.0, massaMuscularMax: 44.0, imme: 12.6, massaLivreGordura: 58.6, massaAdiposaMin: 6.0, massaAdiposaMax: 11.5, imgMin: 2.3, imgMax: 2.9, gorduraMin: 14.1, gorduraMax: 18.0 },
+    { idadeMin: 46, idadeMax: 55, agua: 58.0, massaMuscularMin: 36.5, massaMuscularMax: 42.5, imme: 12.4, massaLivreGordura: 56.0, massaAdiposaMin: 8.5, massaAdiposaMax: 14.5, imgMin: 3.2, imgMax: 3.9, gorduraMin: 16.1, gorduraMax: 20.4 },
     { idadeMin: 56, idadeMax: 999, agua: 58.0, massaMuscularMin: 34.0, massaMuscularMax: 40.0, imme: 11.5, massaLivreGordura: 53.0, massaAdiposaMin: 9.8, massaAdiposaMax: 15.8, imgMin: 3.6, imgMax: 4.5, gorduraMin: 18.1, gorduraMax: 21.0 },
   ],
 } as const;
