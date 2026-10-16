@@ -38,15 +38,17 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, erro: "pacienteId ausente" }, { status: 400 });
     }
 
+    // A altura do paciente não fica na tabela `pacientes`; ela é registrada
+    // na anamnese mais recente (campo `altura`, em cm).
     const [rows, anamnese] = await Promise.all([
-  listarUltimasTresAvaliacoes(pacienteId),
-  prisma.anamneses.findFirst({
-    where: { paciente_id: pacienteId },
-    orderBy: { created_at: "desc" },
-    select: { altura: true },
-  }),
-]);
-const alturaCm = Number(anamnese?.altura ?? 0);
+      listarUltimasTresAvaliacoes(pacienteId),
+      prisma.anamneses.findFirst({
+        where: { paciente_id: pacienteId },
+        orderBy: { created_at: "desc" },
+        select: { altura: true },
+      }),
+    ]);
+    const alturaCm = Number(anamnese?.altura ?? 0);
     const avaliacoes = rows.map((r) => {
       const snap = extrairSnapshotDeEvolucao(r);
       const massaMuscularKg = obterMassaMuscularHistorica(
