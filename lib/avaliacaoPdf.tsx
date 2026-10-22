@@ -164,8 +164,8 @@ const CIRC_ORDER = [
   "quadril",
   "abdomen",
   "peitoral",
-  "braco_direito",
-  "braco_esquerdo",
+  "biceps_direito",
+  "biceps_esquerdo",
   "coxa_direita",
   "coxa_esquerda",
   "panturrilha_direita",
@@ -207,13 +207,21 @@ function formatBirth(v?: string | null) {
   if (Number.isNaN(d.getTime())) return v;
   return d.toLocaleDateString("pt-BR");
 }
-function formatAssessmentDate(v?: string | null) {
-  if (!v) return "—";
-  if (/^\d{4}-\d{2}-\d{2}/.test(v)) {
-    const [yyyy, mm, dd] = v.slice(0, 10).split("-");
-    return `${dd}/${mm}/${yyyy}`;
+function formatMetric(v: number | null | undefined, unit: string, digits = 1) {
+  if (v === null || v === undefined || !Number.isFinite(Number(v)) || Number(v) <= 0) {
+    return "";
   }
-  return formatBirth(v);
+  const value = toFixedPt(v, digits);
+  if (!value) return "";
+  return unit === "%" ? `${value}%` : `${value} ${unit}`;
+}
+function formatGeneratedPdfDate() {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date());
 }
 function labelSexo(s: "M" | "F") {
   return s === "F" ? "feminino" : "masculino";
@@ -571,7 +579,7 @@ const styles = StyleSheet.create({
 
 // ---------- Componentes ----------
 function EvalPill({ cor, label }: { cor?: "verde" | "amarelo"; label?: string }) {
-  if (!label) return <Text style={[styles.pill, styles.pillNeutral]}>—</Text>;
+  if (!label) return null;
   const s = cor === "amarelo" ? styles.pillYellow : styles.pillGreen;
   return <Text style={[styles.pill, s]}>{label}</Text>;
 }
@@ -596,7 +604,7 @@ function ReferenciaCelula({
   idade: number;
 }) {
   if (parametro === "peso") {
-    return <Text style={styles.ccColRef}>—</Text>;
+    return <Text style={styles.ccColRef}></Text>;
   }
   const referencias = obterReferenciasComposicao(sexo, idade);
   const chave = parametro === "massaMagra" ? "massaLivreGordura" : parametro;
@@ -993,7 +1001,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             {`nascimento: ${formatBirth(paciente.nascimento)} | peso: ${toFixedPt(dados.pesoKg)} kg`}
           </Text>
           <Text style={styles.headerInfoLine2}>
-            {`altura: ${toFixedPt(paciente.altura_cm, 0)} cm | sexo: ${labelSexo(paciente.sexo)} | avaliação: ${formatAssessmentDate(dados.dataAvaliacao)}`}
+            {`altura: ${toFixedPt(paciente.altura_cm, 0)} cm | sexo: ${labelSexo(paciente.sexo)} | avaliação realizada: ${formatGeneratedPdfDate()}`}
           </Text>
           <View style={styles.headerRule} />
           <Text style={styles.headerTitle}>AVALIAÇÃO FÍSICA</Text>
@@ -1018,7 +1026,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                   <Text style={styles.ccColParamText}>Peso</Text>
                 </View>
                 <ReferenciaCelula parametro="peso" sexo={paciente.sexo} idade={paciente.idade} />
-                <Text style={styles.ccColRes}>{toFixedPt(dados.pesoKg)} kg</Text>
+                <Text style={styles.ccColRes}>{formatMetric(dados.pesoKg, "kg")}</Text>
                 <View style={styles.ccColEval}><EvalPill /></View>
               </View>
 
@@ -1027,7 +1035,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                   <Text style={styles.ccColParamText}>% de água corporal</Text>
                 </View>
                 <ReferenciaCelula parametro="agua" sexo={paciente.sexo} idade={paciente.idade} />
-                <Text style={styles.ccColRes}>{toFixedPt(dados.pctAgua)} %</Text>
+                <Text style={styles.ccColRes}>{formatMetric(dados.pctAgua, "%")}</Text>
                 <View style={styles.ccColEval}>
                   <EvalPill
                     cor={dados.classificacaoAgua?.cor}
@@ -1041,7 +1049,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                   <Text style={styles.ccColParamText}>Massa muscular</Text>
                 </View>
                 <ReferenciaCelula parametro="massaMuscular" sexo={paciente.sexo} idade={paciente.idade} />
-                <Text style={styles.ccColRes}>{toFixedPt(dados.massaMuscularKg)} kg</Text>
+                <Text style={styles.ccColRes}>{formatMetric(dados.massaMuscularKg, "kg")}</Text>
                 <View style={styles.ccColEval}>
                   <EvalPill
                     cor={dados.classificacaoMassaMuscular?.cor}
@@ -1052,10 +1060,10 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
               <View style={styles.ccRow}>
                 <View style={styles.ccColParam}>
-                  <Text style={styles.ccColParamText}>Músculo esquelético</Text>
+                  <Text style={styles.ccColParamText}>Índice de massa muscular esquelética</Text>
                 </View>
                 <ReferenciaCelula parametro="imme" sexo={paciente.sexo} idade={paciente.idade} />
-                <Text style={styles.ccColRes}>{toFixedPt(dados.imme, 2)} kg/m²</Text>
+                <Text style={styles.ccColRes}>{formatMetric(dados.imme, "kg/m²", 2)}</Text>
                 <View style={styles.ccColEval}>
                   <EvalPill cor={dados.classificacaoImme?.cor} label={dados.classificacaoImme?.label} />
                 </View>
@@ -1066,7 +1074,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                   <Text style={styles.ccColParamText}>Massa livre de gordura</Text>
                 </View>
                 <ReferenciaCelula parametro="massaMagra" sexo={paciente.sexo} idade={paciente.idade} />
-                <Text style={styles.ccColRes}>{toFixedPt(dados.massaMagraKg)} kg</Text>
+                <Text style={styles.ccColRes}>{formatMetric(dados.massaMagraKg, "kg")}</Text>
                 <View style={styles.ccColEval}>
                   <EvalPill
                     cor={dados.classificacaoMassaLivreGordura?.cor}
@@ -1080,7 +1088,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                   <Text style={styles.ccColParamText}>Massa adiposa</Text>
                 </View>
                 <ReferenciaCelula parametro="massaAdiposa" sexo={paciente.sexo} idade={paciente.idade} />
-                <Text style={styles.ccColRes}>{toFixedPt(dados.massaGordaKg)} kg</Text>
+                <Text style={styles.ccColRes}>{formatMetric(dados.massaGordaKg, "kg")}</Text>
                 <View style={styles.ccColEval}>
                   <EvalPill
                     cor={(dados.classificacaoMassaAdiposa || dados.classificacaoImg)?.cor}
@@ -1094,7 +1102,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                   <Text style={styles.ccColParamText}>Índice de massa gorda</Text>
                 </View>
                 <ReferenciaCelula parametro="img" sexo={paciente.sexo} idade={paciente.idade} />
-                <Text style={styles.ccColRes}>{toFixedPt(dados.img, 2)} kg/m²</Text>
+                <Text style={styles.ccColRes}>{formatMetric(dados.img, "kg/m²", 2)}</Text>
                 <View style={styles.ccColEval}>
                   {dados.classificacaoImg?.label ? (
                     <EvalPill cor={dados.classificacaoImg.cor} label={dados.classificacaoImg.label} />
@@ -1109,7 +1117,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                   <Text style={styles.ccColParamText}>% de gordura</Text>
                 </View>
                 <ReferenciaCelula parametro="gordura" sexo={paciente.sexo} idade={paciente.idade} />
-                <Text style={styles.ccColRes}>{toFixedPt(dados.bfPct)} %</Text>
+                <Text style={styles.ccColRes}>{formatMetric(dados.bfPct, "%")}</Text>
                 <View style={styles.ccColEval}>
                   {dados.classificacaoGordura?.label ? (
                     <EvalPill cor={dados.classificacaoGordura.cor} label={dados.classificacaoGordura.label} />
