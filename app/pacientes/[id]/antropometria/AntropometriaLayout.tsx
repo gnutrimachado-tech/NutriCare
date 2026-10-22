@@ -1105,7 +1105,6 @@ export default function AntropometriaLayout({
     });
     return arr;
   }, [historicoAvaliacoes]);
-  const [avaliacaoBaseId, setAvaliacaoBaseId] = useState<string>("");
   // Caixas de seleção: quais avaliações (1ª/2ª/3ª) entram na comparação.
   // Nenhuma marcada = somente a primeira (a atual); 1 ou 2 marcadas = compara
   // com 2 ou 3 pontos no gráfico de evolução.
@@ -1115,13 +1114,6 @@ export default function AntropometriaLayout({
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
   }
-  useEffect(() => {
-    // Padrão: comparar contra a 1ª avaliação (mais antiga), se existir.
-    if (!avaliacaoBaseId && historicoOrdenado[0]?.id) {
-      setAvaliacaoBaseId(historicoOrdenado[0].id);
-    }
-  }, [historicoOrdenado, avaliacaoBaseId]);
-
   function classifPill(c: { cor: "verde" | "amarelo" }) {
     return {
       ...avaliacaoPillBaseStyle,
@@ -1399,7 +1391,6 @@ export default function AntropometriaLayout({
       setExcluindoAvaliacaoIds((prev) => [...prev, id]);
       await excluirAvaliacaoAntropometrica(pacienteId, id);
       setEvolucaoSelecionadaIds((prev) => prev.filter((selecionado) => selecionado !== id));
-      setAvaliacaoBaseId((atual) => (atual === id ? "" : atual));
       setAvaliacaoMsg(`Avaliação de ${dataLabel} excluída.`);
       router.refresh();
     } catch (e: any) {
@@ -1857,16 +1848,36 @@ export default function AntropometriaLayout({
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
-                        gap: 10,
-                        padding: "7px 10px",
+                        gap: 8,
+                        padding: "6px 8px",
                         border: "1px solid #e2e8f0",
                         borderRadius: 8,
                         background: "#fff",
                         color: "#334155",
-                        fontSize: 13,
+                        fontSize: 12,
                       }}
                     >
-                      <span>{label} — {dataLabel}</span>
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 7,
+                          flex: 1,
+                          minWidth: 0,
+                          cursor: compararResultados ? "pointer" : "default",
+                        }}
+                      >
+                        {compararResultados ? (
+                          <input
+                            type="checkbox"
+                            aria-label={`Incluir ${label} de ${dataLabel} na comparação`}
+                            checked={evolucaoSelecionadaIds.includes(h.id)}
+                            onChange={() => toggleEvolucaoSelecionada(h.id)}
+                            style={{ flex: "0 0 auto", margin: 0 }}
+                          />
+                        ) : null}
+                        <span>{label} — {dataLabel}</span>
+                      </label>
                       <button
                         type="button"
                         aria-label={`Excluir ${label} de ${dataLabel}`}
@@ -1905,57 +1916,6 @@ export default function AntropometriaLayout({
               />
               <span>Comparação de resultados</span>
             </label>
-
-            {compararResultados ? (
-              <div style={avaliacaoCompareSelectWrapStyle}>
-                <span style={compareHintStyle}>Comparar com:</span>
-                <select
-                  value={avaliacaoBaseId}
-                  onChange={(e) => setAvaliacaoBaseId(e.target.value)}
-                  style={avaliacaoCompareSelectStyle}
-                >
-                  {historicoOrdenado.length === 0 ? (
-                    <option value="">Sem avaliações anteriores</option>
-                  ) : (
-                    historicoOrdenado.map((h, idx) => {
-                      const label =
-                        idx === 0
-                          ? "1ª avaliação"
-                          : idx === 1
-                          ? "2ª avaliação"
-                          : "3ª avaliação";
-                      const d = getSnapshotDateLabel(h.snapshot?.dataAvaliacao || h.createdAt || undefined);
-                      return (
-                        <option key={h.id} value={h.id}>
-                          {label} — {d}
-                        </option>
-                      );
-                    })
-                  )}
-                </select>
-
-                {/* Caixas de seleção: o gráfico de evolução do PDF responde a elas.
-                    Nenhuma marcada = somente a primeira (avaliação atual);
-                    1 marcada = compara com 2 meses; 2 marcadas = com 3 meses. */}
-                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                  {historicoOrdenado.map((h, idx) => {
-                    const label =
-                      idx === 0 ? "1ª avaliação" : idx === 1 ? "2ª avaliação" : "3ª avaliação";
-                    const d = getSnapshotDateLabel(h.snapshot?.dataAvaliacao || h.createdAt || undefined);
-                    return (
-                      <label key={h.id} style={avaliacaoCompareToggleStyle}>
-                        <input
-                          type="checkbox"
-                          checked={evolucaoSelecionadaIds.includes(h.id)}
-                          onChange={() => toggleEvolucaoSelecionada(h.id)}
-                        />
-                        <span>{label} — {d}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
           </div>
 
           {avaliacaoMsg ? <div style={avaliacaoFeedbackBoxStyle}>{avaliacaoMsg}</div> : null}
@@ -2154,16 +2114,6 @@ const avaliacaoCompareRowStyle: React.CSSProperties = {
 const avaliacaoCompareToggleStyle: React.CSSProperties = {
   display: "inline-flex", alignItems: "center", gap: 8,
   fontSize: 13, fontWeight: 600, color: "#334",
-};
-const avaliacaoCompareSelectWrapStyle: React.CSSProperties = {
-  display: "inline-flex", alignItems: "center", gap: 8,
-};
-const avaliacaoCompareSelectStyle: React.CSSProperties = {
-  padding: "6px 10px",
-  border: "1px solid #d1d5db",
-  borderRadius: 8,
-  fontSize: 13,
-  background: "#fff",
 };
 const avaliacaoFeedbackBoxStyle: React.CSSProperties = {
   fontSize: 12,
