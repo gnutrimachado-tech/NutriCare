@@ -1244,8 +1244,25 @@ export default function AntropometriaLayout({
   const currentDobras = useMemo(() => filterNumericEntries(dobras), [dobras]);
   const currentCircunferencias = useMemo(() => filterNumericEntries(circunferencias), [circunferencias]);
 
-  const previousDobras = useMemo(() => parseSnapshotValues(avaliacaoAnterior?.dobras as Record<string, string> | undefined), [avaliacaoAnterior]);
-  const previousCircunferencias = useMemo(() => parseSnapshotValues(avaliacaoAnterior?.circunferencias as Record<string, string> | undefined), [avaliacaoAnterior]);
+  // Nas tabelas Antes/Atual do PDF, a base permanece na primeira avaliação.
+  // Se a avaliação em edição for essa mesma primeira data, não duplica valores em Antes.
+  const primeiraAvaliacaoParaComparacao = useMemo(() => {
+    const primeiroSnapshot = historicoOrdenado.find((item) => item.snapshot)?.snapshot ?? null;
+    if (!primeiroSnapshot) return null;
+
+    const dataPrimeira = toDateInputValue(primeiroSnapshot.dataAvaliacao);
+    const dataAtual = toDateInputValue(dataAvaliacaoAtual);
+    return dataPrimeira && dataAtual && dataPrimeira === dataAtual ? null : primeiroSnapshot;
+  }, [historicoOrdenado, dataAvaliacaoAtual]);
+
+  const previousDobras = useMemo(
+    () => parseSnapshotValues(primeiraAvaliacaoParaComparacao?.dobras as Record<string, string> | undefined),
+    [primeiraAvaliacaoParaComparacao]
+  );
+  const previousCircunferencias = useMemo(
+    () => parseSnapshotValues(primeiraAvaliacaoParaComparacao?.circunferencias as Record<string, string> | undefined),
+    [primeiraAvaliacaoParaComparacao]
+  );
 
   function buildCurrentSnapshot(): AvaliacaoHistoricoSnapshot {
     return {
