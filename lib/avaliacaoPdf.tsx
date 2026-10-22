@@ -548,9 +548,8 @@ const styles = StyleSheet.create({
   },
   signLine: {
     position: "absolute",
-    // O traço passa a acompanhar o texto do CRN (linha de baixo), como na
-    // imagem de referência enviada pelo nutri.
-    top: PAGE_HEIGHT - (56 - 8),
+    // Linha próxima ao nome, com o CRN logo abaixo.
+    top: PAGE_HEIGHT - (56 + 6),
     left: PAGE_MARGIN_X,
     height: 0.8,
     backgroundColor: "#333",
@@ -559,7 +558,7 @@ const styles = StyleSheet.create({
   signCrn: {
     position: "absolute",
     // CRN abaixo do traço, na segunda linha da assinatura.
-    top: PAGE_HEIGHT - (56 - 8) + 3,
+    top: PAGE_HEIGHT - (56 + 6) + 3,
     left: PAGE_MARGIN_X,
     fontSize: 16,
     fontFamily: "GreatVibes",
@@ -1063,7 +1062,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                   <Text style={styles.ccColParamText}>Índice de massa muscular esquelética</Text>
                 </View>
                 <ReferenciaCelula parametro="imme" sexo={paciente.sexo} idade={paciente.idade} />
-                <Text style={styles.ccColRes}>{formatMetric(dados.imme, "kg/m²", 2)}</Text>
+                <Text style={styles.ccColRes}>{formatMetric(dados.imme, "kg/m²")}</Text>
                 <View style={styles.ccColEval}>
                   <EvalPill cor={dados.classificacaoImme?.cor} label={dados.classificacaoImme?.label} />
                 </View>
