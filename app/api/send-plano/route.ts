@@ -451,8 +451,8 @@ async function createLayoutDoc(): Promise<LayoutDoc> {
   ]);
 
   const bgResult = await readPublicAssetWithFormat(
-    "fundo-layout.jpg",
-    "layouts/fundo-layout.jpg",
+    "layouts/publicfundo-layout.jpg.jpg",
+    "pub1licfundo-layout.jpg",
     "fundo-layout.png",
     "layouts/fundo-layout.png",
     "nutri-coracao.png"
@@ -580,6 +580,10 @@ function drawHeader(doc: LayoutDoc, page: PDFPage, options: BasePageOptions) {
 
 function drawFooter(doc: LayoutDoc, page: PDFPage) {
   const footerY = 56;
+  // Posições alinhadas ao PDF de avaliação física: assinatura y=59,75,
+  // linha y=59,6 e CRN y=39,75.
+  const textShiftDown = 8.25;
+  const ruleShiftDown = 6.4;
   const nomeBase = (doc.nutricionistaNome || "").trim();
   const crnRodape = (doc.nutricionistaCrn || CRN_LABEL).trim();
 
@@ -595,7 +599,7 @@ function drawFooter(doc: LayoutDoc, page: PDFPage) {
 
   page.drawText(fullNutriText, {
     x: PAGE_MARGIN_X,
-    y: footerY + 12,
+    y: footerY + 12 - textShiftDown,
     size: nutriLineSize,
     font: scriptFont,
     color: rgb(0.12, 0.12, 0.12),
@@ -603,8 +607,8 @@ function drawFooter(doc: LayoutDoc, page: PDFPage) {
 
   // Linha acompanhando apenas o texto do nutricionista
   page.drawLine({
-    start: { x: PAGE_MARGIN_X, y: footerY + 10 },
-    end: { x: PAGE_MARGIN_X + nutriTextWidth, y: footerY + 10 },
+    start: { x: PAGE_MARGIN_X, y: footerY + 10 - ruleShiftDown },
+    end: { x: PAGE_MARGIN_X + nutriTextWidth, y: footerY + 10 - ruleShiftDown },
     thickness: 0.8,
     color: rgb(0.2, 0.2, 0.2),
   });
@@ -614,7 +618,7 @@ function drawFooter(doc: LayoutDoc, page: PDFPage) {
 
   page.drawText(crnRodape, {
     x: PAGE_MARGIN_X,
-    y: footerY - 8,
+    y: footerY - 8 - textShiftDown,
     size: crnLineSize,
     font: scriptFont,
     color: rgb(0.25, 0.25, 0.25),
@@ -882,8 +886,8 @@ async function preloadAssets(): Promise<{ logo: Buffer | null; background: Buffe
   ]);
 
   const bgResult = await readPublicAssetWithFormat(
-    "fundo-layout.jpg",
-    "layouts/fundo-layout.jpg",
+    "layouts/publicfundo-layout.jpg.jpg",
+    "pub1licfundo-layout.jpg",
     "fundo-layout.png",
     "layouts/fundo-layout.png",
     "nutri-coracao.png"
