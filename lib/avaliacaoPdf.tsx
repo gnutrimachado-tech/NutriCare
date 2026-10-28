@@ -213,7 +213,7 @@ function formatMetric(v: number | null | undefined, unit: string, digits = 1) {
   }
   const value = toFixedPt(v, digits);
   if (!value) return "";
-  return unit === "%" ? `${value}%` : `${value} ${unit}`;
+  return unit === "%" ? ${value}% : ${value} ${unit};
 }
 function formatGeneratedPdfDate() {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -539,31 +539,29 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   signName: {
-    position: "absolute",
-    // Posição superior alinhada ao código de referência: 764,14 pt.
-    top: 764.14,
-    left: PAGE_MARGIN_X,
-    fontSize: 18,
-    fontFamily: "GreatVibes",
-    color: "#1f1f1f",
-  },
-  signLine: {
-    position: "absolute",
-    // Linha a 17,75 pt do topo da caixa do nome; espessura de 0,8 pt.
-    top: 781.89,
-    left: PAGE_MARGIN_X,
-    height: 0.8,
-    backgroundColor: "#333",
-    // width é definida em tempo de render conforme o comprimento do texto.
-  },
-  signCrn: {
-    position: "absolute",
-    // Topo do CRN a 4,25 pt abaixo do topo da linha.
-    top: 786.14,
-    left: PAGE_MARGIN_X,
-    fontSize: 16,
-    fontFamily: "GreatVibes",
-    color: "#404040",
+  position: "absolute",
+  top: 764.14,
+  left: PAGE_MARGIN_X,
+  fontSize: 18,
+  fontFamily: "GreatVibes",
+  color: "#1f1f1f",
+},
+signLine: {
+  position: "absolute",
+  top: 781.89,
+  left: PAGE_MARGIN_X,
+  height: 0.8,
+  backgroundColor: "#333",
+  // width é definida em tempo de render conforme o comprimento do texto.
+},
+signCrn: {
+  position: "absolute",
+  top: 786.14,
+  left: PAGE_MARGIN_X,
+  fontSize: 16,
+  fontFamily: "GreatVibes",
+  color: "#404040",
+},
   },
   footerLogo: {
     position: "absolute",
