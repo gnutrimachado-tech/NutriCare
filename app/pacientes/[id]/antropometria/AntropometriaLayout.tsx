@@ -7,7 +7,7 @@ import { excluirAvaliacaoAntropometrica } from "./actions";
 import type { AvaliacaoHistoricoSnapshot } from "@/lib/avaliacaoHistorico";
 import {
   classificarAgua,
-  classificarIMME,
+  classificarMassaMuscular,
   classificarIMG,
   classificarMassaLivreGordura,
   classificarFFMI,
@@ -15,7 +15,6 @@ import {
   calcularIMME,
   calcularIMG,
   calcularFFMI,
-  FRACAO_MUSCULO_ESQUELETICO,
   type Sexo as SexoBC,
 } from "@/lib/bodyComposition";
 
@@ -34,6 +33,10 @@ type Props = {
   pesoKg: number;
   alturaCm: number;
   dataAvaliacao?: string | null;
+  percentualGorduraDireto?: number | null;
+  massaMuscularEsqueleticaDireta?: number | null;
+  massaAdiposaDireta?: number | null;
+  aguaCorporalDireta?: number | null;
   avaliacaoAnteriorInicial?: AvaliacaoHistoricoSnapshot | null;
   historicoAvaliacoes?: HistoricoItem[];
 };
@@ -780,6 +783,10 @@ export default function AntropometriaLayout({
   pesoKg,
   alturaCm,
   dataAvaliacao = null,
+  percentualGorduraDireto = null,
+  massaMuscularEsqueleticaDireta = null,
+  massaAdiposaDireta = null,
+  aguaCorporalDireta = null,
   avaliacaoAnteriorInicial = null,
   historicoAvaliacoes = [],
 }: Props) {
@@ -941,12 +948,34 @@ export default function AntropometriaLayout({
   ]);
 
   const result = useMemo(() => {
+    const bodyFatDireto =
+      percentualGorduraDireto !== null &&
+      Number.isFinite(percentualGorduraDireto) &&
+      percentualGorduraDireto > 0
+        ? round1(percentualGorduraDireto)
+        : null;
+    const massaAdiposaDiretaValida =
+      massaAdiposaDireta !== null &&
+      Number.isFinite(massaAdiposaDireta) &&
+      massaAdiposaDireta > 0
+        ? round1(massaAdiposaDireta)
+        : null;
+
     if (!protocoloAtual || !canCalculate) {
+      const bodyFatPct = bodyFatDireto;
+      const massaAdiposa =
+        massaAdiposaDiretaValida ??
+        (bodyFatPct !== null && pesoKg > 0
+          ? round1((pesoKg * bodyFatPct) / 100)
+          : null);
       return {
-        bodyFatPct: null,
+        bodyFatPct,
         density: null,
-        massaAdiposa: null,
-        massaMuscular: null,
+        massaAdiposa,
+        massaMuscular:
+          massaAdiposa !== null && pesoKg > 0
+            ? round1(Math.max(0, pesoKg - massaAdiposa))
+            : null,
         formulaLabel: protocoloAtual?.label ?? "",
       };
     }
@@ -959,13 +988,15 @@ export default function AntropometriaLayout({
       circ: circNum,
     });
 
-    const bodyFatPct =
+    const bodyFatCalculado =
       calc.bodyFatPct !== null && Number.isFinite(calc.bodyFatPct)
         ? Math.max(0, calc.bodyFatPct)
         : null;
+    const bodyFatPct = bodyFatDireto ?? bodyFatCalculado;
 
     const massaAdiposa =
-      bodyFatPct !== null ? round1((pesoKg * bodyFatPct) / 100) : null;
+      massaAdiposaDiretaValida ??
+      (bodyFatPct !== null ? round1((pesoKg * bodyFatPct) / 100) : null);
 
     const massaMuscular =
       massaAdiposa !== null ? round1(pesoKg - massaAdiposa) : null;
@@ -977,7 +1008,17 @@ export default function AntropometriaLayout({
       massaMuscular,
       formulaLabel: calc.formulaLabel,
     };
-  }, [protocoloAtual, canCalculate, idade, pesoKg, alturaCm, dobrasNum, circNum]);
+  }, [
+    protocoloAtual,
+    canCalculate,
+    idade,
+    pesoKg,
+    alturaCm,
+    dobrasNum,
+    circNum,
+    percentualGorduraDireto,
+    massaAdiposaDireta,
+  ]);
 
   // ==============================
   // % ÁGUA CORPORAL — Fórmula de Watson
@@ -986,6 +1027,13 @@ export default function AntropometriaLayout({
   // Exibe apenas o % de água do corpo (TBW / peso × 100).
   // ==============================
   const aguaCorporalPct = useMemo(() => {
+    if (
+      aguaCorporalDireta !== null &&
+      Number.isFinite(aguaCorporalDireta) &&
+      aguaCorporalDireta > 0
+    ) {
+      return round1(aguaCorporalDireta);
+    }
     if (!(pesoKg > 0) || !(alturaCm > 0)) return null;
     const tbw =
       sexoPaciente === "Masculino"
@@ -993,11 +1041,11 @@ export default function AntropometriaLayout({
         : -2.097 + 0.1069 * alturaCm + 0.2466 * pesoKg;
     if (!Number.isFinite(tbw) || tbw <= 0) return null;
     return round1((tbw / pesoKg) * 100);
-  }, [sexoPaciente, idade, alturaCm, pesoKg]);
+  }, [sexoPaciente, idade, alturaCm, pesoKg, aguaCorporalDireta]);
 
   // ==============================
   // LINK COM A ANAMNESE
-  // Salva massa muscular, % de gordura e % de água nas barras da Anamnese.
+  // Salva as medidas nos campos correspondentes da Anamnese.
   // Regra: a Antropometria é a fonte — sempre que houver valor calculado,
   // ele corrige a barra correspondente na Anamnese (e, por consequência,
   // a massa muscular usada no Gasto Calórico).
@@ -1014,18 +1062,18 @@ export default function AntropometriaLayout({
         return;
       }
       sincronizarAntropometria(pacienteId, {
-        massa_muscular: result.massaMuscular,
+        massa_muscular: massaMuscularEsqueleticaDireta,
         percentual_gordura: result.bodyFatPct,
         massa_adiposa: result.massaAdiposa,
         agua_corporal: aguaCorporalPct,
       }).catch(() => {});
     };
-  }, [result, aguaCorporalPct, pacienteId]);
+  }, [result, aguaCorporalPct, pacienteId, massaMuscularEsqueleticaDireta]);
 
   useEffect(() => {
     const timer = setTimeout(() => syncRef.current(), 1500);
     return () => clearTimeout(timer);
-  }, [result, aguaCorporalPct]);
+  }, [result, aguaCorporalPct, massaMuscularEsqueleticaDireta]);
 
   useEffect(() => {
     const handler = () => syncRef.current();
@@ -1055,26 +1103,28 @@ export default function AntropometriaLayout({
     if (options?.flash) flashVoiceField(`circ:${key}`);
   }
 
-    // =================== IMME / IMG / FFMI / % de agua ===================
+  // =================== Composição corporal / IMG / FFMI / % de água ===================
   const sexoCodigo: SexoBC = sexoPaciente === "Feminino" ? "F" : "M";
-  const massaMuscularEsqueleticaEstimada =
-    result.massaMuscular !== null
-      ? Math.max(0, result.massaMuscular * FRACAO_MUSCULO_ESQUELETICO)
-      : null;
-  const immeVal: number =
-    massaMuscularEsqueleticaEstimada !== null && alturaCm > 0
-      ? calcularIMME(massaMuscularEsqueleticaEstimada, alturaCm) : 0;
   const massaMuscularEsqueleticaKg =
-    immeVal > 0 && alturaCm > 0
-      ? round1(immeVal * (alturaCm / 100) ** 2)
+    massaMuscularEsqueleticaDireta !== null &&
+    Number.isFinite(massaMuscularEsqueleticaDireta) &&
+    massaMuscularEsqueleticaDireta > 0
+      ? round1(massaMuscularEsqueleticaDireta)
       : null;
+  const immeVal =
+    massaMuscularEsqueleticaKg !== null && alturaCm > 0
+      ? calcularIMME(massaMuscularEsqueleticaKg, alturaCm)
+      : 0;
   const imgVal: number =
     result.massaAdiposa !== null && alturaCm > 0
       ? calcularIMG(result.massaAdiposa, alturaCm) : 0;
   const ffmiVal: number =
     result.massaMuscular !== null && alturaCm > 0
       ? calcularFFMI(result.massaMuscular, alturaCm) : 0;
-  const immeClass = immeVal > 0 ? classificarIMME(immeVal, sexoCodigo, idade) : null;
+  const massaMuscularClass =
+    massaMuscularEsqueleticaKg !== null
+      ? classificarMassaMuscular(massaMuscularEsqueleticaKg, sexoCodigo, idade)
+      : null;
   const imgClass  = imgVal  > 0 ? classificarIMG(imgVal,  sexoCodigo, idade) : null;
   const massaLivreGorduraClass =
     result.massaMuscular !== null && result.massaMuscular > 0
@@ -1309,6 +1359,7 @@ export default function AntropometriaLayout({
       pesoKg,
       bodyFatPct: result.bodyFatPct,
       massaMuscularKg: massaMuscularEsqueleticaKg,
+      massaMuscularEsqueleticaKg,
       massaLivreGorduraKg: result.massaMuscular,
       massaAdiposaKg: result.massaAdiposa,
       aguaPct: aguaCorporalPct,
@@ -1676,11 +1727,15 @@ export default function AntropometriaLayout({
             <div style={{ ...resultItemStyle, border: "1px solid #dcfce7" }}>
               <div style={resultIconGreen}>💪</div>
               <div>
-                <div style={resultTitleGreen}>Massa muscular</div>
+                <div style={resultTitleGreen}>Músculo esquelético</div>
                 <div style={resultValueStyle}>
                   {formatPt(massaMuscularEsqueleticaKg, " kg")}
                 </div>
-                <div style={resultFootNoteStyle}>estimada</div>
+                {massaMuscularClass ? (
+                  <div style={classifPill(massaMuscularClass)}>
+                    {massaMuscularClass.label}
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -1712,7 +1767,7 @@ export default function AntropometriaLayout({
             </div>
           )}
         </div>
-        {immeClass && imgClass && massaLivreGorduraClass ? (
+        {imgClass && massaLivreGorduraClass ? (
           <div style={avaliacaoExtrasCardStyle}>
             <div style={headerBlockStyle}>
               <div style={iconBubblePurple}>🏆</div>
@@ -1725,14 +1780,6 @@ export default function AntropometriaLayout({
             </div>
 
             <div style={resultsGridStyle}>
-              <div style={{ ...resultItemStyle, border: "1px solid #dcfce7" }}>
-                <div style={{ ...resultIconGreen, background: metricClassColor("musculo").iconBg, color: metricClassColor("musculo").icon }}>🏋️</div>
-                <div>
-                  <div style={{ ...resultTitleGreen, color: metricClassColor("musculo").text }}>Músculo Esquelético</div>
-                  <div style={resultValueStyle}>{formatPt(immeVal, " kg/m²")}</div>
-                </div>
-              </div>
-
               <div style={{ ...resultItemStyle, border: "1px solid #fed7aa" }}>
                 <div style={{ ...resultIconOrange, background: metricClassColor("gordura").iconBg, color: metricClassColor("gordura").icon }}>📏</div>
                 <div>

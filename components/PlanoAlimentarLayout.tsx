@@ -1,7 +1,19 @@
 'use client'
 
-import { useState, useCallback, useRef, useEffect, useId } from 'react'
+import { useState, useCallback, useRef, useEffect, useId, useMemo } from 'react'
 import { TBCA_FOODS, type TBCAFood } from './tbca-data'
+
+function parseNumericInput(value: string): number {
+  const normalized = value.trim().includes(',')
+    ? value.trim().replace(/\./g, '').replace(',', '.')
+    : value.trim()
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function normalizeFoodName(name: string): string {
+  return name.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase()
+}
 
 type PlanoAlimentarProps = {
   pacienteId?: string
@@ -266,12 +278,14 @@ function TacoAutocomplete({
   value,
   onChange,
   onSelect,
+  foods,
   placeholder,
   style,
 }: {
   value: string
   onChange: (v: string) => void
   onSelect: (food: TBCAFood) => void
+  foods: TBCAFood[]
   placeholder?: string
   style?: React.CSSProperties
 }) {
@@ -286,13 +300,13 @@ function TacoAutocomplete({
       .filter((w) => w.length > 0)
     if (words.length === 0) return [] // nada pré-preenchido: só mostra ao digitar
     const results: TBCAFood[] = []
-    for (const food of TBCA_FOODS) {
+    for (const food of foods) {
       if (results.length >= 15) break
       const name = food.n.toLowerCase()
       if (words.every((w) => name.includes(w))) results.push(food)
     }
     return results
-  }, [query])
+  }, [foods, query])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -435,6 +449,52 @@ export default function PlanoAlimentarLayout({
   void _nomePaciente
   const [meals, setMeals] = useState<Meal[]>(createInitialMeals)
   const [mealsHydrated, setMealsHydrated] = useState(false)
+  const [customFoods, setCustomFoods] = useState<TBCAFood[]>([])
+  const [foodCatalogLoading, setFoodCatalogLoading] = useState(true)
+  const [foodCatalogError, setFoodCatalogError] = useState('')
+  const [cadSaving, setCadSaving] = useState(false)
+  const [cadMessage, setCadMessage] = useState('')
+  const [cadMessageIsError, setCadMessageIsError] = useState(false)
+
+  const foodCatalog = useMemo(() => {
+    const foodsByName = new Map<string, TBCAFood>()
+    for (const food of TBCA_FOODS) foodsByName.set(normalizeFoodName(food.n), food)
+    for (const food of customFoods) {
+      const key = normalizeFoodName(food.n)
+      const existing = foodsByName.get(key)
+      foodsByName.set(key, existing ? { ...existing, ...food, f: existing.f, ca: existing.ca, fe: existing.fe } : food)
+    }
+    return [...foodsByName.values()].sort((a, b) => a.n.localeCompare(b.n))
+  }, [customFoods])
+
+  useEffect(() => {
+    let cancelled = false
+    const loadCustomFoods = async () => {
+      setFoodCatalogLoading(true)
+      try {
+        const response = await fetch('/api/alimentos')
+        const payload = await response.json().catch(() => null)
+        if (!response.ok) {
+          throw new Error(payload?.error || 'Não foi possível carregar os alimentos salvos.')
+        }
+        if (!Array.isArray(payload)) {
+          throw new Error('A resposta do cadastro de alimentos está inválida.')
+        }
+        if (!cancelled) {
+          setCustomFoods(payload as TBCAFood[])
+          setFoodCatalogError('')
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setFoodCatalogError(error instanceof Error ? error.message : 'Falha ao carregar alimentos salvos.')
+        }
+      } finally {
+        if (!cancelled) setFoodCatalogLoading(false)
+      }
+    }
+    void loadCustomFoods()
+    return () => { cancelled = true }
+  }, [])
 
   // Load full meals from localStorage (PERSIST data across tab switches)
   useEffect(() => {
@@ -537,7 +597,7 @@ export default function PlanoAlimentarLayout({
   for (const meal of meals) {
     for (const f of meal.foods) {
       if (!f.name) continue
-      const src = TBCA_FOODS.find((t) => t.n === f.name)
+      const src = foodCatalog.find((t) => t.n === f.name)
       if (!src) continue
       const factor = (f.baseGrams || 0) / 100
       for (const microName of Object.keys(MICRO_KEY)) {
@@ -596,11 +656,11 @@ export default function PlanoAlimentarLayout({
   const metaFat = Math.round((totalKcal * strat.fat) / 100 / 9)
 
   // Cadastrar preview
-  const cadQtyNum = parseFloat(cadQty) || 0
-  const cadProtNum = parseFloat(cadProt) || 0
-  const cadCarbNum = parseFloat(cadCarb) || 0
-  const cadFatNum = parseFloat(cadFat) || 0
-  const cadKcalNum = parseFloat(cadKcal) || 0
+  const cadQtyNum = parseNumericInput(cadQty)
+  const cadProtNum = parseNumericInput(cadProt)
+  const cadCarbNum = parseNumericInput(cadCarb)
+  const cadFatNum = parseNumericInput(cadFat)
+  const cadKcalNum = parseNumericInput(cadKcal)
   const cadTotalGrams = cadQtyNum * (UNIT_FACTORS[cadUnit] || 1)
   const cadFactor = cadTotalGrams > 0 ? 100 / cadTotalGrams : 0
   const cadShowPreview = cadQtyNum > 0 && (cadProtNum > 0 || cadCarbNum > 0 || cadFatNum > 0 || cadKcalNum > 0)
@@ -728,7 +788,7 @@ export default function PlanoAlimentarLayout({
     updateMeal(mealId, (m) => {
       const existing = m.foods.find((f) => f.id === foodId)
       if (!existing) return m
-      const tbcaFood = TBCA_FOODS.find((t) => t.n === existing.name)
+      const tbcaFood = foodCatalog.find((t) => t.n === existing.name)
       if (tbcaFood) {
         const macros = calcMacros(tbcaFood, qty, existing.unit)
         return {
@@ -796,17 +856,24 @@ export default function PlanoAlimentarLayout({
     }))
   }
 
-  const cadastrarAlimento = () => {
+  const cadastrarAlimento = async () => {
     if (!cadNome.trim()) {
-      alert('Informe o nome do alimento')
+      setCadMessage('Informe o nome do alimento.')
+      setCadMessageIsError(true)
       return
     }
     if (cadQtyNum <= 0) {
-      alert('Informe a quantidade')
+      setCadMessage('Informe uma quantidade maior que zero.')
+      setCadMessageIsError(true)
+      return
+    }
+    if (cadNome.trim().length > 200) {
+      setCadMessage('O nome do alimento deve ter no máximo 200 caracteres.')
+      setCadMessageIsError(true)
       return
     }
     const newFood: TBCAFood = {
-      n: cadNome,
+      n: cadNome.trim(),
       k: Math.round(cadKcalNum * cadFactor * 10) / 10,
       p: Math.round(cadProtNum * cadFactor * 10) / 10,
       l: Math.round(cadFatNum * cadFactor * 10) / 10,
@@ -815,17 +882,45 @@ export default function PlanoAlimentarLayout({
       ca: 0,
       fe: 0,
     }
-    TBCA_FOODS.push(newFood)
-    TBCA_FOODS.sort((a, b) => a.n.localeCompare(b.n))
-    alert(
-      `Alimento "${cadNome}" cadastrado!\nValores por 100g: P:${newFood.p}g · C:${newFood.c}g · G:${newFood.l}g · ${newFood.k} kcal`
-    )
-    setCadNome('')
-    setCadQty('100')
-    setCadProt('')
-    setCadCarb('')
-    setCadFat('')
-    setCadKcal('')
+    setCadSaving(true)
+    setCadMessage('')
+    setCadMessageIsError(false)
+    try {
+      const response = await fetch('/api/alimentos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome: newFood.n,
+          calorias: newFood.k,
+          proteinas: newFood.p,
+          carboidratos: newFood.c,
+          gorduras: newFood.l,
+          fibras: newFood.f,
+        }),
+      })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Não foi possível salvar o alimento.')
+      }
+      const savedFood = payload as TBCAFood
+      setCustomFoods((current) => [
+        ...current.filter((food) => normalizeFoodName(food.n) !== normalizeFoodName(savedFood.n)),
+        savedFood,
+      ])
+      setCadMessage(`Alimento "${savedFood.n}" salvo no sistema.`)
+      setCadMessageIsError(false)
+      setCadNome('')
+      setCadQty('100')
+      setCadProt('')
+      setCadCarb('')
+      setCadFat('')
+      setCadKcal('')
+    } catch (error) {
+      setCadMessage(error instanceof Error ? error.message : 'Falha ao salvar alimento.')
+      setCadMessageIsError(true)
+    } finally {
+      setCadSaving(false)
+    }
   }
 
   // ==================== STYLES ====================
@@ -1027,6 +1122,7 @@ export default function PlanoAlimentarLayout({
                             <FoodRow
                               key={food.id}
                               food={food}
+                              foods={foodCatalog}
                               mealId={meal.id}
                               subs={meal.subs[food.id] || []}
                               onUpdateName={(name) => updateFood(meal.id, food.id, { name })}
@@ -1403,9 +1499,16 @@ export default function PlanoAlimentarLayout({
                 {cadMicroExpanded ? '− Micronutrientes' : '+ Micronutrientes'}
               </button>
 
-              <button onClick={cadastrarAlimento} style={btnSaveStyle}>
-                Adicionar alimento ao sistema
+              <button onClick={cadastrarAlimento} disabled={cadSaving} style={{ ...btnSaveStyle, opacity: cadSaving ? 0.65 : 1 }}>
+                {cadSaving ? 'Salvando...' : 'Adicionar alimento ao sistema'}
               </button>
+              {foodCatalogLoading && <p style={{ color: '#718096', fontSize: 10, margin: '7px 0 0' }}>Carregando alimentos salvos...</p>}
+              {foodCatalogError && <p role="alert" style={{ color: '#c53030', fontSize: 10, margin: '7px 0 0' }}>{foodCatalogError}</p>}
+              {cadMessage && (
+                <p role={cadMessageIsError ? 'alert' : 'status'} style={{ color: cadMessageIsError ? '#c53030' : '#2f855a', fontSize: 10, margin: '7px 0 0' }}>
+                  {cadMessage}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -1417,6 +1520,7 @@ export default function PlanoAlimentarLayout({
 // ==================== FOOD ROW COMPONENT ====================
 function FoodRow({
   food,
+  foods,
   mealId: _mealId,
   subs,
   onUpdateName,
@@ -1430,6 +1534,7 @@ function FoodRow({
   onAddFood,
 }: {
   food: FoodItem
+  foods: TBCAFood[]
   mealId: string
   subs: SubItem[]
   onUpdateName: (name: string) => void
@@ -1469,6 +1574,7 @@ function FoodRow({
             value={food.name}
             onChange={onUpdateName}
             onSelect={onSelectTBCA}
+            foods={foods}
             style={{ minWidth: 130 }}
           />
         </td>
@@ -1546,6 +1652,7 @@ function FoodRow({
             <TacoAutocomplete
               value={sub.name}
               onChange={(name) => onUpdateSub(sub.id, { name })}
+              foods={foods}
               onSelect={(tbcaFood) => {
                 const grams = sub.qty * (UNIT_FACTORS[sub.unit] || 1)
                 const factor = grams / 100
@@ -1571,7 +1678,7 @@ function FoodRow({
                 onChange={(e) => {
                   const v = e.target.value.replace(/[^\d.,]/g, '')
                   const qty = Math.min(parseFloat(v.replace(',', '.')) || 0, 9999)
-                  const tbcaFood = TBCA_FOODS.find((t) => t.n === sub.name)
+                  const tbcaFood = foods.find((t) => t.n === sub.name)
                   if (tbcaFood) {
                     const grams = qty * (UNIT_FACTORS[sub.unit] || 1)
                     const factor = grams / 100
@@ -1600,7 +1707,7 @@ function FoodRow({
                 value={sub.unit}
                 onChange={(e) => {
                   const newUnit = e.target.value
-                  const tbcaFood = TBCA_FOODS.find((t) => t.n === sub.name)
+                  const tbcaFood = foods.find((t) => t.n === sub.name)
                   if (tbcaFood) {
                     const grams = sub.qty * (UNIT_FACTORS[newUnit] || 1)
                     const factor = grams / 100

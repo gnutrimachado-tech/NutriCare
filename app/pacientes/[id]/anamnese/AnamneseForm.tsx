@@ -25,8 +25,8 @@ function genFieldId() {
 const CAMPOS_FIXOS = [
   { id: "peso", label: "Peso (kg)" },
   { id: "altura", label: "Altura (cm)" },
-  { id: "percentual_gordura", label: "% Gordura" },
-  { id: "massa_muscular", label: "Massa Muscular (kg)" },
+  { id: "percentual_gordura", label: "Percentual de gordura (%)" },
+  { id: "massa_muscular", label: "Músculo esquelético (kg)" },
   { id: "massa_adiposa", label: "Massa Adiposa (kg)" },
   { id: "agua_corporal", label: "Água Corporal (%)" },
   { id: "historico_clinico", label: "Histórico Clínico" },
@@ -477,11 +477,11 @@ export default function AnamneseForm({ pacienteId, dados }: Props) {
             <input type="text" name="altura" style={inputLinhaStyle} defaultValue={valorInteiro(dados?.altura)} />
           </div>
           <div style={campoPequenoStyle}>
-            <label style={campoLabelStyle}>% Gordura</label>
+            <label style={campoLabelStyle}>Percentual de gordura (%)</label>
             <input type="text" name="percentual_gordura" style={inputLinhaStyle} defaultValue={valorDecimal(dados?.percentual_gordura)} />
           </div>
           <div style={campoPequenoStyle}>
-            <label style={campoLabelStyle}>Massa Muscular (kg)</label>
+            <label style={campoLabelStyle}>Músculo esquelético (kg)</label>
             <input type="text" name="massa_muscular" style={inputLinhaStyle} defaultValue={valorDecimal(dados?.massa_muscular)} />
           </div>
           <div style={campoPequenoStyle}>

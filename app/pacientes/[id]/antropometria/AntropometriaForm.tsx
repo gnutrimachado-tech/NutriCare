@@ -36,14 +36,14 @@ export default function AntropometriaForm({
       <input
         type="text"
         name="percentual_gordura"
-        placeholder="% Gordura"
+        placeholder="Percentual de gordura (%)"
         style={inputStyle}
       />
 
       <input
         type="text"
         name="massa_muscular"
-        placeholder="Massa muscular (kg)"
+        placeholder="Músculo esquelético (kg)"
         style={inputStyle}
       />
 

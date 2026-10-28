@@ -32,6 +32,7 @@ type BodyShape = {
   pesoKg?: number;
   bodyFatPct?: number | null;
   massaMuscularKg?: number | null;
+  massaMuscularEsqueleticaKg?: number | null;
   massaLivreGorduraKg?: number | null;
   massaAdiposaKg?: number | null;
   imme?: number | null;
@@ -136,6 +137,8 @@ export async function POST(req: NextRequest) {
       massaMagraKg: Number(body.massaLivreGorduraKg ?? body.massaMuscularKg) || 0,
       massaGordaKg: Number(body.massaAdiposaKg) || 0,
       bfPct: Number(body.bodyFatPct) || 0,
+      massaMuscularEsqueleticaKg:
+        body.massaMuscularEsqueleticaKg ?? body.massaMuscularKg ?? null,
       imme: Number(body.imme) || null,
     });
 

@@ -13,6 +13,7 @@ export interface AvaliacaoInput {
   massaMagraKg: number; // massa livre de gordura
   massaGordaKg: number;
   bfPct: number;
+  massaMuscularEsqueleticaKg?: number | null;
   imme?: number | null;
 }
 
@@ -326,16 +327,28 @@ export function imagemLateralUrl(sexo: Sexo, code: CodigoImagem): string {
 export function resumoCompleto(input: AvaliacaoInput) {
   const bfPct = round(input.bfPct, 1);
   const pesoKg = round(input.pesoKg, 1);
-  const massaGordaKg = round((pesoKg * bfPct) / 100, 1);
+  const massaGordaDireta = Number(input.massaGordaKg);
+  const massaGordaKg =
+    Number.isFinite(massaGordaDireta) && massaGordaDireta > 0
+      ? round(massaGordaDireta, 1)
+      : round((pesoKg * bfPct) / 100, 1);
   const massaMagraKg = round(pesoKg - massaGordaKg, 1);
   const h = input.alturaCm / 100;
-  const massaMuscularEsqueleticaEstimada =
-    Math.max(0, massaMagraKg * FRACAO_MUSCULO_ESQUELETICO);
-  const imme =
+  const massaMuscularDireta = Number(input.massaMuscularEsqueleticaKg);
+  const immeInformado =
     input.imme != null && Number.isFinite(Number(input.imme)) && Number(input.imme) > 0
       ? round(Number(input.imme))
-      : calcularIMME(massaMuscularEsqueleticaEstimada, input.alturaCm);
-  const massaMuscularEsqueleticaKg = round(imme * h * h, 1);
+      : 0;
+  const massaMuscularEsqueleticaKg =
+    Number.isFinite(massaMuscularDireta) && massaMuscularDireta > 0
+      ? round(massaMuscularDireta, 1)
+      : immeInformado > 0
+        ? round(immeInformado * h * h, 1)
+        : 0;
+  const imme =
+    massaMuscularEsqueleticaKg > 0
+      ? calcularIMME(massaMuscularEsqueleticaKg, input.alturaCm)
+      : immeInformado;
   const img = calcularIMG(massaGordaKg, input.alturaCm);
   const ffmi = calcularFFMI(massaMagraKg, input.alturaCm);
   const code = escolherImagemFrontal(input.sexo, ffmi, input.bfPct);

@@ -109,6 +109,10 @@ export default async function AntropometriaPage({ params }: Props) {
         pesoKg={pesoKg}
         alturaCm={alturaCm}
         dataAvaliacao={anamnese?.data_avaliacao?.toISOString?.() || null}
+        percentualGorduraDireto={Number(anamnese?.percentual_gordura ?? 0) || null}
+        massaMuscularEsqueleticaDireta={Number(anamnese?.massa_muscular ?? 0) || null}
+        massaAdiposaDireta={Number(anamnese?.massa_adiposa ?? 0) || null}
+        aguaCorporalDireta={Number(anamnese?.agua_corporal ?? 0) || null}
         avaliacaoAnteriorInicial={avaliacaoAnterior}
         historicoAvaliacoes={historico}
       />
