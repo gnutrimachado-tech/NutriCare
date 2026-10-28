@@ -213,7 +213,7 @@ function formatMetric(v: number | null | undefined, unit: string, digits = 1) {
   }
   const value = toFixedPt(v, digits);
   if (!value) return "";
-  return unit === "%" ? ${value}% : ${value} ${unit};
+return unit === "%" ? `${value}%` : `${value} ${unit}`;
 }
 function formatGeneratedPdfDate() {
   return new Intl.DateTimeFormat("pt-BR", {
