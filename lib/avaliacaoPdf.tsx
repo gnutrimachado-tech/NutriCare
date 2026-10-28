@@ -552,7 +552,6 @@ signLine: {
   left: PAGE_MARGIN_X,
   height: 0.8,
   backgroundColor: "#333",
-  // width é definida em tempo de render conforme o comprimento do texto.
 },
 signCrn: {
   position: "absolute",
@@ -561,6 +560,7 @@ signCrn: {
   fontSize: 16,
   fontFamily: "GreatVibes",
   color: "#404040",
+},
 },
   },
   footerLogo: {
