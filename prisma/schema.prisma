@@ -23,16 +23,20 @@ model agendamentos {
 }
 
 model alimentos {
-  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  nome           String           @db.VarChar(200)
-  categoria      String?          @db.VarChar(100)
-  calorias       Decimal?         @db.Decimal(8, 2)
-  proteinas      Decimal?         @db.Decimal(8, 2)
-  carboidratos   Decimal?         @db.Decimal(8, 2)
-  gorduras       Decimal?         @db.Decimal(8, 2)
-  fibras         Decimal?         @db.Decimal(8, 2)
-  created_at     DateTime?        @default(now()) @db.Timestamp(6)
-  refeicao_itens refeicao_itens[]
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nutricionista_id String?         @db.Uuid
+  nome             String          @db.VarChar(200)
+  categoria        String?         @db.VarChar(100)
+  calorias         Decimal?        @db.Decimal(8, 2)
+  proteinas        Decimal?        @db.Decimal(8, 2)
+  carboidratos     Decimal?        @db.Decimal(8, 2)
+  gorduras         Decimal?        @db.Decimal(8, 2)
+  fibras           Decimal?        @db.Decimal(8, 2)
+  created_at       DateTime?       @default(now()) @db.Timestamp(6)
+  nutricionistas   nutricionistas? @relation(fields: [nutricionista_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  refeicao_itens   refeicao_itens[]
+
+  @@index([nutricionista_id], map: "idx_alimentos_nutricionista")
 }
 
 model anamneses {
@@ -90,6 +94,7 @@ model nutricionistas {
   crn        String?      @db.VarChar(30)
   cpf        String?      @unique @db.VarChar(11)
   created_at DateTime?    @default(now()) @db.Timestamp(6)
+  alimentos  alimentos[]
   pacientes  pacientes[]
   protocolos protocolos[]
 }

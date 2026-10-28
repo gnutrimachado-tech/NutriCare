@@ -31,6 +31,7 @@ type BodyShape = {
   pesoKg?: number;
   bodyFatPct?: number | null;
   massaMuscularKg?: number | null;
+  massaMuscularEsqueleticaKg?: number | null;
   massaLivreGorduraKg?: number | null;
   massaAdiposaKg?: number | null;
   imme?: number | null;
@@ -136,6 +137,8 @@ export async function POST(req: NextRequest) {
       massaMagraKg: Number(body.massaLivreGorduraKg ?? body.massaMuscularKg) || 0,
       massaGordaKg: Number(body.massaAdiposaKg) || 0,
       bfPct: Number(body.bodyFatPct) || 0,
+      massaMuscularEsqueleticaKg:
+        body.massaMuscularEsqueleticaKg ?? body.massaMuscularKg ?? null,
       imme: Number(body.imme) || null,
     });
 
@@ -316,8 +319,7 @@ export async function POST(req: NextRequest) {
       <div style="font-size:15px;font-weight:700;color:#166534;margin-bottom:8px;">Resumo principal</div>
       <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.8;color:#166534;">
         <li>Peso: <strong>${resumo.pesoKg.toFixed(1).replace(".", ",")} kg</strong></li>
-        <li>Massa muscular: <strong>${resumo.massaMuscularEsqueleticaKg.toFixed(1).replace(".", ",")} kg</strong> (${esc(resumo.classificacoes.massaMuscular.label)})</li>
-        <li>Músculo Esquelético: <strong>${resumo.imme.toFixed(2).replace(".", ",")} kg/m²</strong> (${esc(resumo.classificacoes.imme.label)})</li>
+        <li>Músculo esquelético: <strong>${resumo.massaMuscularEsqueleticaKg.toFixed(1).replace(".", ",")} kg</strong> (${esc(resumo.classificacoes.massaMuscular.label)})</li>
         <li>Índice de Massa Gorda: <strong>${resumo.img.toFixed(2).replace(".", ",")} kg/m²</strong> (${esc(resumo.classificacoes.img.label)})</li>
         <li>Massa Livre de Gordura: <strong>${resumo.massaMagraKg.toFixed(1).replace(".", ",")} kg</strong> (${esc(resumo.classificacoes.massaLivreGordura.label)})</li>
         <li>% de Gordura: <strong>${resumo.bfPct.toFixed(1).replace(".", ",")}%</strong> (${esc(resumo.classificacoes.gordura.label)})</li>
@@ -340,8 +342,7 @@ export async function POST(req: NextRequest) {
       text:
         `Olá ${paciente.nome}, segue em anexo sua Avaliação Física.\n\n` +
         `Peso: ${resumo.pesoKg.toFixed(1).replace(".", ",")} kg\n` +
-        `Massa muscular: ${resumo.massaMuscularEsqueleticaKg.toFixed(1).replace(".", ",")} kg\n` +
-        `Músculo Esquelético: ${resumo.imme.toFixed(2).replace(".", ",")} kg/m²\n` +
+        `Músculo esquelético: ${resumo.massaMuscularEsqueleticaKg.toFixed(1).replace(".", ",")} kg\n` +
         `Índice de Massa Gorda: ${resumo.img.toFixed(2).replace(".", ",")} kg/m²\n` +
         `Massa Livre de Gordura: ${resumo.massaMagraKg.toFixed(1).replace(".", ",")} kg\n` +
         `% de Gordura: ${resumo.bfPct.toFixed(1).replace(".", ",")}%\n` +
