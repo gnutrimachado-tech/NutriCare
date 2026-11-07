@@ -213,7 +213,7 @@ function formatMetric(v: number | null | undefined, unit: string, digits = 1) {
   }
   const value = toFixedPt(v, digits);
   if (!value) return "";
-return unit === "%" ? `${value}%` : `${value} ${unit}`;
+  return unit === "%" ? ${value}% : ${value} ${unit};
 }
 function formatGeneratedPdfDate() {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -237,7 +237,7 @@ function fileToDataUri(rel?: string) {
   const full = absPublic(rel);
   if (!full || !fs.existsSync(full)) return null;
   const buf = fs.readFileSync(full);
-  return `data:${guessMime(full)};base64,${buf.toString("base64")}`;
+  return data:${guessMime(full)};base64,${buf.toString("base64")};
 }
 function hasPositive(v: any) {
   return v !== null && v !== undefined && Number(v) > 0;
@@ -539,29 +539,30 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   signName: {
-  position: "absolute",
-  top: 764.14,
-  left: PAGE_MARGIN_X,
-  fontSize: 18,
-  fontFamily: "GreatVibes",
-  color: "#1f1f1f",
-},
-signLine: {
-  position: "absolute",
-  top: 781.89,
-  left: PAGE_MARGIN_X,
-  height: 0.8,
-  backgroundColor: "#333",
-},
-signCrn: {
-  position: "absolute",
-  top: 786.14,
-  left: PAGE_MARGIN_X,
-  fontSize: 16,
-  fontFamily: "GreatVibes",
-  color: "#404040",
-},
-},
+    position: "absolute",
+    top: PAGE_HEIGHT - (56 + 12) - 18,
+    left: PAGE_MARGIN_X,
+    fontSize: 18,
+    fontFamily: "GreatVibes",
+    color: "#1f1f1f",
+  },
+  signLine: {
+    position: "absolute",
+    // Linha próxima ao nome, com o CRN logo abaixo.
+    top: PAGE_HEIGHT - (56 + 6),
+    left: PAGE_MARGIN_X,
+    height: 0.8,
+    backgroundColor: "#333",
+    // width é definida em tempo de render conforme o comprimento do texto.
+  },
+  signCrn: {
+    position: "absolute",
+    // CRN abaixo do traço, na segunda linha da assinatura.
+    top: PAGE_HEIGHT - (56 + 6) + 3,
+    left: PAGE_MARGIN_X,
+    fontSize: 16,
+    fontFamily: "GreatVibes",
+    color: "#404040",
   },
   footerLogo: {
     position: "absolute",
@@ -653,7 +654,7 @@ function MiniChart({
       const angle = Math.PI - (Math.PI * arcProgress * index) / steps;
       const x = centerX + radius * Math.cos(angle);
       const y = arcY - radius * Math.sin(angle);
-      return `${index === 0 ? "M" : "L"} ${x} ${y}`;
+      return ${index === 0 ? "M" : "L"} ${x} ${y};
     }).join(" ");
   };
   const trackPath = makeArcPath(1);
@@ -746,13 +747,13 @@ function EvolutionSparkline({
     return { ...p, x, y };
   });
   const lineD = plotted
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
+    .map((p, i) => ${i === 0 ? "M" : "L"} ${p.x} ${p.y})
     .join(" ");
   const first = plotted[0];
   const last = plotted[plotted.length - 1];
   const baselineY = top + plotH;
-  const areaD = `${lineD} L ${last.x} ${baselineY} L ${first.x} ${baselineY} Z`;
-  const gradientId = `evolution-gradient-${color.replace("#", "")}`;
+  const areaD = ${lineD} L ${last.x} ${baselineY} L ${first.x} ${baselineY} Z;
+  const gradientId = evolution-gradient-${color.replace("#", "")};
 
   return (
     <Svg width={W} height={H} style={styles.footChart}>
@@ -770,11 +771,11 @@ function EvolutionSparkline({
         stroke="#e1e1e1"
         strokeWidth={0.7}
       />
-      <Path d={areaD} fill={`url(#${gradientId})`} stroke="none" />
+      <Path d={areaD} fill={url(#${gradientId})} stroke="none" />
       <Path d={lineD} fill="none" stroke={color} strokeWidth={1.2} />
       {plotted.map((p, i) => (
         <Circle
-          key={`point-${i}`}
+          key={point-${i}}
           cx={p.x}
           cy={p.y}
           r={2.1}
@@ -785,7 +786,7 @@ function EvolutionSparkline({
       ))}
       {plotted.map((p, i) => (
         <Text
-          key={`comparison-date-${i}`}
+          key={comparison-date-${i}}
           x={p.x}
           y={H - 1}
           textAnchor="middle"
@@ -888,7 +889,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
     {
       data: dados.data,
       peso: dados.pesoKg,
-      massaMuscular: dados.massaMuscularKg ?? null,
+      massaMuscular: dados.massaMagraKg,
       bfPct: dados.bfPct,
     };
   const temComparacaoSelecionada = Boolean(dados.compareResults);
@@ -977,8 +978,8 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
   //   linha 1 (acima do traço): "Nutricionista: {nome}"
   //   linha 2 (abaixo do traço): "CRN: {crn}"
   const nomeBase = (nutricionista?.nome || "").trim();
-  const fullNutriText = nomeBase ? `Nutricionista: ${nomeBase}` : "Nutricionista:";
-  const crnRodape = (nutricionista?.crn ? `CRN: ${nutricionista.crn}` : "CRN:").trim();
+  const fullNutriText = nomeBase ? Nutricionista: ${nomeBase} : "Nutricionista:";
+  const crnRodape = (nutricionista?.crn ? CRN: ${nutricionista.crn} : "CRN:").trim();
   // O traço acompanha o comprimento do texto MAIS LONGO entre as duas linhas.
   const estWidth = Math.min(
     Math.max(fullNutriText.length * 18, crnRodape.length * 16) * 0.42,
@@ -996,10 +997,10 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
           {logo ? <Image src={logo} style={styles.headerLogo} /> : null}
           <Text style={styles.headerName}>{paciente.nome}</Text>
           <Text style={styles.headerInfoLine1}>
-            {`nascimento: ${formatBirth(paciente.nascimento)} | peso: ${toFixedPt(dados.pesoKg)} kg`}
+            {nascimento: ${formatBirth(paciente.nascimento)} | peso: ${toFixedPt(dados.pesoKg)} kg}
           </Text>
           <Text style={styles.headerInfoLine2}>
-            {`altura: ${toFixedPt(paciente.altura_cm, 0)} cm | sexo: ${labelSexo(paciente.sexo)} | avaliação realizada: ${formatGeneratedPdfDate()}`}
+            {altura: ${toFixedPt(paciente.altura_cm, 0)} cm | sexo: ${labelSexo(paciente.sexo)} | avaliação realizada: ${formatGeneratedPdfDate()}}
           </Text>
           <View style={styles.headerRule} />
           <Text style={styles.headerTitle}>AVALIAÇÃO FÍSICA</Text>
@@ -1044,7 +1045,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
 
               <View style={styles.ccRow}>
                 <View style={styles.ccColParam}>
-                  <Text style={styles.ccColParamText}>Músculo esquelético</Text>
+                  <Text style={styles.ccColParamText}>Massa muscular</Text>
                 </View>
                 <ReferenciaCelula parametro="massaMuscular" sexo={paciente.sexo} idade={paciente.idade} />
                 <Text style={styles.ccColRes}>{formatMetric(dados.massaMuscularKg, "kg")}</Text>
@@ -1053,6 +1054,17 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
                     cor={dados.classificacaoMassaMuscular?.cor}
                     label={dados.classificacaoMassaMuscular?.label}
                   />
+                </View>
+              </View>
+
+              <View style={styles.ccRow}>
+                <View style={styles.ccColParam}>
+                  <Text style={styles.ccColParamText}>Índice de massa muscular esquelética</Text>
+                </View>
+                <ReferenciaCelula parametro="imme" sexo={paciente.sexo} idade={paciente.idade} />
+                <Text style={styles.ccColRes}>{formatMetric(dados.imme, "kg/m²")}</Text>
+                <View style={styles.ccColEval}>
+                  <EvalPill cor={dados.classificacaoImme?.cor} label={dados.classificacaoImme?.label} />
                 </View>
               </View>
 
@@ -1166,7 +1178,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             {showEvoCard ? (
               <>
                 <MiniChart title="Peso (kg)" points={pesoPontos} color={CHART_GREEN} />
-                <MiniChart title="Músculo esquelético (kg)" points={musculoPontos} color={CHART_BLUE} />
+                <MiniChart title="Massa Muscular (kg)" points={musculoPontos} color={CHART_BLUE} />
                 <MiniChart title="% de Gordura (%)" points={bfPontos} color={CHART_RED} />
               </>
             ) : (
@@ -1196,7 +1208,7 @@ export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProp
             </View>
 
             <View style={styles.footBox}>
-              <Text style={[styles.footLabel, { color: CHART_BLUE }]}>Músculo esquelético</Text>
+              <Text style={[styles.footLabel, { color: CHART_BLUE }]}>Massa Muscular</Text>
               <Text style={styles.footBig}>{toFixedPt(massaMuscularComparada)} kg</Text>
               {dMM !== null ? (
                 <Text style={[styles.footDelta, { color: dMM >= 0 ? GREEN_TXT : RED_TXT }]}>
