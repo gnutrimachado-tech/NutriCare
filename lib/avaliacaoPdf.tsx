@@ -789,4 +789,375 @@ function buildChartSeries(
             label: formatAssessmentDate(fallback.dataAvaliacao || fallback.createdAt),
             weight: chartValue(fallback.pesoKg),
             muscle: chartValue(fallbackMuscle),
-            fat: chartValue(
+            fat: chartValue(fallback.bodyFatPct),
+          },
+        ]
+      : [];
+
+  const current = dados.evolucaoAtual;
+  return [
+    ...history,
+    {
+      label: formatAssessmentDate(dados.dataAvaliacaoAtual || current?.data || dados.data),
+      weight: Number(current?.peso ?? dados.pesoKg),
+      muscle: Number(current?.massaMuscular ?? muscleMassKg),
+      fat: Number(current?.bfPct ?? dados.bfPct),
+    },
+  ];
+}
+
+function skeletalMuscleFromSummary(
+  summary: SummarySnapshot | null | undefined,
+  alturaCm: number
+) {
+  if (hasPositive(summary?.massaMuscularEsqueleticaKg)) {
+    return Number(summary?.massaMuscularEsqueleticaKg);
+  }
+  if (hasPositive(summary?.massaMuscularKg)) {
+    return Number(summary?.massaMuscularKg) * 0.45;
+  }
+  if (hasPositive(summary?.imme) && alturaCm > 0) {
+    return Number(summary?.imme) * (alturaCm / 100) ** 2;
+  }
+  return null;
+}
+
+function EvolutionTrend({
+  title,
+  color,
+  values,
+}: {
+  title: string;
+  color: string;
+  values: Array<{ label: string; value: number }>;
+}) {
+  const valid = values.filter((point) => Number.isFinite(point.value));
+  const width = 146;
+  const height = 20;
+  const left = 6;
+  const right = width - 6;
+  const min = valid.length ? Math.min(...valid.map((point) => point.value)) : 0;
+  const max = valid.length ? Math.max(...valid.map((point) => point.value)) : 1;
+  const range = Math.max(max - min, Math.abs(max) * 0.08, 1);
+  const plotted = valid.map((point, index) => ({
+    ...point,
+    x: valid.length === 1 ? width / 2 : left + ((right - left) * index) / (valid.length - 1),
+    y: 15 - ((point.value - min) / range) * 10,
+  }));
+
+  return (
+    <View style={styles.trendBlock}>
+      <View style={styles.trendHeading}>
+        <Text style={styles.trendTitle}>{title}</Text>
+        {valid.length ? (
+          <Text style={[styles.trendValue, { color }]}>{toFixedPt(valid[valid.length - 1].value)}</Text>
+        ) : null}
+      </View>
+      <Svg width={width} height={height} style={styles.trendChart}>
+        <Line x1={left} y1={15} x2={right} y2={15} stroke="#e2e8df" strokeWidth={1.5} />
+        {plotted.slice(1).map((point, index) => (
+          <Line
+            key={`line-${index}`}
+            x1={plotted[index].x}
+            y1={plotted[index].y}
+            x2={point.x}
+            y2={point.y}
+            stroke={color}
+            strokeWidth={1.4}
+          />
+        ))}
+        {plotted.map((point, index) => (
+          <Circle
+            key={`dot-${index}`}
+            cx={point.x}
+            cy={point.y}
+            r={2}
+            fill="#ffffff"
+            stroke={color}
+            strokeWidth={1.1}
+          />
+        ))}
+      </Svg>
+      <View style={styles.trendDates}>
+        <Text style={styles.trendDate}>{valid[0]?.label || ""}</Text>
+        <Text style={styles.trendDate}>{valid[valid.length - 1]?.label || ""}</Text>
+      </View>
+    </View>
+  );
+}
+
+function ComparisonBox({
+  label,
+  value,
+  unit,
+  delta,
+  points,
+  color,
+}: {
+  label: string;
+  value: number;
+  unit: string;
+  delta: number | null;
+  points: Array<{ label: string; value: number }>;
+  color: string;
+}) {
+  const valid = points.filter((point) => Number.isFinite(point.value));
+  const isGoodChange = label === "Massa muscular" ? Number(delta) > 0 : Number(delta) < 0;
+  const deltaColor =
+    delta === null ? "#7b8178" : delta === 0 || isGoodChange ? "#34723a" : "#b63e35";
+  const deltaLabel =
+    delta === null
+      ? "—"
+      : `${delta > 0 ? "+" : ""}${toFixedPt(delta)} ${unit}`;
+
+  return (
+    <View style={styles.comparisonBox}>
+      <Text style={[styles.comparisonLabel, { color }]}>{label}</Text>
+      <Text style={styles.comparisonValue}>
+        {toFixedPt(value)} {unit}
+      </Text>
+      <Text style={[styles.comparisonDelta, { color: deltaColor }]}>{deltaLabel}</Text>
+      {valid.length > 1 ? (
+        <Svg width={116} height={23} style={styles.comparisonChart}>
+          <Line x1={5} y1={19} x2={111} y2={19} stroke="#e5e7eb" strokeWidth={0.7} />
+          {valid.slice(1).map((point, index) => {
+            const min = Math.min(...valid.map((item) => item.value));
+            const max = Math.max(...valid.map((item) => item.value));
+            const range = Math.max(max - min, Math.abs(max) * 0.08, 1);
+            const x1 = 5 + (106 * index) / Math.max(1, valid.length - 1);
+            const x2 = 5 + (106 * (index + 1)) / Math.max(1, valid.length - 1);
+            const y1 = 16 - ((valid[index].value - min) / range) * 11;
+            const y2 = 16 - ((point.value - min) / range) * 11;
+            return (
+              <Line
+                key={`comparison-line-${index}`}
+                x1={x1}
+                y1={y1}
+                x2={x2}
+                y2={y2}
+                stroke={color}
+                strokeWidth={1.2}
+              />
+            );
+          })}
+          {valid.map((point, index) => {
+            const min = Math.min(...valid.map((item) => item.value));
+            const max = Math.max(...valid.map((item) => item.value));
+            const range = Math.max(max - min, Math.abs(max) * 0.08, 1);
+            return (
+              <Circle
+                key={`comparison-dot-${index}`}
+                cx={5 + (106 * index) / Math.max(1, valid.length - 1)}
+                cy={16 - ((point.value - min) / range) * 11}
+                r={1.7}
+                fill="#ffffff"
+                stroke={color}
+                strokeWidth={1}
+              />
+            );
+          })}
+        </Svg>
+      ) : null}
+    </View>
+  );
+}
+
+export function AvaliacaoPdfDocument({ paciente, dados, nutricionista }: PdfProps) {
+  const logo = fileToDataUri("/logo-nutricare.png");
+  const fundo =
+    fileToDataUri("/layouts/fundo-layout.jpg") || fileToDataUri("/fundo-layout.jpg");
+  const { frente } = resolveImagePair(dados, paciente.sexo);
+  const muscleMassKg =
+    dados.massaMuscularEsqueleticaKg ??
+    (hasPositive(dados.imme)
+      ? Number(dados.imme) * (Number(paciente.altura_cm) / 100) ** 2
+      : Number(dados.massaMagraKg) * 0.45);
+  const circRows = measurementRows(
+    CIRC_ORDER,
+    CIRC_LABELS,
+    dados.currentCircunferencias,
+    dados.previousCircunferencias,
+    false
+  );
+  const dobraRows = measurementRows(
+    DOBRAS_ORDER,
+    DOBRAS_LABELS,
+    dados.currentDobras,
+    dados.previousDobras,
+    false
+  );
+  const chartSeries = buildChartSeries(dados, muscleMassKg, paciente.altura_cm);
+  const showEvolutionCharts = Boolean(dados.compareResults && chartSeries.length > 1);
+  const currentWeight = Number(dados.evolucaoAtual?.peso ?? dados.pesoKg);
+  const currentMuscle = Number(dados.evolucaoAtual?.massaMuscular ?? muscleMassKg);
+  const currentFat = Number(dados.evolucaoAtual?.bfPct ?? dados.bfPct);
+  const previous = dados.previousSummary;
+  const previousMuscle = skeletalMuscleFromSummary(previous, paciente.altura_cm);
+  const comparisonPoints = [
+    ...chartSeries.map((point) => ({
+      label: point.label,
+      weight: point.weight,
+      muscle: point.muscle,
+      fat: point.fat,
+    })),
+  ];
+  const deltaWeight = previous?.pesoKg != null ? currentWeight - Number(previous.pesoKg) : null;
+  const deltaMuscle =
+    previousMuscle != null ? currentMuscle - Number(previousMuscle) : null;
+  const deltaFat = previous?.bodyFatPct != null ? currentFat - Number(previous.bodyFatPct) : null;
+  const fullNutriText = nutricionista?.nome
+    ? `Nutricionista: ${nutricionista.nome.trim()}`
+    : "Nutricionista:";
+  const crnText = nutricionista?.crn ? `CRN: ${nutricionista.crn}` : "CRN:";
+  const signatureWidth = Math.min(
+    Math.max(fullNutriText.length * 5.8, crnText.length * 5.2),
+    CONTENT_WIDTH - 70
+  );
+
+  return (
+    <Document>
+      <Page size="A4" style={styles.page}>
+        {fundo ? <Image src={fundo} style={styles.background} fixed /> : null}
+
+        <View style={styles.header} fixed>
+          {logo ? <Image src={logo} style={styles.logo} /> : null}
+          <View style={styles.headerText}>
+            <Text style={styles.patientName}>{paciente.nome}</Text>
+            <Text style={styles.patientMeta}>
+              nascimento: {formatBirth(paciente.nascimento)} | peso: {toFixedPt(dados.pesoKg)} kg
+            </Text>
+            <Text style={styles.patientMeta}>
+              altura: {toFixedPt(paciente.altura_cm, 0)} cm | sexo: {labelSexo(paciente.sexo)} |
+              avaliação realizada:{" "}
+              {formatAssessmentDate(dados.dataAvaliacaoAtual || dados.data)}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.headerRule} />
+        <Text style={styles.title}>AVALIAÇÃO FÍSICA</Text>
+
+        <View style={[styles.card, styles.compositionCard]}>
+          <Text style={styles.cardTitle}>COMPOSIÇÃO CORPORAL</Text>
+          <View style={styles.compositionHead}>
+            <Text style={[styles.compositionHeadText, { width: "42%" }]}>Parâmetro</Text>
+            <Text style={[styles.compositionHeadText, { width: "21%" }]}>Referência</Text>
+            <Text style={[styles.compositionHeadText, { width: "20%" }]}>Resultado</Text>
+            <Text style={[styles.compositionHeadText, { width: "17%" }]}>Avaliação</Text>
+          </View>
+          <CompositionRow label="Peso" reference="" result={`${toFixedPt(dados.pesoKg)} kg`} />
+          <CompositionRow
+            label="% de água corporal"
+            reference={dados.classificacaoAgua?.referencia}
+            result={hasPositive(dados.pctAgua) ? `${toFixedPt(dados.pctAgua)}%` : "—"}
+            classification={dados.classificacaoAgua}
+          />
+          <CompositionRow
+            label="Massa muscular (estimada)"
+            reference={dados.classificacaoMassaMuscular?.referencia}
+            result={`${toFixedPt(muscleMassKg)} kg`}
+            classification={dados.classificacaoMassaMuscular}
+          />
+          <CompositionRow
+            label="Massa livre de gordura"
+            reference={dados.classificacaoMassaLivre?.referencia}
+            result={`${toFixedPt(dados.massaMagraKg)} kg`}
+            classification={dados.classificacaoMassaLivre}
+          />
+          <CompositionRow
+            label="Massa adiposa"
+            reference={dados.classificacaoMassaAdiposa?.referencia}
+            result={`${toFixedPt(dados.massaGordaKg)} kg`}
+            classification={dados.classificacaoMassaAdiposa}
+          />
+          <CompositionRow
+            label="Índice de massa gorda"
+            reference={dados.classificacaoImg?.referencia}
+            result={`${toFixedPt(dados.img, 2)} kg/m²`}
+            classification={dados.classificacaoImg}
+          />
+          <CompositionRow
+            label="% de gordura"
+            reference={dados.classificacaoGordura?.referencia}
+            result={`${toFixedPt(dados.bfPct)}%`}
+            classification={dados.classificacaoGordura}
+          />
+        </View>
+
+        <View style={[styles.card, styles.bodyCard]}>
+          <Text style={[styles.cardTitle, styles.bodyTitle]}>BIOTIPO CORPORAL</Text>
+          {frente ? <Image src={frente} style={styles.bodyImage} /> : null}
+        </View>
+
+        <View style={[styles.card, styles.middleCard, styles.circumferenceCard]}>
+          <MeasurementCard title="CIRCUNFERÊNCIAS (cm)" rows={circRows} />
+        </View>
+        <View style={[styles.card, styles.middleCard, styles.foldsCard]}>
+          <MeasurementCard title="DOBRAS CUTÂNEAS (mm)" rows={dobraRows} />
+        </View>
+        <View style={[styles.card, styles.middleCard, styles.evolutionCard]}>
+          <Text style={styles.cardTitle}>EVOLUÇÃO</Text>
+          {showEvolutionCharts ? (
+            <>
+              <EvolutionTrend
+                title="Peso (kg)"
+                color="#73956a"
+                values={chartSeries.map((point) => ({ label: point.label, value: point.weight }))}
+              />
+              <EvolutionTrend
+                title="Massa muscular (kg)"
+                color="#4a7dbd"
+                values={chartSeries.map((point) => ({ label: point.label, value: point.muscle }))}
+              />
+              <EvolutionTrend
+                title="% de gordura"
+                color="#c62828"
+                values={chartSeries.map((point) => ({ label: point.label, value: point.fat }))}
+              />
+            </>
+          ) : (
+            <EvolutionIntro />
+          )}
+        </View>
+
+        <View style={[styles.card, styles.comparisonCard]}>
+          <Text style={styles.cardTitle}>EVOLUÇÃO COMPARATIVA</Text>
+          <View style={styles.comparisonRow}>
+            <ComparisonBox
+              label="Peso"
+              value={currentWeight}
+              unit="kg"
+              delta={deltaWeight}
+              points={comparisonPoints.map(({ label, weight }) => ({ label, value: weight }))}
+              color="#262d26"
+            />
+            <ComparisonBox
+              label="Massa muscular"
+              value={currentMuscle}
+              unit="kg"
+              delta={deltaMuscle}
+              points={comparisonPoints.map(({ label, muscle }) => ({ label, value: muscle }))}
+              color="#4a7dbd"
+            />
+            <ComparisonBox
+              label="% de gordura"
+              value={currentFat}
+              unit="%"
+              delta={deltaFat}
+              points={comparisonPoints.map(({ label, fat }) => ({ label, value: fat }))}
+              color="#c62828"
+            />
+          </View>
+        </View>
+
+        <View style={styles.footerLayer} fixed>
+          <Text style={styles.signature}>{fullNutriText}</Text>
+          <View style={[styles.signatureRule, { width: signatureWidth }]} />
+          <Text style={styles.crn}>{crnText}</Text>
+          {logo ? <Image src={logo} style={styles.footerLogo} /> : null}
+        </View>
+      </Page>
+    </Document>
+  );
+}
+
+export default AvaliacaoPdfDocument;
