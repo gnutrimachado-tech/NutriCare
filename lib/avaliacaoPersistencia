@@ -1,0 +1,43 @@
+export type AvaliacaoExistente = { id: string };
+
+type SalvarOuAtualizarPorDataArgs<TData, TResult> = {
+  pacienteId: string;
+  dataAvaliacao: Date | null;
+  data: TData;
+  buscarExistente: (
+    pacienteId: string,
+    dataAvaliacao: Date,
+  ) => Promise<AvaliacaoExistente | null>;
+  atualizar: (id: string, data: TData) => Promise<TResult>;
+  criar: (data: TData) => Promise<TResult>;
+};
+
+export async function salvarOuAtualizarPorData<TData, TResult>({
+  pacienteId,
+  dataAvaliacao,
+  data,
+  buscarExistente,
+  atualizar,
+  criar,
+}: SalvarOuAtualizarPorDataArgs<TData, TResult>): Promise<{
+  registro: TResult;
+  updated: boolean;
+}> {
+  const existente = dataAvaliacao
+    ? await buscarExistente(pacienteId, dataAvaliacao)
+    : null;
+  const registro = existente
+    ? await atualizar(existente.id, data)
+    : await criar(data);
+
+  return { registro, updated: Boolean(existente) };
+}
+
+export function calcularNumeroAvaliacao(
+  rotativas: Array<{ id: string }>,
+  salvoId: string,
+  totalAvaliacoes: number,
+): number {
+  const posicao = rotativas.findIndex((item) => item.id === salvoId);
+  return posicao >= 0 ? posicao + 1 : Math.min(totalAvaliacoes, 3);
+}
