@@ -93,6 +93,7 @@ export type AvaliacaoHistoricoResumo = {
   pesoKg: number | null;
   bodyFatPct: number | null;
   massaMuscularKg: number | null;
+  massaLivreGorduraKg?: number | null;
   massaAdiposaKg: number | null;
   aguaPct: number | null;
   imme: number | null;
@@ -138,9 +139,51 @@ type PersistArgs = {
   resumo: AvaliacaoHistoricoResumo;
 };
 
+const FRACAO_MUSCULO_ESQUELETICO_ESTIMADA = 0.45;
+
 function toNullableNumber(value: unknown) {
-  const n = Number(value);
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && !value.trim()) return null;
+  const normalized =
+    typeof value === "string" ? value.trim().replace(",", ".") : value;
+  const n = Number(normalized);
   return Number.isFinite(n) ? n : null;
+}
+
+// Converte os formatos históricos para massa muscular esquelética em kg.
+// A ordem evita tratar massa livre de gordura como músculo medido:
+// 1) valor esquelético já salvo; 2) reconstrução pelo IMME; 3) estimativa
+// de 45% da massa livre de gordura para registros antigos.
+export function obterMassaMuscularHistorica(
+  snapshot: AvaliacaoHistoricoSnapshot | null,
+  massaMuscularLegada: unknown,
+  alturaCm: number
+): number | null {
+  const valorDireto = toNullableNumber(
+    snapshot?.resumo.massaMuscularEsqueleticaKg
+  );
+  if (valorDireto !== null && valorDireto > 0) return valorDireto;
+
+  const imme = toNullableNumber(snapshot?.resumo.imme);
+  const altura = Number(alturaCm);
+  if (imme !== null && imme > 0 && Number.isFinite(altura) && altura > 0) {
+    const alturaMetros = altura / 100;
+    const massaKg = imme * alturaMetros * alturaMetros;
+    return Math.round(massaKg * 10) / 10;
+  }
+
+  const massaLivreGordura = toNullableNumber(
+    snapshot?.resumo.massaLivreGorduraKg ??
+      snapshot?.resumo.massaMuscularKg ??
+      massaMuscularLegada
+  );
+  if (massaLivreGordura !== null && massaLivreGordura > 0) {
+    return Math.round(
+      massaLivreGordura * FRACAO_MUSCULO_ESQUELETICO_ESTIMADA * 10
+    ) / 10;
+  }
+
+  return null;
 }
 
 // Normaliza a data informada pelo nutri para "YYYY-MM-DD" (string) e Date (UTC).
@@ -188,6 +231,7 @@ export function buildAvaliacaoSnapshot(args: PersistArgs): AvaliacaoHistoricoSna
       pesoKg: toNullableNumber(args.resumo.pesoKg),
       bodyFatPct: toNullableNumber(args.resumo.bodyFatPct),
       massaMuscularKg: toNullableNumber(args.resumo.massaMuscularKg),
+      massaLivreGorduraKg: toNullableNumber(args.resumo.massaLivreGorduraKg),
       massaAdiposaKg: toNullableNumber(args.resumo.massaAdiposaKg),
       aguaPct: toNullableNumber(args.resumo.aguaPct),
       imme: toNullableNumber(args.resumo.imme),
